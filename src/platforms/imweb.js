@@ -81,6 +81,21 @@ export class Imweb extends BasePlatform {
         await this.page.goto('https://imweb.me/login');
         await this.page.waitForLoadState('domcontentloaded');
 
+        // 서버에서 받은 로그인 정보가 있으면 자동입력 시도 (실패해도 아래 수동 대기로 그대로 진행)
+        if (this.autoLogin && this.autoLogin.loginId && this.autoLogin.password) {
+            try {
+                this.log(`[아임웹] 저장된 계정으로 자동 로그인 시도...`);
+                await this.page.waitForSelector('input[name="email"]', { timeout: 8000 });
+                await this.page.fill('input[name="email"]', this.autoLogin.loginId);
+                await this.page.fill('input[name="password"]', this.autoLogin.password);
+                try { await this.page.check('input[name="autoLogin"]', { timeout: 2000 }); } catch {}
+                await this.page.click('button[type="submit"]');
+                this.log(`[아임웹] 자동 입력 완료. (캡차·추가 인증이 뜨면 직접 처리해주세요)`);
+            } catch (e) {
+                this.log(`[아임웹] 자동 로그인 입력 실패 → 수동으로 진행: ${e.message}`);
+            }
+        }
+
         this.log(`[아임웹] 로그인을 완료해주세요. (대기시간 120초)`);
         try {
             await this.page.waitForURL(url => this.isPortalHomeUrl(url.href), { timeout: 120000 });

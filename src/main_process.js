@@ -181,6 +181,8 @@ function getImweb() {
         // 내부 관리자 API(가격 상속)와 registerB2bViaApi 도 함께 갖는다.
         imwebInstance = new ImwebEdit(configPath, getBrowserSync);
     }
+    // 서버에서 받은 아임웹 로그인정보(있으면)를 붙여준다 → login()에서 자동입력에 사용
+    imwebInstance.autoLogin = serverCreds['imweb'] || null;
     return imwebInstance;
 }
 
