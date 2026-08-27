@@ -65,6 +65,7 @@
     <nav class="nav">
       <a href="/" class="{% block nav_home %}{% endblock %}"><span>📊 대시보드</span></a>
       <a href="/staff" class="{% block nav_staff %}{% endblock %}"><span>👤 직원 계정</span></a>
+      {% if user["role"] == "admin" %}<a href="/keys" class="{% block nav_keys %}{% endblock %}"><span>🔑 인증키 관리</span></a>{% endif %}
       <a href="/logs" class="{% block nav_logs %}{% endblock %}"><span>📜 로그인 로그</span></a>
     </nav>
     <div class="side-foot">

@@ -64,6 +64,30 @@ def init_db():
         )
     """)
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS platform_credentials (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            platform    TEXT NOT NULL,                       -- coupang / naver / esm / imweb
+            label       TEXT NOT NULL,                       -- 계정 별칭 (예: 쿠팡-본사)
+            enc_payload BLOB NOT NULL,                       -- 암호화된 JSON (accessKey/secretKey/세션 등)
+            updated_by  TEXT,
+            updated_at  TEXT NOT NULL
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS key_access_logs (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            staff_id   INTEGER,
+            username   TEXT,
+            platform   TEXT,
+            cred_id    INTEGER,
+            action     TEXT NOT NULL,                        -- view / create / update / delete
+            ip         TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+
     conn.commit()
 
     # 최초 실행 시 기본 관리자 계정 1개 생성 (username: admin / pw: admin1234)
@@ -148,3 +172,70 @@ def count_today_logins():
     ).fetchone()
     conn.close()
     return row["c"]
+
+
+# ── 인증키 (암호화 저장) ──────────────────────────────────────
+def list_credentials():
+    """복호화하지 않고 메타데이터만 (목록 표시용)."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT id, platform, label, updated_by, updated_at FROM platform_credentials ORDER BY platform, id"
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def get_credential(cred_id: int):
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM platform_credentials WHERE id = ?", (cred_id,)).fetchone()
+    conn.close()
+    return row
+
+
+def add_credential(platform: str, label: str, enc_payload: bytes, by: str):
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO platform_credentials (platform, label, enc_payload, updated_by, updated_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (platform, label, enc_payload, by, datetime.now().isoformat(timespec="seconds")),
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_credential(cred_id: int, enc_payload: bytes, by: str):
+    conn = get_conn()
+    conn.execute(
+        "UPDATE platform_credentials SET enc_payload = ?, updated_by = ?, updated_at = ? WHERE id = ?",
+        (enc_payload, by, datetime.now().isoformat(timespec="seconds"), cred_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_credential(cred_id: int):
+    conn = get_conn()
+    conn.execute("DELETE FROM platform_credentials WHERE id = ?", (cred_id,))
+    conn.commit()
+    conn.close()
+
+
+# ── 인증키 접근 감사 로그 ─────────────────────────────────────
+def record_key_access(staff_id, username, platform, cred_id, action, ip):
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO key_access_logs (staff_id, username, platform, cred_id, action, ip, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (staff_id, username, platform, cred_id, action, ip, datetime.now().isoformat(timespec="seconds")),
+    )
+    conn.commit()
+    conn.close()
+
+
+def recent_key_logs(limit: int = 30):
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM key_access_logs ORDER BY id DESC LIMIT ?", (limit,)
+    ).fetchall()
+    conn.close()
+    return rows

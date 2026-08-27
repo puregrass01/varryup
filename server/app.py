@@ -8,6 +8,7 @@ VERY UP 관리자 서버 (Phase 2)
   (최신 starlette/jinja2/python 조합에서 TemplateResponse 캐시 키 호환 이슈 회피)
 """
 import os
+import json
 import secrets
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -15,6 +16,11 @@ from starlette.middleware.sessions import SessionMiddleware
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 import db
+import crypto
+
+
+def _ip(request: "Request") -> str:
+    return request.client.host if request.client else "-"
 
 BASE_DIR = os.path.dirname(__file__)
 env = Environment(
@@ -114,6 +120,89 @@ def staff_toggle(request: Request, staff_id: int):
     if target:
         db.set_staff_active(staff_id, target["is_active"] == 0)
     return RedirectResponse("/staff", status_code=303)
+
+
+# ── 인증키 중앙보관 (암호화 + 감사로그) ───────────────────────
+PLATFORM_HINTS = {
+    "coupang": '{\n  "vendorId": "",\n  "accessKey": "",\n  "secretKey": ""\n}',
+    "naver": '{\n  "session": ""\n}',
+    "esm": '{\n  "session": ""\n}',
+    "imweb": '{\n  "clientId": "",\n  "clientSecret": ""\n}',
+}
+
+
+@app.get("/keys", response_class=HTMLResponse)
+def keys_page(request: Request, msg: str = None):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if user["role"] != "admin":
+        return RedirectResponse("/", status_code=303)
+    return render("keys.html", user=user, creds=db.list_credentials(),
+                  logs=db.recent_key_logs(20), hints=PLATFORM_HINTS, msg=msg)
+
+
+@app.post("/keys/add")
+def keys_add(request: Request, platform: str = Form(...), label: str = Form(...), payload: str = Form(...)):
+    user = current_user(request)
+    if not user or user["role"] != "admin":
+        return RedirectResponse("/login", status_code=303)
+    try:
+        json.loads(payload)  # JSON 형식 검증
+    except Exception:
+        return RedirectResponse("/keys?msg=❌ JSON 형식이 올바르지 않습니다.", status_code=303)
+    db.add_credential(platform, label.strip(), crypto.encrypt(payload), user["name"])
+    db.record_key_access(user["id"], user["username"], platform, None, "create", _ip(request))
+    return RedirectResponse("/keys?msg=✅ 인증키가 암호화되어 저장되었습니다.", status_code=303)
+
+
+@app.get("/keys/{cred_id}", response_class=HTMLResponse)
+def keys_detail(request: Request, cred_id: int):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if user["role"] != "admin":
+        return RedirectResponse("/", status_code=303)
+    row = db.get_credential(cred_id)
+    if not row:
+        return RedirectResponse("/keys", status_code=303)
+    plaintext = crypto.decrypt(row["enc_payload"])
+    try:  # 보기 좋게 정렬
+        plaintext = json.dumps(json.loads(plaintext), ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    # 복호화해서 열람한 것 자체를 감사 기록에 남긴다
+    db.record_key_access(user["id"], user["username"], row["platform"], cred_id, "view", _ip(request))
+    return render("key_detail.html", user=user, cred=row, plaintext=plaintext)
+
+
+@app.post("/keys/{cred_id}/update")
+def keys_update(request: Request, cred_id: int, payload: str = Form(...)):
+    user = current_user(request)
+    if not user or user["role"] != "admin":
+        return RedirectResponse("/login", status_code=303)
+    row = db.get_credential(cred_id)
+    if not row:
+        return RedirectResponse("/keys", status_code=303)
+    try:
+        json.loads(payload)
+    except Exception:
+        return RedirectResponse(f"/keys/{cred_id}", status_code=303)
+    db.update_credential(cred_id, crypto.encrypt(payload), user["name"])
+    db.record_key_access(user["id"], user["username"], row["platform"], cred_id, "update", _ip(request))
+    return RedirectResponse("/keys?msg=✅ 인증키가 수정되었습니다.", status_code=303)
+
+
+@app.post("/keys/{cred_id}/delete")
+def keys_delete(request: Request, cred_id: int):
+    user = current_user(request)
+    if not user or user["role"] != "admin":
+        return RedirectResponse("/login", status_code=303)
+    row = db.get_credential(cred_id)
+    if row:
+        db.delete_credential(cred_id)
+        db.record_key_access(user["id"], user["username"], row["platform"], cred_id, "delete", _ip(request))
+    return RedirectResponse("/keys?msg=🗑 인증키가 삭제되었습니다.", status_code=303)
 
 
 # ── 로그인 로그 ──────────────────────────────────────────────

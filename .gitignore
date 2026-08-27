@@ -34,3 +34,4 @@ data/defaults/
 server/admin.db
 *.db
 __pycache__/
+server/secret.key
