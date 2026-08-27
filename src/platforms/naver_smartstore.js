@@ -51,11 +51,43 @@ export class NaverSmartStore extends BasePlatform {
     // ※ 네이버는 보안이 강해 자동입력이 막히거나 캡차가 뜰 수 있음 → 실패하면 아래 수동 로그인으로 진행.
     if (this.autoLogin && this.autoLogin.loginId && this.autoLogin.password) {
         try {
-            console.log('[네이버] 저장된 계정으로 자동 로그인 시도...');
-            await this.page.waitForSelector('#id', { timeout: 8000 });
-            await this.page.fill('#id', this.autoLogin.loginId);
-            await this.page.fill('#pw', this.autoLogin.password);
-            await this.page.click('.btn_login, button[type="submit"]');
+            console.log('[네이버] 자동 로그인 시도... URL:', this.page.url());
+            await this.page.waitForLoadState('domcontentloaded');
+            await sleep(1200);
+
+            // '네이버 아이디로 로그인'을 누르면 네이버 로그인이 '새 팝업창'으로 열린다.
+            // 그 팝업 페이지를 잡아서(target) 거기에 입력해야 한다. (원래 창은 판매자 탭이라 소용없음)
+            let loginPage = null;
+            for (const sel of [
+                'button:has-text("네이버 아이디로 로그인")',
+                'a:has-text("네이버 아이디로 로그인")',
+                '[role="tab"]:has-text("네이버 아이디로 로그인")',
+            ]) {
+                const el = this.page.locator(sel).first();
+                if (await el.count() === 0) continue;
+                try {
+                    const [popup] = await Promise.all([
+                        this.page.waitForEvent('popup', { timeout: 5000 }).catch(() => null),
+                        el.click({ timeout: 2500 }),
+                    ]);
+                    loginPage = popup;
+                    console.log('[네이버] 탭 클릭:', sel, '| 팝업:', popup ? '열림' : '없음(같은창)');
+                    break;
+                } catch (e) { /* 다음 후보 시도 */ }
+            }
+
+            // 팝업이 열렸으면 팝업에, 아니면 현재 창에 입력
+            const target = loginPage || this.page;
+            await target.waitForLoadState('domcontentloaded').catch(() => {});
+            await sleep(1500);
+            console.log('[네이버][진단] 입력대상 URL:', target.url());
+
+            const pwField = target.locator('input[type="password"]:visible, #pw').first();
+            const idField = target.locator('#id, input[type="text"]:visible, input[type="email"]:visible').first();
+            await pwField.waitFor({ timeout: 8000 });
+            await idField.fill(this.autoLogin.loginId);
+            await pwField.fill(this.autoLogin.password);
+            await target.keyboard.press('Enter');
             console.log('[네이버] 자동 입력 완료. (캡차·2단계 인증이 뜨면 직접 처리)');
         } catch (e) {
             console.log('[네이버] 자동 로그인 입력 실패 → 수동으로 진행:', e.message);
