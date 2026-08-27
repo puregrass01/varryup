@@ -567,6 +567,14 @@
   <div id="header">
     <button id="btn-back" title="런처로 돌아가기">← 런처로</button>
     <div id="app-title">✦ VERY UP VER2</div>
+    <div style="display:flex;gap:6px;margin-left:auto;-webkit-app-region:no-drag;">
+      <button onclick="require('electron').ipcRenderer.send('minimize-win')" title="최소화"
+        style="width:28px;height:28px;border-radius:50%;border:none;background:rgba(255,255,255,0.08);color:#94a3b8;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;"
+        onmouseover="this.style.background='rgba(255,255,255,0.18)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">─</button>
+      <button onclick="require('electron').ipcRenderer.send('close-win')" title="닫기"
+        style="width:28px;height:28px;border-radius:50%;border:none;background:rgba(255,255,255,0.08);color:#94a3b8;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;"
+        onmouseover="this.style.background='rgba(220,50,50,0.8)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,0.08)';this.style.color='#94a3b8'">✕</button>
+    </div>
   </div>
 
   <!-- ══ 모드 선택 바 ══ -->
@@ -624,6 +632,17 @@
 
       <!-- 현황판 -->
       <div class="board-title">현황판</div>
+
+      <!-- 플랫폼 로그인 버튼 -->
+      <div id="login-buttons" style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px;">
+        <button type="button" onclick="platformLogin('naver')"
+          style="padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#e6e9ee;font-size:13px;cursor:pointer;font-family:inherit;">🟢 네이버 로그인</button>
+        <button type="button" onclick="platformLogin('esm')"
+          style="padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#e6e9ee;font-size:13px;cursor:pointer;font-family:inherit;">🔵 ESM 로그인</button>
+        <button type="button" onclick="platformLogin('imweb')"
+          style="padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#e6e9ee;font-size:13px;cursor:pointer;font-family:inherit;">🟣 아임웹 로그인</button>
+      </div>
+
       <table id="status-board">
         <thead>
           <tr>
@@ -856,6 +875,20 @@ function handleCheck(country, type, isChecked) {
 /* ══════════════════════════════════════════════
    로그
 ══════════════════════════════════════════════ */
+// 플랫폼 브라우저 로그인 (현황판 위 버튼) — 서버에 로그인정보가 있으면 자동입력됨
+async function platformLogin(platform) {
+  const names = { naver: '네이버', esm: 'ESM', imweb: '아임웹' };
+  const chan  = { naver: 'naver-login', esm: 'esm-login', imweb: 'imweb-login' };
+  addLog(`${names[platform]} 로그인 창을 엽니다...`, 'info');
+  try {
+    const res = await ipc.invoke(chan[platform]);
+    if (res && res.success) addLog(`${names[platform]} 로그인 성공!`, 'ok');
+    else addLog(`${names[platform]} 로그인 실패: ${(res && res.error) || '알 수 없는 오류'}`, 'error');
+  } catch (e) {
+    addLog(`${names[platform]} 로그인 오류: ${e.message}`, 'error');
+  }
+}
+
 function addLog(msg, level = 'info') {
   const icons = { info: 'ℹ️', ok: '✅', warn: '⚠️', error: '❌' };
   const now = new Date();
