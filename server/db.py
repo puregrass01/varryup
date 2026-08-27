@@ -88,6 +88,29 @@ def init_db():
         )
     """)
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS licenses (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            key            TEXT UNIQUE NOT NULL,
+            status         TEXT NOT NULL DEFAULT 'active',   -- active / blocked / expired
+            seats          INTEGER NOT NULL DEFAULT 1,
+            assigned_to    TEXT,                             -- 배정 대상(메모)
+            expires_at     TEXT,                             -- 만료일 (YYYY-MM-DD, 없으면 무제한)
+            created_at     TEXT NOT NULL
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ai_usage (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            staff_id   INTEGER,
+            username   TEXT,
+            endpoint   TEXT,                                 -- predict / predict_clean
+            ms_elapsed INTEGER,
+            created_at TEXT NOT NULL
+        )
+    """)
+
     conn.commit()
 
     # 최초 실행 시 기본 관리자 계정 1개 생성 (username: admin / pw: admin1234)
@@ -245,5 +268,74 @@ def recent_key_logs(limit: int = 30):
     rows = conn.execute(
         "SELECT * FROM key_access_logs ORDER BY id DESC LIMIT ?", (limit,)
     ).fetchall()
+    conn.close()
+    return rows
+
+
+# ── 라이선스 ─────────────────────────────────────────────────
+def list_licenses():
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM licenses ORDER BY id DESC").fetchall()
+    conn.close()
+    return rows
+
+
+def add_license(key: str, seats: int, assigned_to: str, expires_at: str):
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO licenses (key, status, seats, assigned_to, expires_at, created_at) "
+        "VALUES (?, 'active', ?, ?, ?, ?)",
+        (key, seats, assigned_to or None, expires_at or None,
+         datetime.now().isoformat(timespec="seconds")),
+    )
+    conn.commit()
+    conn.close()
+
+
+def set_license_status(license_id: int, status: str):
+    conn = get_conn()
+    conn.execute("UPDATE licenses SET status = ? WHERE id = ?", (status, license_id))
+    conn.commit()
+    conn.close()
+
+
+def delete_license(license_id: int):
+    conn = get_conn()
+    conn.execute("DELETE FROM licenses WHERE id = ?", (license_id,))
+    conn.commit()
+    conn.close()
+
+
+# ── AI 사용량 ─────────────────────────────────────────────────
+def record_ai_usage(staff_id, username, endpoint, ms_elapsed):
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO ai_usage (staff_id, username, endpoint, ms_elapsed, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (staff_id, username, endpoint, ms_elapsed, datetime.now().isoformat(timespec="seconds")),
+    )
+    conn.commit()
+    conn.close()
+
+
+def ai_usage_summary():
+    """오늘/전체 건수 + 직원별 집계."""
+    conn = get_conn()
+    today = datetime.now().strftime("%Y-%m-%d")
+    total = conn.execute("SELECT COUNT(*) AS c FROM ai_usage").fetchone()["c"]
+    today_cnt = conn.execute(
+        "SELECT COUNT(*) AS c FROM ai_usage WHERE created_at LIKE ?", (today + "%",)
+    ).fetchone()["c"]
+    by_staff = conn.execute(
+        "SELECT username, COUNT(*) AS cnt, AVG(ms_elapsed) AS avg_ms "
+        "FROM ai_usage GROUP BY username ORDER BY cnt DESC"
+    ).fetchall()
+    conn.close()
+    return {"total": total, "today": today_cnt, "by_staff": by_staff}
+
+
+def recent_ai_usage(limit: int = 50):
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM ai_usage ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
     conn.close()
     return rows

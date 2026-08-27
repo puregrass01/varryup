@@ -301,6 +301,18 @@ ipcMain.handle('server-login', async (event, { username, password }) => {
 });
 ipcMain.handle('server-status', () => ({ loggedIn: !!serverAuth, name: serverAuth ? serverAuth.name : null }));
 
+// AI 이미지 1건 처리할 때마다 서버에 사용량 보고 (실패해도 무시 — 앱 동작에 영향 없음)
+async function reportAiUsage(endpoint, ms) {
+    if (!serverAuth) return;
+    try {
+        await fetch(`${ADMIN_SERVER_URL}/api/usage`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${serverAuth.token}` },
+            body: new URLSearchParams({ endpoint, ms_elapsed: String(Math.round(ms || 0)) }),
+        });
+    } catch {}
+}
+
 ipcMain.on('launch-app', (event, appName) => {
     if (appName === 'seed') createSeedWindow();
     else if (appName === 'up') createUpWindow();
@@ -1110,16 +1122,18 @@ ipcMain.handle('generate-ai-image', async (event, data) => {
                 
                 // skipAI가 참이면 알고리즘 방식(predict_clean), 거짓이면 딥러닝 방식(predict) 호출
                 const endpoint = skipAI ? `${AI_SERVER_URL}/predict_clean` : `${AI_SERVER_URL}/predict`;
-                
+
+                const _t0 = Date.now();
                 const response = await fetch(endpoint, {
                     method: 'POST',
                     body: formData
                 });
-                
+
                 if (!response.ok) {
                     throw new Error(`AI 서버 오류: ${response.statusText}`);
                 }
-                
+                reportAiUsage(skipAI ? 'predict_clean' : 'predict', Date.now() - _t0);
+
                 const arrayBuffer = await response.arrayBuffer();
                 img = await loadImage(Buffer.from(arrayBuffer));
             } catch (error) {
@@ -1336,8 +1350,10 @@ async function generateIntlImage({ brand, carClass, no, gen, year, code, include
         const fd = new FormData();
         fd.append('file', blob, 'mirror.jpg');
         const ep = skipAI ? `${AI_SERVER_URL}/predict_clean` : `${AI_SERVER_URL}/predict`;
+        const _t0 = Date.now();
         const res = await fetch(ep, { method: 'POST', body: fd });
         if (!res.ok) throw new Error('AI server error: ' + res.statusText);
+        reportAiUsage(skipAI ? 'predict_clean' : 'predict', Date.now() - _t0);
         const img = await loadImage(Buffer.from(await res.arrayBuffer()));
         const raw = createCanvas(img.width, img.height);
         raw.getContext('2d').drawImage(img, 0, 0);

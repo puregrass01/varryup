@@ -247,6 +247,68 @@ def logs_page(request: Request):
     return render("logs.html", user=user, logs=db.recent_logins(100))
 
 
+# ── 라이선스 관리 ────────────────────────────────────────────
+def _gen_license_key():
+    import secrets as _s
+    part = lambda: _s.token_hex(2).upper()
+    return f"VERYUP-{part()}-{part()}-{part()}"
+
+
+@app.get("/licenses", response_class=HTMLResponse)
+def licenses_page(request: Request, msg: str = None):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if user["role"] != "admin":
+        return RedirectResponse("/", status_code=303)
+    return render("licenses.html", user=user, licenses=db.list_licenses(), msg=msg)
+
+
+@app.post("/licenses/add")
+def licenses_add(request: Request, key: str = Form(""), seats: int = Form(1),
+                 assigned_to: str = Form(""), expires_at: str = Form("")):
+    user = current_user(request)
+    if not user or user["role"] != "admin":
+        return RedirectResponse("/login", status_code=303)
+    key = (key or "").strip() or _gen_license_key()
+    try:
+        db.add_license(key, seats, assigned_to.strip(), expires_at.strip())
+        return RedirectResponse(f"/licenses?msg=✅ 라이선스 발급: {key}", status_code=303)
+    except Exception as e:
+        return RedirectResponse(f"/licenses?msg=발급 실패: {e}", status_code=303)
+
+
+@app.post("/licenses/{license_id}/toggle")
+def licenses_toggle(request: Request, license_id: int):
+    user = current_user(request)
+    if not user or user["role"] != "admin":
+        return RedirectResponse("/login", status_code=303)
+    rows = [l for l in db.list_licenses() if l["id"] == license_id]
+    if rows:
+        new_status = "blocked" if rows[0]["status"] == "active" else "active"
+        db.set_license_status(license_id, new_status)
+    return RedirectResponse("/licenses", status_code=303)
+
+
+@app.post("/licenses/{license_id}/delete")
+def licenses_delete(request: Request, license_id: int):
+    user = current_user(request)
+    if not user or user["role"] != "admin":
+        return RedirectResponse("/login", status_code=303)
+    db.delete_license(license_id)
+    return RedirectResponse("/licenses?msg=🗑 라이선스가 삭제되었습니다.", status_code=303)
+
+
+# ── AI 사용량 통계 ────────────────────────────────────────────
+@app.get("/usage", response_class=HTMLResponse)
+def usage_page(request: Request):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    return render("usage.html", user=user,
+                  summary=db.ai_usage_summary(), recent=db.recent_ai_usage(50))
+
+
 # ══════════════════════════════════════════════════════════════
 #  앱(프로그램)용 API — 앱이 서버에서 인증키를 받아쓰기 위한 통로
 #  1) POST /api/login          : 직원 로그인 → 토큰 발급
@@ -300,3 +362,14 @@ def api_credentials(request: Request, platform: str = None, authorization: str =
         # 앱이 키를 가져간 것도 감사로그에 남긴다 (api 경유 열람)
         db.record_key_access(user["id"], user["username"], c["platform"], c["id"], "view", _ip(request) + " (앱)")
     return {"ok": True, "credentials": result}
+
+
+@app.post("/api/usage")
+def api_usage(request: Request, endpoint: str = Form("predict"),
+              ms_elapsed: int = Form(0), authorization: str = Header(None)):
+    """앱이 AI 이미지 1건 처리할 때마다 사용량을 기록한다."""
+    user = _auth_by_token(authorization)
+    if not user:
+        return JSONResponse({"ok": False, "error": "인증 필요"}, status_code=401)
+    db.record_ai_usage(user["id"], user["username"], endpoint, ms_elapsed)
+    return {"ok": True}
