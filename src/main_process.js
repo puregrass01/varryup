@@ -44,6 +44,9 @@ const AI_IS_LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(AI_SERV
 const ADMIN_SERVER_URL = (process.env.ADMIN_SERVER_URL || 'http://localhost:8001').replace(/\/+$/, '');
 // 로그인 후 발급받은 토큰·직원정보 (메모리에만 보관, 파일로 저장하지 않음)
 let serverAuth = null;
+// 서버에서 받은 "로그인(아이디/비번)" 인증키 (플랫폼별). 브라우저 로그인 자동입력에 쓴다.
+// 메모리에만 보관 → 파일로 안 남김.
+let serverCreds = {};
 
 /** 디버그 파일용 임시 폴더 (없어도 조용히 무시) */
 function debugDir() {
@@ -263,14 +266,20 @@ async function syncCredentialsFromServer() {
     if (!serverAuth) return;
     try {
         const creds = await fetchCredentials(ADMIN_SERVER_URL, serverAuth.token);
+        serverCreds = {};
         let n = 0;
         for (const c of creds) {
             if (!c.data) continue;
-            if (c.platform === 'coupang') { mergeIntoConfig('coupang_config.json', c.data); n++; }
-            else if (c.platform === 'imweb') { mergeIntoConfig('imweb_config.json', c.data); n++; }
-            // naver / esm 로그인 자동입력 연동은 다음 단계
+            if (c.data.loginId) {
+                // 로그인(아이디/비번) 종류 → 브라우저 로그인 자동입력용으로 메모리에 보관
+                serverCreds[c.platform] = c.data; n++;
+            } else if (c.platform === 'coupang') {
+                mergeIntoConfig('coupang_config.json', c.data); n++;
+            } else if (c.platform === 'imweb') {
+                mergeIntoConfig('imweb_config.json', c.data); n++;
+            }
         }
-        console.log('[서버] 인증키 동기화 완료:', n, '건');
+        console.log('[서버] 인증키 동기화 완료:', n, '건 (로그인정보 보유 플랫폼:', Object.keys(serverCreds).join(',') || '없음', ')');
     } catch (e) {
         console.warn('[서버] 인증키 동기화 실패(로컬 설정 사용):', e.message);
     }
