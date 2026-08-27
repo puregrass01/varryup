@@ -1,4 +1,4 @@
-﻿// 보안 연결(SSL) 인증서 검증 무시 (쿠팡 API 등 연동 시 인증서 오류 방지)
+// 보안 연결(SSL) 인증서 검증 무시 (쿠팡 API 등 연동 시 인증서 오류 방지)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
@@ -33,6 +33,12 @@ const AI_GEN_DIR = process.env.AI_GEN_DIR || (app.isPackaged
 const AI_OUTPUT_DIR = path.join(app.getPath('userData'), 'ai_output');
 const AI_UPLOAD_DIR = path.join(app.getPath('userData'), 'ai_uploads');
 
+// AI 서버 주소(설정값). 기본은 로컬. 서버 PC로 옮길 때 환경변수 AI_SERVER_URL 로만 교체하면 된다.
+//   예) AI_SERVER_URL=http://192.168.0.10:8000   또는   http://210.103.107.86:8000
+const AI_SERVER_URL = (process.env.AI_SERVER_URL || 'http://localhost:8000').replace(/\/+$/, '');
+// 원격 서버를 쓰면 각 PC에서 로컬 AI(807MB exe)를 띄울 필요가 없다.
+const AI_IS_LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(AI_SERVER_URL);
+
 /** 디버그 파일용 임시 폴더 (없어도 조용히 무시) */
 function debugDir() {
     try {
@@ -46,6 +52,10 @@ function debugDir() {
 let aiProcs = [];
 function startAiServers() {
     try {
+        if (!AI_IS_LOCAL) {
+            console.log('[AI] 원격 AI 서버 사용:', AI_SERVER_URL, '- 로컬 AI 서버는 실행하지 않습니다.');
+            return;
+        }
         if (!fs.existsSync(AI_GEN_DIR)) {
             console.warn('AI 생성기 폴더가 없어 AI 서버를 시작하지 않습니다:', AI_GEN_DIR);
             return;
@@ -239,6 +249,16 @@ ipcMain.on('close-app', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win) win.close();
     if (launcherWindow) launcherWindow.show(); else createLauncher();
+});
+
+// 커스텀 윈도우 컨트롤 (최소화 / 닫기)
+ipcMain.on('minimize-win', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) win.minimize();
+});
+ipcMain.on('close-win', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) win.close();
 });
 
 // ── 자동 업데이트 ────────────────────────────────────────────────
@@ -1023,7 +1043,7 @@ ipcMain.handle('generate-ai-image', async (event, data) => {
                 formData.append('file', blob, 'mirror.jpg');
                 
                 // skipAI가 참이면 알고리즘 방식(predict_clean), 거짓이면 딥러닝 방식(predict) 호출
-                const endpoint = skipAI ? 'http://localhost:8000/predict_clean' : 'http://localhost:8000/predict';
+                const endpoint = skipAI ? `${AI_SERVER_URL}/predict_clean` : `${AI_SERVER_URL}/predict`;
                 
                 const response = await fetch(endpoint, {
                     method: 'POST',
@@ -1249,7 +1269,7 @@ async function generateIntlImage({ brand, carClass, no, gen, year, code, include
         const blob = new Blob([fs.readFileSync(imgPath)], { type: 'image/jpeg' });
         const fd = new FormData();
         fd.append('file', blob, 'mirror.jpg');
-        const ep = skipAI ? 'http://localhost:8000/predict_clean' : 'http://localhost:8000/predict';
+        const ep = skipAI ? `${AI_SERVER_URL}/predict_clean` : `${AI_SERVER_URL}/predict`;
         const res = await fetch(ep, { method: 'POST', body: fd });
         if (!res.ok) throw new Error('AI server error: ' + res.statusText);
         const img = await loadImage(Buffer.from(await res.arrayBuffer()));
