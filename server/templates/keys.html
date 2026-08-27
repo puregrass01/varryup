@@ -35,7 +35,14 @@
 <div class="card" style="margin-bottom:20px">
   <h2 style="font-size:15px;margin:0 0 16px">인증키 추가</h2>
   <form method="post" action="/keys/add">
-    <div class="grid" style="grid-template-columns:1fr 2fr;gap:14px;margin-bottom:14px">
+    <div class="grid" style="grid-template-columns:1.1fr 1fr 1.6fr;gap:14px;margin-bottom:14px">
+      <div>
+        <label>종류</label>
+        <select id="kind" onchange="fillHint()">
+          <option value="login">로그인 (아이디·비번)</option>
+          <option value="api">API 키</option>
+        </select>
+      </div>
       <div>
         <label>플랫폼</label>
         <select name="platform" id="platform" onchange="fillHint()">
@@ -45,7 +52,7 @@
           <option value="imweb">아임웹 (imweb)</option>
         </select>
       </div>
-      <div><label>별칭 (구분용 이름)</label><input name="label" placeholder="예: 쿠팡-본사 계정" required></div>
+      <div><label>별칭 (구분용 이름)</label><input name="label" placeholder="예: 네이버-본사 로그인" required></div>
     </div>
     <label>인증키 값 (JSON 형식)</label>
     <textarea name="payload" id="payload" rows="6" required
@@ -81,16 +88,21 @@
 </div>
 
 <script>
-  const HINTS = {
+  const LOGIN = '{\n  "loginId": "",\n  "password": ""\n}';
+  const API = {
     coupang: '{\n  "vendorId": "",\n  "accessKey": "",\n  "secretKey": ""\n}',
     naver:   '{\n  "session": ""\n}',
     esm:     '{\n  "session": ""\n}',
     imweb:   '{\n  "clientId": "",\n  "clientSecret": ""\n}'
   };
   function fillHint(){
+    const kind = document.getElementById('kind').value;
     const p = document.getElementById('platform').value;
     const t = document.getElementById('payload');
-    if(!t.value.trim() || t.dataset.auto === '1'){ t.value = HINTS[p] || ''; t.dataset.auto='1'; }
+    if(!t.value.trim() || t.dataset.auto === '1'){
+      t.value = (kind === 'login') ? LOGIN : (API[p] || '');
+      t.dataset.auto = '1';
+    }
   }
   document.getElementById('payload').addEventListener('input', function(){ this.dataset.auto='0'; });
   fillHint();
