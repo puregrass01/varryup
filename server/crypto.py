@@ -43,3 +43,8 @@ def decrypt(token: bytes) -> str:
     if isinstance(token, str):
         token = token.encode("utf-8")
     return _fernet.decrypt(token).decode("utf-8")
+
+
+def app_secret() -> str:
+    """세션·API 토큰 서명용 안정적인 비밀키(문자열). 서버 재시작에도 동일하게 유지된다."""
+    return _load_master_key().decode("utf-8")

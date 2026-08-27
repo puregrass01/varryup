@@ -9,14 +9,19 @@ VERY UP 관리자 서버 (Phase 2)
 """
 import os
 import json
-import secrets
-from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Request, Form, Header
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 import db
 import crypto
+
+# 세션·API 토큰 서명에 쓰는 안정적인 비밀키 (재시작해도 동일)
+APP_SECRET = os.environ.get("ADMIN_SECRET") or crypto.app_secret()
+api_signer = URLSafeTimedSerializer(APP_SECRET, salt="app-api-token")
+API_TOKEN_MAX_AGE = 60 * 60 * 24 * 7  # 7일
 
 
 def _ip(request: "Request") -> str:
@@ -34,8 +39,8 @@ def render(name: str, status_code: int = 200, **ctx) -> HTMLResponse:
 
 
 app = FastAPI(title="VERY UP 관리자")
-# 세션 서명 키: 실제 서버 배포 시 환경변수 ADMIN_SECRET 로 고정값을 넣는다.
-app.add_middleware(SessionMiddleware, secret_key=os.environ.get("ADMIN_SECRET", secrets.token_hex(32)))
+# 세션 서명 키(안정적 → 재시작에도 로그인 유지). 배포 시 환경변수 ADMIN_SECRET 로 덮어쓸 수 있다.
+app.add_middleware(SessionMiddleware, secret_key=APP_SECRET)
 
 db.init_db()
 
@@ -240,3 +245,58 @@ def logs_page(request: Request):
     if not user:
         return RedirectResponse("/login", status_code=303)
     return render("logs.html", user=user, logs=db.recent_logins(100))
+
+
+# ══════════════════════════════════════════════════════════════
+#  앱(프로그램)용 API — 앱이 서버에서 인증키를 받아쓰기 위한 통로
+#  1) POST /api/login          : 직원 로그인 → 토큰 발급
+#  2) GET  /api/credentials    : 토큰으로 인증키(복호화) 조회
+# ══════════════════════════════════════════════════════════════
+def _auth_by_token(authorization: str | None):
+    """Authorization: Bearer <token> 헤더를 검증해 staff row 반환 (실패 시 None)."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        data = api_signer.loads(token, max_age=API_TOKEN_MAX_AGE)
+    except (BadSignature, SignatureExpired):
+        return None
+    user = db.get_staff_by_id(data.get("uid"))
+    if not user or user["is_active"] != 1:
+        return None
+    return user
+
+
+@app.post("/api/login")
+def api_login(request: Request, username: str = Form(...), password: str = Form(...)):
+    ip = _ip(request)
+    user = db.get_staff_by_username(username)
+    ok = user is not None and user["is_active"] == 1 and db.verify_password(password, user["password_hash"])
+    if not ok:
+        db.record_login(user["id"] if user else None, username, ip, "fail")
+        return JSONResponse({"ok": False, "error": "로그인 실패"}, status_code=401)
+    db.record_login(user["id"], username, ip, "success")
+    token = api_signer.dumps({"uid": user["id"]})
+    return {"ok": True, "token": token, "name": user["name"], "role": user["role"]}
+
+
+@app.get("/api/credentials")
+def api_credentials(request: Request, platform: str = None, authorization: str = Header(None)):
+    """앱이 인증키를 받아가는 엔드포인트. platform 지정 시 해당 플랫폼만.
+       반환: [{id, platform, label, data}]  (data = 복호화된 값)"""
+    user = _auth_by_token(authorization)
+    if not user:
+        return JSONResponse({"ok": False, "error": "인증 필요(토큰 없음/만료)"}, status_code=401)
+    result = []
+    for c in db.list_credentials():
+        if platform and c["platform"] != platform:
+            continue
+        row = db.get_credential(c["id"])
+        try:
+            data = json.loads(crypto.decrypt(row["enc_payload"]))
+        except Exception:
+            data = None
+        result.append({"id": c["id"], "platform": c["platform"], "label": c["label"], "data": data})
+        # 앱이 키를 가져간 것도 감사로그에 남긴다 (api 경유 열람)
+        db.record_key_access(user["id"], user["username"], c["platform"], c["id"], "view", _ip(request) + " (앱)")
+    return {"ok": True, "credentials": result}
