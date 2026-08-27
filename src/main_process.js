@@ -17,6 +17,7 @@ import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
 import { spawn } from 'child_process';
 import os from 'os';
 import electronUpdater from 'electron-updater';
+import { serverLogin, fetchCredentials } from './utils/server_keys.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,6 +39,11 @@ const AI_UPLOAD_DIR = path.join(app.getPath('userData'), 'ai_uploads');
 const AI_SERVER_URL = (process.env.AI_SERVER_URL || 'http://localhost:8000').replace(/\/+$/, '');
 // 원격 서버를 쓰면 각 PC에서 로컬 AI(807MB exe)를 띄울 필요가 없다.
 const AI_IS_LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(AI_SERVER_URL);
+
+// 관리자/인증키 서버 주소 (직원 로그인 · 인증키 조회). 배포 시 서버 PC 주소로 교체.
+const ADMIN_SERVER_URL = (process.env.ADMIN_SERVER_URL || 'http://localhost:8001').replace(/\/+$/, '');
+// 로그인 후 발급받은 토큰·직원정보 (메모리에만 보관, 파일로 저장하지 않음)
+let serverAuth = null;
 
 /** 디버그 파일용 임시 폴더 (없어도 조용히 무시) */
 function debugDir() {
@@ -241,6 +247,46 @@ function createUpWindow() {
     if (launcherWindow) launcherWindow.hide();
 }
 function createWindow() { createLauncher(); }
+
+// ── 서버 로그인 + 인증키 동기화 ──────────────────────────────
+// 로그인한 직원만 서버에서 인증키를 받아, 앱이 읽는 로컬 설정파일에 병합한다.
+// 서버가 없거나 실패해도 앱이 죽지 않도록 try/catch (기존 로컬 설정 사용).
+function mergeIntoConfig(filename, data) {
+    try {
+        const p = path.join(app.getPath('userData'), filename);
+        let cur = {};
+        if (fs.existsSync(p)) { try { cur = JSON.parse(fs.readFileSync(p, 'utf-8')); } catch {} }
+        fs.writeFileSync(p, JSON.stringify({ ...cur, ...data }, null, 2), 'utf-8');
+    } catch (e) { console.warn('설정 병합 실패:', filename, e.message); }
+}
+async function syncCredentialsFromServer() {
+    if (!serverAuth) return;
+    try {
+        const creds = await fetchCredentials(ADMIN_SERVER_URL, serverAuth.token);
+        let n = 0;
+        for (const c of creds) {
+            if (!c.data) continue;
+            if (c.platform === 'coupang') { mergeIntoConfig('coupang_config.json', c.data); n++; }
+            else if (c.platform === 'imweb') { mergeIntoConfig('imweb_config.json', c.data); n++; }
+            // naver / esm 로그인 자동입력 연동은 다음 단계
+        }
+        console.log('[서버] 인증키 동기화 완료:', n, '건');
+    } catch (e) {
+        console.warn('[서버] 인증키 동기화 실패(로컬 설정 사용):', e.message);
+    }
+}
+ipcMain.handle('server-login', async (event, { username, password }) => {
+    try {
+        serverAuth = await serverLogin(ADMIN_SERVER_URL, username, password);
+        await syncCredentialsFromServer();
+        return { ok: true, name: serverAuth.name, role: serverAuth.role };
+    } catch (e) {
+        serverAuth = null;
+        return { ok: false, error: e.message };
+    }
+});
+ipcMain.handle('server-status', () => ({ loggedIn: !!serverAuth, name: serverAuth ? serverAuth.name : null }));
+
 ipcMain.on('launch-app', (event, appName) => {
     if (appName === 'seed') createSeedWindow();
     else if (appName === 'up') createUpWindow();
@@ -299,10 +345,15 @@ function setupAutoUpdate() {
 }
 
 app.whenReady().then(() => {
-  seedSharedDefaults();
-  startAiServers();
+  // 런처 먼저 즉시 열기
   createWindow();
-  setupAutoUpdate();
+
+  // 무거운 작업은 UI가 뜬 후 백그라운드에서 실행
+  setImmediate(() => {
+    seedSharedDefaults();
+    startAiServers();
+    setupAutoUpdate();
+  });
 });
 
 app.on('before-quit', () => { stopAiServers(); });
@@ -1302,20 +1353,9 @@ async function generateIntlImage({ brand, carClass, no, gen, year, code, include
         return f;
     }
 
-    if (includeLogo && fs.existsSync(logoPath)) {
-        const logoImg = await loadImage(fs.readFileSync(logoPath));
-        const targetH = 1100;
-        const ls = targetH / logoImg.height;
-        const lW = logoImg.width * ls;
-        const lH = logoImg.height * ls;
-        ctx.globalAlpha = 0.28;
-        ctx.drawImage(logoImg, (W - lW) / 2, (H - lH) / 2, lW, lH);
-        ctx.globalAlpha = 1.0;
-    }
-
-    const marginTop = 100, marginBottom = 280;
-    const mirrorAreaH = H - marginTop - marginBottom;
-    const mirrorAreaW = W - 300;
+    const marginTop = 80, marginBottom = 300;
+    const mirrorAreaH = H - marginTop - marginBottom;   // 1420px
+    const mirrorAreaW = W - 200;                         // 좌우 여백 100px씩
     const centerX = W / 2;
     const centerY = marginTop + mirrorAreaH / 2;
     let mirrorImages = [], labelLeftCX, labelRightCX;
@@ -1326,10 +1366,10 @@ async function generateIntlImage({ brand, carClass, no, gen, year, code, include
         labelLeftCX  = centerX - mc.width / 4;
         labelRightCX = centerX + mc.width / 4;
     } else {
-        const single = await getMirror(mirrorPath, (mirrorAreaW - 100) / 2, mirrorAreaH);
+        const single = await getMirror(mirrorPath, (mirrorAreaW - 120) / 2, mirrorAreaH);
         const flipped = flipCanvas(single);
-        const gap = 100;
-        const leftX = centerX - gap / 2 - single.width;
+        const gap = 120;
+        const leftX  = centerX - gap / 2 - single.width;
         const rightX = centerX + gap / 2;
         const y = centerY - single.height / 2;
         if (mirrorSide === 'driver') {
@@ -1343,8 +1383,10 @@ async function generateIntlImage({ brand, carClass, no, gen, year, code, include
         labelRightCX = rightX + single.width / 2;
     }
 
+    // 거울 그리기 (흰 배경 위)
     for (const m of mirrorImages) ctx.drawImage(m.canvas, m.x, m.y);
 
+    // BSA 로고
     if (bsaType === 'bsa' && !manualBsa) {
         const bsaLogoPath = path.join(__dirname, '..', 'data', 'bsa_logo.png');
         if (fs.existsSync(bsaLogoPath)) {
@@ -1356,7 +1398,21 @@ async function generateIntlImage({ brand, carClass, no, gen, year, code, include
         }
     }
 
-    const labelY = H - 220, labelBoxW = 250, labelBoxH = 100;
+    // 로고: 비율 유지, 약간 작게 — 높이 420px 기준으로 너비 자동 계산
+    if (includeLogo && fs.existsSync(logoPath)) {
+        const logoImg = await loadImage(fs.readFileSync(logoPath));
+        const logoDrawH = 520;                                    // 높이 약간 키움
+        const logoDrawW = logoImg.width * (logoDrawH / logoImg.height); // 비율 유지
+        const logoX = (W - logoDrawW) / 2;
+        const logoY = 680;
+        ctx.globalAlpha = 1.0;   // 투명도 100%
+        ctx.drawImage(logoImg, logoX, logoY, logoDrawW, logoDrawH);
+        ctx.globalAlpha = 1.0;
+    }
+
+    // L/R 박스: 260×160px
+    const labelBoxW = 260, labelBoxH = 160;
+    const labelY = H - labelBoxH - 60;
     ctx.fillStyle = '#111111';
     ctx.fillRect(labelLeftCX  - labelBoxW / 2, labelY, labelBoxW, labelBoxH);
     ctx.fillRect(labelRightCX - labelBoxW / 2, labelY, labelBoxW, labelBoxH);
@@ -1364,7 +1420,7 @@ async function generateIntlImage({ brand, carClass, no, gen, year, code, include
     const fp = path.join(__dirname, '..', 'data', 'NEXON_Lv2_Gothic_Bold.ttf');
     const fn = fs.existsSync(fp) ? 'NexonGothic' : 'Malgun Gothic';
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 70px "' + fn + '", "Malgun Gothic"';
+    ctx.font = '900 100px "' + fn + '", "Malgun Gothic"';   // 900 weight = 가장 두꺼운 bold
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const isP = mirrorSide === 'passenger';

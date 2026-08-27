@@ -8,6 +8,37 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!-- 커스텀 윈도우 컨트롤 -->
+    <div style="position:fixed;top:0;left:0;right:0;height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;-webkit-app-region:drag;z-index:9999;">
+        <span style="font-size:0.75rem;color:rgba(255,255,255,0.3);font-family:'Outfit',sans-serif;letter-spacing:0.05em;">VERY UP VER2</span>
+        <div style="-webkit-app-region:no-drag;display:flex;gap:6px;">
+            <button onclick="const {ipcRenderer}=require('electron');ipcRenderer.send('minimize-win')" title="최소화"
+                style="width:28px;height:28px;border-radius:50%;border:none;background:rgba(255,255,255,0.08);color:#aaa;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;"
+                onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">─</button>
+            <button onclick="const {ipcRenderer}=require('electron');ipcRenderer.send('close-win')" title="닫기"
+                style="width:28px;height:28px;border-radius:50%;border:none;background:rgba(255,255,255,0.08);color:#aaa;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;"
+                onmouseover="this.style.background='rgba(220,50,50,0.7)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,0.08)';this.style.color='#aaa'">✕</button>
+        </div>
+    </div>
+    <!-- 직원 로그인 오버레이 (로그인 전엔 이 화면이 카드를 가린다) -->
+    <div id="loginOverlay" style="position:fixed;inset:0;z-index:5000;background:#0f1420;display:flex;align-items:center;justify-content:center;">
+        <div style="width:320px;max-width:86vw;background:#1a2130;border:1px solid #2a3346;border-radius:16px;padding:30px 26px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
+            <div style="text-align:center;font-family:'Outfit',sans-serif;">
+                <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.01em;">VERY UP</div>
+                <div style="font-size:12px;color:#8b97a6;margin-top:3px;">직원 로그인</div>
+            </div>
+            <div style="margin-top:22px;display:flex;flex-direction:column;gap:12px;">
+                <input id="li_user" placeholder="아이디" autocomplete="username"
+                    style="padding:11px 12px;border-radius:9px;border:1px solid #2a3346;background:#0f1420;color:#fff;font-size:14px;outline:none;">
+                <input id="li_pw" type="password" placeholder="비밀번호" autocomplete="current-password"
+                    style="padding:11px 12px;border-radius:9px;border:1px solid #2a3346;background:#0f1420;color:#fff;font-size:14px;outline:none;">
+                <button id="li_btn" onclick="doLogin()"
+                    style="padding:12px;border:none;border-radius:9px;background:#0f766e;color:#fff;font-size:15px;font-weight:600;cursor:pointer;">로그인</button>
+                <div id="li_err" style="display:none;color:#e8807f;font-size:13px;text-align:center;line-height:1.4;"></div>
+            </div>
+        </div>
+    </div>
+
     <div class="launcher-bg">
         <!-- 배경 글로우 -->
         <div class="glow glow-left"></div>
@@ -77,6 +108,36 @@
 
     <script>
         const { ipcRenderer } = require('electron');
+
+        function showErr(m) {
+            const e = document.getElementById('li_err');
+            e.textContent = m; e.style.display = 'block';
+        }
+        async function doLogin() {
+            const btn = document.getElementById('li_btn');
+            const err = document.getElementById('li_err');
+            const username = document.getElementById('li_user').value.trim();
+            const password = document.getElementById('li_pw').value;
+            if (!username || !password) { showErr('아이디와 비밀번호를 입력하세요.'); return; }
+            btn.disabled = true; btn.textContent = '로그인 중...'; err.style.display = 'none';
+            try {
+                const res = await ipcRenderer.invoke('server-login', { username, password });
+                if (res && res.ok) {
+                    document.getElementById('loginOverlay').style.display = 'none';
+                } else {
+                    showErr((res && res.error) || '로그인에 실패했습니다.');
+                }
+            } catch (e) {
+                showErr('서버에 연결할 수 없습니다. 서버가 켜져 있는지 확인하세요.');
+            } finally {
+                btn.disabled = false; btn.textContent = '로그인';
+            }
+        }
+        // 로그인 화면에서 엔터로 제출
+        document.addEventListener('keydown', (e) => {
+            const ov = document.getElementById('loginOverlay');
+            if (e.key === 'Enter' && ov && ov.style.display !== 'none') doLogin();
+        });
 
         function launchSeed() {
             ipcRenderer.send('launch-app', 'seed');
