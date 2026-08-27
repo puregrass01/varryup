@@ -127,6 +127,21 @@ def staff_toggle(request: Request, staff_id: int):
     return RedirectResponse("/staff", status_code=303)
 
 
+@app.post("/staff/{staff_id}/reset-password")
+def staff_reset_password(request: Request, staff_id: int, new_password: str = Form(...)):
+    # 관리자가 직원 비밀번호를 재설정(초기화)한다. 현재 비번 몰라도 됨.
+    user = current_user(request)
+    if not user or user["role"] != "admin":
+        return RedirectResponse("/login", status_code=303)
+    if len(new_password) < 6:
+        return RedirectResponse("/staff?msg=❌ 비밀번호는 6자 이상이어야 합니다.", status_code=303)
+    target = db.get_staff_by_id(staff_id)
+    if not target:
+        return RedirectResponse("/staff", status_code=303)
+    db.update_password(staff_id, new_password)
+    return RedirectResponse(f"/staff?msg=✅ {target['name']} 님의 비밀번호가 변경되었습니다.", status_code=303)
+
+
 # ── 인증키 중앙보관 (암호화 + 감사로그) ───────────────────────
 PLATFORM_HINTS = {
     "coupang": '{\n  "vendorId": "",\n  "accessKey": "",\n  "secretKey": ""\n}',

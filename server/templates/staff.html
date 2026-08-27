@@ -18,11 +18,19 @@
         <td>{% if s["role"] == "admin" %}<span class="pill admin">관리자</span>{% else %}직원{% endif %}</td>
         <td>{% if s["is_active"] == 1 %}<span class="pill ok">활성</span>{% else %}<span class="pill off">비활성</span>{% endif %}</td>
         <td style="color:var(--muted)">{{ s["created_at"][:10] }}</td>
-        <td style="text-align:right">
-          {% if user["role"] == "admin" and s["username"] != user["username"] %}
+        <td style="text-align:right;white-space:nowrap">
+          {% if user["role"] == "admin" %}
+          <form method="post" action="/staff/{{ s['id'] }}/reset-password" style="display:inline-flex;gap:4px;align-items:center;margin-right:6px"
+                onsubmit="return confirm('이 직원의 비밀번호를 변경할까요?');">
+            <input name="new_password" type="text" placeholder="새 비밀번호" required minlength="6"
+                   style="width:108px;padding:5px 8px;font-size:12.5px;border:1px solid var(--line);border-radius:6px;background:#fff">
+            <button class="btn ghost sm" type="submit">비번 변경</button>
+          </form>
+          {% if s["username"] != user["username"] %}
           <form method="post" action="/staff/{{ s['id'] }}/toggle" style="display:inline">
             <button class="btn ghost sm" type="submit">{% if s["is_active"] == 1 %}비활성화{% else %}활성화{% endif %}</button>
           </form>
+          {% endif %}
           {% endif %}
         </td>
       </tr>
