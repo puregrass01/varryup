@@ -46,6 +46,22 @@ export class NaverSmartStore extends BasePlatform {
     }
 
     console.log('Login required. Please complete the login in the opened browser...');
+
+    // 서버에서 받은 로그인 정보가 있으면 자동입력 시도.
+    // ※ 네이버는 보안이 강해 자동입력이 막히거나 캡차가 뜰 수 있음 → 실패하면 아래 수동 로그인으로 진행.
+    if (this.autoLogin && this.autoLogin.loginId && this.autoLogin.password) {
+        try {
+            console.log('[네이버] 저장된 계정으로 자동 로그인 시도...');
+            await this.page.waitForSelector('#id', { timeout: 8000 });
+            await this.page.fill('#id', this.autoLogin.loginId);
+            await this.page.fill('#pw', this.autoLogin.password);
+            await this.page.click('.btn_login, button[type="submit"]');
+            console.log('[네이버] 자동 입력 완료. (캡차·2단계 인증이 뜨면 직접 처리)');
+        } catch (e) {
+            console.log('[네이버] 자동 로그인 입력 실패 → 수동으로 진행:', e.message);
+        }
+    }
+
     try {
         // Wait for SmartStore dashboard (after login redirect completes)
         await this.page.waitForURL(/sell\.smartstore\.naver\.com/, { timeout: 120000 });

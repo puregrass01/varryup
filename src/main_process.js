@@ -194,6 +194,7 @@ function getESM() {
         const sessionPath = path.join(app.getPath('userData'), 'session_esmplus.json');
         esmInstance = new ESMPlusHosting(b, sessionPath);
     }
+    esmInstance.autoLogin = serverCreds['esm'] || null;
     return esmInstance;
 }
 
@@ -205,6 +206,7 @@ function getNaver() {
         const sessionPath = path.join(app.getPath('userData'), 'session_naver.json');
         naverInstance = new NaverSmartStore(b, sessionPath);
     }
+    naverInstance.autoLogin = serverCreds['naver'] || null;
     return naverInstance;
 }
 
@@ -217,6 +219,7 @@ function getNaverEdit() {
         naverEditInstance = new NaverSmartStoreEdit(b, sessionPath);
     }
     naverEditInstance.browser = getBrowserSync();
+    naverEditInstance.autoLogin = serverCreds['naver'] || null;
     return naverEditInstance;
 }
 
@@ -866,6 +869,7 @@ function getImwebEdit() {
         imwebEditInstance = new ImwebEdit(configPath, getBrowserSync);
     }
     imwebEditInstance.browser = browser;
+    imwebEditInstance.autoLogin = serverCreds['imweb'] || null;
     imwebEditInstance.logCallback = (msg) => {
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('imweb-log', msg);
     };

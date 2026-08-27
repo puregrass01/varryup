@@ -57,7 +57,21 @@ export class ESMPlusHosting extends BasePlatform {
     }
 
     console.log('Login required for ESM Plus. Please login manually in the opened browser.');
-    
+
+    // 서버에서 받은 로그인 정보가 있으면 자동입력 시도 (실패해도 아래 수동 대기로 그대로 진행)
+    if (this.autoLogin && this.autoLogin.loginId && this.autoLogin.password) {
+      try {
+        console.log('[ESM] 저장된 계정으로 자동 로그인 시도...');
+        await this.page.waitForSelector('#typeMemberInputId01', { timeout: 8000 });
+        await this.page.fill('#typeMemberInputId01', this.autoLogin.loginId);
+        await this.page.fill('#typeMemberInputPassword01', this.autoLogin.password);
+        await this.page.click('button:has-text("로그인")');
+        console.log('[ESM] 자동 입력 완료. (캡차·추가 인증이 뜨면 직접 처리)');
+      } catch (e) {
+        console.log('[ESM] 자동 로그인 입력 실패 → 수동으로 진행:', e.message);
+      }
+    }
+
     // 사용자가 웹 브라우저 상에서 수동 로그인 완료할 때까지 대기
     let loginSuccess = false;
     const startTime = Date.now();
