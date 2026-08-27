@@ -205,6 +205,34 @@ def keys_delete(request: Request, cred_id: int):
     return RedirectResponse("/keys?msg=🗑 인증키가 삭제되었습니다.", status_code=303)
 
 
+# ── 비밀번호 변경 (본인 계정) ─────────────────────────────────
+@app.get("/password", response_class=HTMLResponse)
+def password_page(request: Request, msg: str = None, err: str = None):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    return render("password.html", user=user, msg=msg, err=err)
+
+
+@app.post("/password", response_class=HTMLResponse)
+def password_change(request: Request, current: str = Form(...),
+                    new1: str = Form(...), new2: str = Form(...)):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if not db.verify_password(current, user["password_hash"]):
+        return render("password.html", user=user, status_code=400,
+                      err="현재 비밀번호가 올바르지 않습니다.")
+    if new1 != new2:
+        return render("password.html", user=user, status_code=400,
+                      err="새 비밀번호 두 개가 서로 다릅니다.")
+    if len(new1) < 6:
+        return render("password.html", user=user, status_code=400,
+                      err="새 비밀번호는 6자 이상이어야 합니다.")
+    db.update_password(user["id"], new1)
+    return render("password.html", user=user, msg="✅ 비밀번호가 변경되었습니다.")
+
+
 # ── 로그인 로그 ──────────────────────────────────────────────
 @app.get("/logs", response_class=HTMLResponse)
 def logs_page(request: Request):

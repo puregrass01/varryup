@@ -144,6 +144,14 @@ def set_staff_active(staff_id: int, active: bool):
     conn.close()
 
 
+def update_password(staff_id: int, new_password: str):
+    conn = get_conn()
+    conn.execute("UPDATE staff SET password_hash = ? WHERE id = ?",
+                 (hash_password(new_password), staff_id))
+    conn.commit()
+    conn.close()
+
+
 def record_login(staff_id, username, ip, result):
     conn = get_conn()
     conn.execute(
