@@ -27,6 +27,8 @@
       "!data/esm_session.json",
       "!data/coupang_config.json",
       "!data/test_cache.json",
+      "!data/defaults/session_*.json",
+      "!data/imweb_openapi_config.json",
       "!**/*.log"
     ],
     "win": {
