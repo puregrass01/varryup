@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}대시보드 · VERY UP 관리자{% endblock %}
+{% block nav_home %}active{% endblock %}
+{% block body %}
+<h1>대시보드</h1>
+<p class="sub">{{ user["name"] }} 님, 안녕하세요. 오늘의 현황입니다.</p>
+
+<div class="grid g3" style="margin-bottom:22px">
+  <div class="card stat"><div class="n">{{ today_logins }}</div><div class="l">오늘 로그인 (성공)</div></div>
+  <div class="card stat"><div class="n">{{ active_count }}</div><div class="l">활성 직원 계정</div></div>
+  <div class="card stat"><div class="n">{{ staff_total }}</div><div class="l">전체 직원 계정</div></div>
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 14px">최근 로그인</h2>
+  <table>
+    <thead><tr><th>시각</th><th>아이디</th><th>IP</th><th>결과</th></tr></thead>
+    <tbody>
+      {% for r in recent %}
+      <tr>
+        <td>{{ r["created_at"].replace("T", " ") }}</td>
+        <td>{{ r["username"] }}</td>
+        <td>{{ r["ip"] }}</td>
+        <td>{% if r["result"] == "success" %}<span class="pill ok">성공</span>{% else %}<span class="pill off">실패</span>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" style="color:var(--muted)">기록이 없습니다.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
