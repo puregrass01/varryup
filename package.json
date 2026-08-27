@@ -1,0 +1,59 @@
+{
+  "name": "very-up-ver2",
+  "version": "2.0.0",
+  "description": "VERY UP VER2 - Multi-country commerce automation tool",
+  "main": "src/main_process.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "build": {
+    "appId": "com.veryup.ver2",
+    "productName": "VERY UP VER2",
+    "asar": false,
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "data/**/*",
+      "node_modules/**/*",
+      "package.json",
+      "!session_naver.json",
+      "!data/session_naver.json",
+      "!data/esm_session.json",
+      "!data/coupang_config.json",
+      "!data/test_cache.json",
+      "!**/*.log"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://CHANGE-ME.example.com/updates/"
+      }
+    ],
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
+    }
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.2",
+    "dotenv": "^16.4.5",
+    "electron-updater": "^6.8.9",
+    "playwright": "^1.43.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "electron": "^30.0.1",
+    "electron-builder": "^24.13.3",
+    "electron-packager": "^17.1.2"
+  }
+}

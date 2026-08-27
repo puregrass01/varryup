@@ -1,0 +1,3384 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VERY UP - 옵틱글래스 상품 자동화</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo">
+                <h1>VERY UP</h1>
+                <span class="badge">Optic Glass Auto</span>
+            </div>
+            <div class="global-actions">
+                <!-- Global actions can go here if needed -->
+            </div>
+        </header>
+
+        <nav class="app-tabs">
+            <button class="tab-btn active" onclick="switchTab('aiGenTab')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 12L2.1 12"/><path d="M12 12L18.4 20.4"/><path d="M12 12L18.4 3.6"/><circle cx="12" cy="12" r="3"/></svg>
+                AI 이미지 생성
+            </button>
+            <button class="tab-btn" onclick="switchTab('esmTab')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                ESM 이미지 호스팅
+            </button>
+            <button class="tab-btn" onclick="switchTab('naverTab')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                네이버 스마트스토어
+            </button>
+            <button class="tab-btn" onclick="switchTab('coupangTab')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                쿠팡 윙
+            </button>
+            <button class="tab-btn" onclick="switchTab('imwebTab')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                아임웹 B2B몰
+            </button>
+            <button class="tab-btn" onclick="switchTab('imwebBoardTab')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                아임웹 본사·해외몰
+            </button>
+        </nav>
+
+        <main class="tab-content-area">
+            <!-- AI Image Gen Panel -->
+            <section class="panel tab-pane active" id="aiGenTab" style="padding: 20px; overflow-y: auto; height: 100%; box-sizing: border-box;">
+                <style>
+                    .layout-flex {
+                        display: flex;
+                        gap: 20px;
+                        align-items: stretch;
+                    }
+                    .left-panel { flex: 1; }
+                    .right-panel { flex: 1; display: flex; flex-direction: column; }
+                    .result-container { 
+                        margin-top: 15px; 
+                        text-align: center; 
+                        display: none; 
+                        background: rgba(0,0,0,0.2);
+                        padding: 15px;
+                        border-radius: 8px;
+                        border: 1px solid var(--border-color);
+                        flex: 1;
+                    }
+                    .result-container p { font-size: 0.85rem; color: var(--text-muted); margin-top: 0;}
+                    #aiResultImage { 
+                        width: 100%; 
+                        height: auto;
+                        display: block;
+                        border-radius: 4px; 
+                    }
+                    .loader { 
+                        display: none; 
+                        text-align: center; 
+                        margin-top: 20px; 
+                        font-size: 0.9rem;
+                        color: #3b82f6; 
+                        background: rgba(59, 130, 246, 0.1);
+                        padding: 15px;
+                        border-radius: 8px;
+                    }
+                    .radio-group-container {
+                        display: flex; gap: 15px; align-items: center; margin-top: 5px;
+                    }
+                    .radio-label, .checkbox-label {
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        font-size: 0.85rem;
+                        color: var(--text-color);
+                        cursor: pointer;
+                    }
+                    .radio-label input[type="radio"], .checkbox-label input[type="checkbox"] {
+                        accent-color: #3b82f6;
+                        width: 16px; height: 16px;
+                    }
+                </style>
+                <div class="container" style="max-width: 100%; margin: 0 auto;">
+                    <form id="aiImageForm">
+                        <div class="layout-flex">
+                            <!-- 왼쪽 패널: 정보 입력 -->
+                            <div class="left-panel">
+                                <h3 style="color: var(--text-color); font-size: 1.1rem; margin-top: 0; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 8px;">1. 텍스트 정보 입력</h3>
+                                <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <div class="form-group">
+                                        <label class="form-label">제조사 (브랜드)</label>
+                                        <input type="text" name="brand" placeholder="예: 벤츠" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">차종 (모델명)</label>
+                                        <input type="text" name="carClass" placeholder="예: B클래스" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">상품번호 (No.)</label>
+                                        <input type="text" name="no" placeholder="예: 322" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">세대</label>
+                                        <input type="text" name="gen" placeholder="예: 1세대 전기형" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">연식</label>
+                                        <input type="text" name="year" placeholder="예: 06.10~09.08" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">코드</label>
+                                        <input type="text" name="code" placeholder="예: W245" class="form-input">
+                                    </div>
+                                    
+                                    <div class="form-group" style="grid-column: span 2; margin-top: 5px;">
+                                        <label class="form-label">BSA 가능 여부</label>
+                                        <div class="radio-group-container">
+                                            <label class="radio-label">
+                                                <input type="radio" name="bsaType" value="none" checked>
+                                                BSA 없음
+                                            </label>
+                                            <label class="radio-label">
+                                                <input type="radio" name="bsaType" value="bsa">
+                                                BSA 가능
+                                            </label>
+                                            <label class="radio-label">
+                                                <input type="radio" name="bsaType" value="bsaOption">
+                                                BSA 선택옵션
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group" style="margin-top: 15px;">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="includeLogo" checked> 
+                                        <span>OPTIC-GLASS 로고 포함하기 (가운데 워터마크)</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- 오른쪽 패널: 거울 및 생성 -->
+                            <div class="right-panel">
+                                <h3 style="color: var(--text-color); font-size: 1.1rem; margin-top: 0; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 8px;">2. 거울 업로드 및 처리</h3>
+                                <div class="form-group">
+                                    <label class="form-label">거울 방향 선택</label>
+                                    <select name="mirrorSide" class="form-input" required>
+                                        <option value="driver">운전석 1개만 업로드 (조수석 자동 반전 생성)</option>
+                                        <option value="passenger">조수석 1개만 업로드 (운전석 자동 반전 생성)</option>
+                                        <option value="both">양쪽 거울이 모두 포함된 1개 사진 업로드</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">거울 사진</label>
+                                    <input type="file" name="mirror" accept="image/*" class="form-input" required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">처리 모드 선택</label>
+                                    <div class="radio-group-container">
+                                        <label class="radio-label">
+                                            <input type="radio" name="skipAI" value="off" checked>
+                                            일반 사진 (AI 누끼)
+                                        </label>
+                                        <label class="radio-label">
+                                            <input type="radio" name="skipAI" value="on">
+                                            클린 사진
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="btn" id="aiSubmitBtn" style="background: linear-gradient(135deg, #3b82f6, #10b981); color: white; border: none; font-weight: 600; padding: 12px; border-radius: 6px; font-size: 0.95rem; cursor: pointer; transition: all 0.2s;">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                                    이미지 생성하기
+                                </button>
+                                
+                                <div class="loader" id="aiLoader">
+                                    ⏳ AI가 배경을 제거하고 이미지를 합성 중입니다...
+                                </div>
+
+                                <div class="result-container" id="aiResultContainer">
+                                    <p>✨ <b>이미지 생성 완료!</b></p>
+                                    <p id="bsaInstructionText" style="color: #ffffff; background-color: #ef4444; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 1.1rem; margin-bottom: 15px; display: none; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                                        🖐 잠깐! 다운로드(저장) 하기 전에, 빨간색 로고를 마우스로 쭈욱 끌어서(드래그) 원하는 세모 각인 위치에 직접 맞춰주세요!
+                                    </p>
+                                    <div id="aiImageWrapper" style="position: relative; display: inline-block; width: 100%; border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden;">
+                                        <img id="aiResultImage" src="" alt="생성된 이미지" style="display: block; width: 100%; height: auto;">
+                                        <img id="draggableBsaLogo" src="" alt="BSA Logo" style="position: absolute; top: 60%; left: 15%; width: 15%; cursor: grab; display: none; z-index: 10; user-select: none;">
+                                    </div>
+                                    
+                                    <div id="bsaSizeControl" style="display: none; margin-top: 15px; text-align: center; background: var(--panel-bg); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                        <label for="bsaSizeSlider" style="font-weight: bold; margin-right: 10px;">🔍 로고 크기 조절:</label>
+                                        <input type="range" id="bsaSizeSlider" min="5" max="40" value="15" style="vertical-align: middle; width: 150px;">
+                                        <span id="bsaSizeDisplay" style="margin-left: 10px; font-weight: bold;">15%</span>
+                                    </div>
+
+                                    <a id="aiDownloadBtn" class="btn" style="display: none; background: #334155; margin-top: 15px; justify-content: center; align-items: center; gap: 8px;" download>
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                                        <span>최종 이미지 완성하기 (내 PC 저장 & ESM 연동)</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- ESM Panel -->
+            <section class="panel glass-panel tab-pane" id="esmTab" style="display:none;">
+                <div class="panel-header" style="justify-content: space-between; display: flex;">
+                    <h2>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        이미지 호스팅 (ESM Plus)
+                    </h2>
+                    <button class="btn btn-outline btn-sm" onclick="loginESM()" id="btnEsmLogin">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+                        ESM 로그인
+                    </button>
+                </div>
+
+                <!-- Step 1: ESM Login Status -->
+                <div class="step-indicator">
+                    <div class="step-number">1</div>
+                    <span>ESMPLUS 로그인</span>
+                    <span class="status-dot" id="esmLoginStatus"></span>
+                </div>
+
+                <!-- Step 2: Image Upload -->
+                <div class="step-indicator">
+                    <div class="step-number">2</div>
+                    <span>이미지 업로드</span>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">ESM 업로드용 파일명 지정 (빈칸이면 'OPTICGLASS_생성이미지'로 저장됨)</label>
+                    <input type="text" id="autoFileNameInput" class="form-input" placeholder="예: OPTICGLASS_B클래스_운전석" value="OPTICGLASS_생성이미지" style="border-color: #8b5cf6; background: rgba(139, 92, 246, 0.05);">
+                </div>
+
+                <div class="form-group row dual-input" style="gap: 15px; align-items: stretch;">
+                    <div class="input-col" style="flex: 1;">
+                        <div class="file-upload-box" onclick="selectEsmImage()" id="esmUploadBox" style="height: 100%;">
+                            <div class="upload-placeholder" id="esmImagePlaceholder">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                                <span id="esmFileName">내 PC에서 이미지 선택</span>
+                            </div>
+                            <img id="esmImagePreview" class="image-preview" style="display:none;" />
+                        </div>
+                    </div>
+                    <div class="input-col" style="flex: 1;">
+                        <div class="file-upload-box ai-upload-box" onclick="loadAutoGeneratedImage()" id="esmAutoUploadBox" style="height: 100%; border-color: #8b5cf6; background: rgba(139, 92, 246, 0.05); transition: all 0.3s ease;">
+                            <div class="upload-placeholder" id="esmAutoImagePlaceholder">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 12L2.1 12"/><path d="M12 12L18.4 20.4"/><path d="M12 12L18.4 3.6"/><circle cx="12" cy="12" r="3"/></svg>
+                                <span id="esmAutoFileName" style="color: #8b5cf6; font-weight: 600; margin-top: 8px; display: block;">자동 생성된<br>이미지 불러오기</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Category Selection -->
+                <div class="step-indicator">
+                    <div class="step-number">3</div>
+                    <span>자동차 또는 오토바이 선택</span>
+                </div>
+                <div class="form-group">
+                    <div class="category-toggle">
+                        <button class="toggle-btn active" id="btnCategoryCar" onclick="setEsmCategory('자동차')">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17h14M5 17a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1l2-3h8l2 3h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/></svg>
+                            자동차
+                        </button>
+                        <button class="toggle-btn" id="btnCategoryMoto" onclick="setEsmCategory('오토바이')">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="17" r="3"/><circle cx="6" cy="17" r="3"/><path d="M6 17h6l4-7h4"/></svg>
+                            오토바이
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 4: File Name Display -->
+                <div class="step-indicator">
+                    <div class="step-number">4</div>
+                    <span>파일명</span>
+                </div>
+                <div class="form-group">
+                    <div class="info-banner" id="fileNameBanner" style="display:none;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        <strong id="fileNameDisplay">-</strong>
+                    </div>
+                </div>
+
+                <!-- Folder Selection & Upload -->
+                <div class="divider"></div>
+                <div class="step-indicator accent">
+                    <div class="step-number accent">▶</div>
+                    <span>자동등록 시작</span>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">업로드 대상 폴더</label>
+                    <div class="path-display" id="folderPathDisplay">
+                        <span class="path-segment">상품관리</span>
+                        <span class="path-arrow">›</span>
+                        <span class="path-segment">이미지호스팅</span>
+                        <span class="path-arrow">›</span>
+                        <span class="path-segment">옵틱글래스 상세페이지</span>
+                        <span class="path-arrow">›</span>
+                        <span class="path-segment" id="pathCategorySegment">조견표</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" id="folderSelectLabel">폴더 선택 (<span id="folderParentName">조견표</span> 하위 폴더)</label>
+                    <div class="folder-list-area">
+                        <button class="btn btn-sm btn-outline" onclick="loadFolders()" id="btnLoadFolders">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                            폴더 조회
+                        </button>
+                        <select id="folderSelect" class="form-input folder-select" disabled>
+                            <option value="">-- 폴더를 조회해주세요 --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary w-full" onclick="uploadESM()" id="btnUpload" disabled>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                    <span>업로드</span>
+                </button>
+
+                <!-- HTML Output -->
+                <div class="divider"></div>
+                <div class="form-group">
+                    <label class="form-label">생성된 HTML (복사 가능)</label>
+                    <div class="html-output-area">
+                        <textarea id="esmHtmlOutput" class="form-input textarea" rows="3" readonly placeholder="이미지 업로드 후 HTML이 여기에 표시됩니다..."></textarea>
+                        <button class="btn btn-sm btn-copy" onclick="copyHtml()" id="btnCopyHtml" style="display:none;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            복사
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Log -->
+                <div class="log-container">
+                    <div class="log-header"><h3>ESM 작업 로그</h3></div>
+                    <div class="log-window" id="esmLogWindow">
+                        <div class="log-entry system">> 시스템 준비 완료.</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Naver SmartStore Panel -->
+            <section class="panel glass-panel tab-pane" id="naverTab" style="display:none;">
+                <div class="panel-header" style="justify-content: space-between; display: flex;">
+                    <h2>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                        스마트스토어 상품 등록
+                    </h2>
+                    <button class="btn btn-outline btn-sm" onclick="loginNaver()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+                        스마트스토어 로그인
+                    </button>
+                </div>
+
+                <!-- Step 1: 작업 모드 -->
+                <div class="step-indicator">
+                    <div class="step-number">1</div>
+                    <span>작업 모드</span>
+                </div>
+                <div class="form-group row">
+                    <label class="form-label">작업 모드</label>
+                    <div class="radio-group">
+                        <label class="radio-btn">
+                            <input type="radio" name="workMode" value="copy" checked onchange="updateModeUI()">
+                            <span>복사 등록</span>
+                        </label>
+                        <label class="radio-btn">
+                            <input type="radio" name="workMode" value="edit" onchange="updateModeUI()">
+                            <span>기존 상품 수정</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Step 2: 상품 정보 -->
+                <div class="step-indicator">
+                    <div class="step-number">2</div>
+                    <span>상품 정보</span>
+                </div>
+
+                <div class="form-group row">
+                    <label class="form-label">상품 구분</label>
+                    <div class="radio-group">
+                        <label class="radio-btn">
+                            <input type="radio" name="category" value="자동차" checked onchange="updateForm()">
+                            <span>자동차</span>
+                        </label>
+                        <label class="radio-btn">
+                            <input type="radio" name="category" value="오토바이" onchange="updateForm()">
+                            <span>오토바이</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group row dual-input">
+                    <div class="input-col">
+                        <label class="form-label">제조사명 (브랜드)</label>
+                        <input type="text" id="brand" class="form-input" placeholder="예: 현대" oninput="updateTitlePreview()">
+                    </div>
+                    <div class="input-col">
+                        <label class="form-label">모델명</label>
+                        <input type="text" id="model" class="form-input" placeholder="예: 싼타페" oninput="updateTitlePreview()">
+                    </div>
+                </div>
+
+                <div class="form-group row dual-input">
+                    <div class="input-col">
+                        <label class="form-label">판매가</label>
+                        <input type="number" id="price" class="form-input" value="115000">
+                    </div>
+                    <div class="input-col">
+                        <label class="form-label">재고 수량</label>
+                        <input type="number" id="stock" class="form-input" value="999">
+                    </div>
+                </div>
+
+                <div class="info-banner" id="templateInfo">
+                    <span class="info-label">템플릿 ID (복사본):</span>
+                    <input type="text" id="templateIdInput" class="form-input" style="width: 150px; display: inline-block; padding: 4px 8px; font-weight: bold; margin-left: 8px;" value="13427230028">
+                </div>
+
+                <!-- ============ [수정 모드 전용] 기존 상품 편집 패널 (추가된 영역) ============ -->
+                <div id="ssEditPanel" style="display:none;">
+                    <div class="form-group" style="background: rgba(16, 185, 129, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed rgba(16, 185, 129, 0.3); margin-bottom: 12px; margin-top: 12px;">
+                        <label class="form-label" style="color: #047857; font-weight: 600;">스마트스토어 상품 URL 입력 (자동 파싱)</label>
+                        <input type="text" id="ssProductUrlInput" class="form-input" placeholder="예: https://smartstore.naver.com/.../products/4821766188" oninput="parseSsProductUrl(this.value)">
+                    </div>
+
+                    <!-- 제조사·차종으로 상품번호 자동 찾기 (스마트스토어 API 실시간 검색) -->
+                    <div class="form-group" style="border:1px dashed #cbd5e1;border-radius:6px;padding:10px;">
+                        <label class="form-label">제조사·차종으로 상품번호 찾기</label>
+                        <div style="display:flex;gap:8px;">
+                            <input type="text" id="ssFindBrand" class="form-input" style="flex:1;" placeholder="제조사 (예: 현대)">
+                            <input type="text" id="ssFindModel" class="form-input" style="flex:1;" placeholder="차종 (예: 싼타페)">
+                            <button type="button" class="btn btn-outline btn-sm" onclick="findSmartstoreId()">🔎 번호 찾기</button>
+                        </div>
+                        <div id="ssFindResult" style="margin-top:8px;"></div>
+                        <div style="font-size:11px;color:#9ca3af;margin-top:6px;">스마트스토어 API에서 등록 상품명을 실시간으로 찾아 위 "수정할 상품번호"에 채워줍니다. (제조사·차종 모두 포함)</div>
+                    </div>
+
+                    <div class="submit-section" style="margin-top:12px;">
+                        <button class="btn btn-outline w-full" onclick="loadSmartstoreProduct()" id="ssLoadBtn">
+                            📥 상품 불러오기
+                        </button>
+                    </div>
+                    <div id="ssEditLoaded" style="display:none;">
+                        <div class="form-group">
+                            <label class="form-label">상품명 (수정 가능)</label>
+                            <input type="text" id="ssEditTitle" class="form-input">
+                            <div style="font-size:11px;color:#9ca3af;margin-top:4px;">비워두거나 그대로 두면 기존 상품명이 유지됩니다.</div>
+                        </div>
+                        <div class="step-indicator">
+                            <div class="step-number">A</div>
+                            <span>옵션 (추가 / 삭제)</span>
+                        </div>
+                        <div class="form-group">
+                            <div id="ssOptionList"></div>
+                            <!-- 옵션 추가 입력부: 복사등록의 "옵션 입력"과 동일한 방식 -->
+                            <div style="border:1px solid #e5e7eb;border-radius:6px;padding:10px;margin-top:10px;">
+                                <label class="form-label" style="margin-bottom:6px;">+ 옵션 추가</label>
+                                <div class="option-grid">
+                                    <div class="option-row">
+                                        <span class="option-label" id="ssAddLabel0">모델명</span>
+                                        <input type="text" id="ssAddModel" class="form-input" placeholder="예: 싼타페 TM 2018~">
+                                    </div>
+                                    <div class="option-row">
+                                        <span class="option-label" id="ssAddLabel1">상품선택</span>
+                                        <input type="text" id="ssAddProduct" class="form-input" placeholder="예: '시작-종료연식'[No.상품번호] BSA">
+                                    </div>
+                                    <div class="option-row">
+                                        <span class="option-label" id="ssAddLabel2">운전석/조수석 선택</span>
+                                        <input type="text" id="ssAddSeat" class="form-input" value="운전석,조수석" placeholder="예: 운전석,조수석">
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+                                    <span style="font-size:11px;color:#6b7280;">재고</span>
+                                    <input type="number" id="ssAddStock" class="form-input" style="width:90px;" value="999">
+                                    <span style="font-size:11px;color:#6b7280;">조수석 옵션가</span>
+                                    <input type="number" id="ssAddPassengerPrice" class="form-input" style="width:100px;" value="-10000">
+                                    <button type="button" class="btn btn-outline btn-sm" onclick="addSmartstoreOption()">+ 옵션 추가</button>
+                                </div>
+                                <div style="font-size:11px;color:#9ca3af;margin-top:6px;">
+                                    운전석/조수석을 쉼표로 나누면 각각 한 줄씩 생성됩니다. (운전석 0원 / 조수석은 위 옵션가 적용)
+                                </div>
+                            </div>
+                        </div>
+                        <div class="step-indicator">
+                            <div class="step-number">B</div>
+                            <span>상세페이지 이미지 (추가 / 삭제)</span>
+                        </div>
+                        <div class="form-group">
+                            <div id="ssImageList"></div>
+                            <div style="display:flex; gap:8px; margin-top:10px;">
+                                <input type="text" id="ssNewImageUrl" class="form-input" style="flex:1;" placeholder="이미지 URL 또는 &lt;img src='...'&gt; 붙여넣기">
+                                <button type="button" class="btn btn-outline btn-sm" onclick="addSmartstoreImage()">+ 맨 위에 추가</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">생성될 상품명 미리보기</label>
+                    <input type="text" id="titlePreview" class="form-input" readonly>
+                </div>
+
+                <!-- Step 3: 옵션 설정 -->
+                <div class="step-indicator">
+                    <div class="step-number">3</div>
+                    <span>옵션 설정</span>
+                </div>
+                <div class="form-group option-section">
+                    <div class="option-grid">
+                        <div class="option-row">
+                            <span class="option-label">모델명</span>
+                            <input type="text" id="optionModel" class="form-input" placeholder="예: 싼타페 TM 2018~">
+                        </div>
+                        <div class="option-row">
+                            <span class="option-label">상품선택</span>
+                            <input type="text" id="optionProduct" class="form-input" placeholder="예: '시작-종료연식'[No.상품번호] BSA">
+                        </div>
+                        <div class="option-row">
+                            <span class="option-label">운전석/조수석 선택</span>
+                            <input type="text" id="optionSeat" class="form-input" value="운전석,조수석" placeholder="예: 운전석,조수석">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: 상세설명 -->
+                <div class="step-indicator">
+                    <div class="step-number">4</div>
+                    <span>상세설명 (ESM HTML)</span>
+                </div>
+                <div class="form-group">
+                    <textarea id="naverEsmHtml" class="form-input textarea" rows="2" placeholder="좌측 ESM 패널에서 업로드 후 자동으로 채워집니다..."></textarea>
+                </div>
+
+                <div class="submit-section">
+                    <button class="btn btn-gradient w-full" onclick="registerNaver()" id="registerBtn">
+                        스마트스토어 복사등록 실행
+                    </button>
+                </div>
+
+                <div class="log-container mt-lg">
+                    <div class="log-header"><h3>스마트스토어 작업 로그</h3></div>
+                    <div class="log-window" id="naverLogWindow">
+                        <div class="log-entry system">> 시스템 준비 완료.</div>
+                    </div>
+                </div>
+            </section>
+
+                        <!-- Coupang Panel -->
+            <section class="panel glass-panel tab-pane" id="coupangTab" style="display:none;">
+                <div class="panel-header" style="justify-content: space-between; display: flex;">
+                    <h2>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                        쿠팡 상품 등록 (Open API)
+                    </h2>
+                    <span class="status-badge" id="coupangApiStatus">
+                        <span class="status-dot" id="coupangConnectionDot"></span>
+                        <span id="coupangStatusText">미연결</span>
+                    </span>
+                </div>
+
+                <!-- Step 1: API Settings -->
+                <div class="step-indicator">
+                    <div class="step-number">1</div>
+                    <span>API 설정</span>
+                </div>
+                <div class="collapsible-section" id="apiSettingsSection">
+                    <div class="form-group">
+                        <label class="form-label">업체코드 (Vendor ID)</label>
+                        <input type="text" id="cpVendorId" class="form-input" placeholder="쿠팡 윙에서 확인">
+                    </div>
+                    <div class="form-group row dual-input">
+                        <div class="input-col">
+                            <label class="form-label">Access Key</label>
+                            <input type="password" id="cpAccessKey" class="form-input" placeholder="Open API Access Key">
+                        </div>
+                        <div class="input-col">
+                            <label class="form-label">Secret Key</label>
+                            <input type="password" id="cpSecretKey" class="form-input" placeholder="Open API Secret Key">
+                        </div>
+                    </div>
+                    <div class="form-group row dual-input">
+                        <div class="input-col">
+                            <label class="form-label">출고지 코드</label>
+                            <input type="text" id="cpOutboundCode" class="form-input" placeholder="API 연결 후 조회 가능">
+                        </div>
+                        <div class="input-col">
+                            <label class="form-label">반품지 코드</label>
+                            <input type="text" id="cpReturnCode" class="form-input" placeholder="API 연결 후 조회 가능">
+                        </div>
+                    </div>
+                    <div class="form-group row dual-input">
+                        <div class="input-col">
+                            <label class="form-label">카테고리 코드</label>
+                            <input type="text" id="cpCategoryCode" class="form-input" placeholder="예: 78647 (자동차용품)">
+                        </div>
+                        <div class="input-col">
+                            <label class="form-label">A/S 연락처</label>
+                            <input type="text" id="cpAsPhone" class="form-input" placeholder="예: 031-000-0000">
+                        </div>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn btn-outline btn-sm" onclick="saveCoupangConfig()" id="btnSaveCpConfig">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            설정 저장
+                        </button>
+                        <button class="btn btn-outline btn-sm" onclick="testCoupangConnection()" id="btnTestCp">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            연결 테스트
+                        </button>
+                        <button class="btn btn-outline btn-sm" onclick="queryCoupangShippingPlaces()" id="btnQueryShipping">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                            출고지/반품지 조회
+                        </button>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Step 2: Product Info -->
+                <div class="step-indicator">
+                    <div class="step-number">2</div>
+                    <span>상품 정보</span>
+                </div>
+
+                <div class="form-group row">
+                    <label class="form-label">작업 모드</label>
+                    <div class="radio-group">
+                        <label class="radio-btn">
+                            <input type="radio" name="cpWorkMode" value="copy" checked onchange="updateCoupangModeUI()">
+                            <span>복사 등록</span>
+                        </label>
+                        <label class="radio-btn">
+                            <input type="radio" name="cpWorkMode" value="edit" onchange="updateCoupangModeUI()">
+                            <span>기존 상품 수정</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group row">
+                    <label class="form-label">상품 구분</label>
+                    <div class="radio-group">
+                        <label class="radio-btn">
+                            <input type="radio" name="cpCategory" value="자동차" checked onchange="updateCoupangForm()">
+                            <span>자동차</span>
+                        </label>
+                        <label class="radio-btn">
+                            <input type="radio" name="cpCategory" value="오토바이" onchange="updateCoupangForm()">
+                            <span>오토바이</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group row dual-input">
+                    <div class="input-col">
+                        <label class="form-label">제조사명 (브랜드)</label>
+                        <input type="text" id="cpBrand" class="form-input" placeholder="예: 현대" oninput="updateCoupangTitle()">
+                    </div>
+                    <div class="input-col">
+                        <label class="form-label">모델명</label>
+                        <input type="text" id="cpModel" class="form-input" placeholder="예: 싼타페" oninput="updateCoupangTitle()">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">상품명 미리보기</label>
+                    <input type="text" id="cpTitlePreview" class="form-input" readonly>
+                </div>
+
+                <div class="form-group row dual-input">
+                    <div class="input-col">
+                        <label class="form-label">판매가</label>
+                        <input type="number" id="cpPrice" class="form-input" value="115000">
+                    </div>
+                    <div class="input-col">
+                        <label class="form-label">재고 수량</label>
+                        <input type="number" id="cpStock" class="form-input" value="999">
+                    </div>
+                </div>
+
+                <div class="info-banner" id="cpProductIdInfo">
+                    <span class="info-label" id="cpProductIdLabel">템플릿 ID:</span>
+                    <input type="text" id="cpProductIdInput" class="form-input" style="width: 180px; display: inline-block; padding: 4px 8px; font-weight: bold; margin-left: 8px;" value="16237598107">
+                </div>
+
+                <!-- ============ [수정 모드 전용] 기존 상품 편집 패널 (추가된 영역) ============ -->
+                <div id="cpEditPanel" style="display:none;">
+                    <!-- 제조사·차종으로 상품 ID 자동 찾기 (구글 시트: A열 등록상품ID / B열 등록상품명) -->
+                    <div class="form-group" style="border:1px dashed #cbd5e1;border-radius:6px;padding:10px;">
+                        <label class="form-label">제조사·차종으로 상품 ID 찾기</label>
+                        <div style="display:flex;gap:8px;">
+                            <input type="text" id="cpFindBrand" class="form-input" style="flex:1;" placeholder="제조사 (예: 현대)">
+                            <input type="text" id="cpFindModel" class="form-input" style="flex:1;" placeholder="차종 (예: 싼타페)">
+                            <button type="button" class="btn btn-outline btn-sm" onclick="findCoupangIdFromSheet()">🔎 ID 찾기</button>
+                        </div>
+                        <div id="cpFindResult" style="margin-top:8px;"></div>
+                        <div style="font-size:11px;color:#9ca3af;margin-top:6px;">쿠팡 API에서 등록 상품명을 실시간으로 찾아 위 "수정할 상품 ID"에 채워줍니다. (제조사·차종 모두 포함하는 상품)</div>
+                    </div>
+
+                    <div class="submit-section" style="margin-top:12px;">
+                        <button class="btn btn-outline w-full" onclick="loadCoupangProduct()" id="cpLoadBtn">
+                            📥 상품 불러오기
+                        </button>
+                    </div>
+
+                    <div id="cpEditLoaded" style="display:none;">
+                        <div class="form-group">
+                            <label class="form-label">상품명 (수정 가능)</label>
+                            <input type="text" id="cpEditTitle" class="form-input">
+                            <div style="font-size:11px;color:#9ca3af;margin-top:4px;">비워두거나 그대로 두면 기존 상품명이 유지됩니다.</div>
+                        </div>
+
+                        <div class="step-indicator">
+                            <div class="step-number">A</div>
+                            <span>옵션 (추가 / 삭제)</span>
+                        </div>
+                        <div class="form-group">
+                            <div id="cpOptionList"></div>
+                            <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addCoupangOption()">+ 옵션 추가</button>
+                        </div>
+
+                        <div class="step-indicator">
+                            <div class="step-number">B</div>
+                            <span>상세페이지 이미지 (추가 / 삭제)</span>
+                        </div>
+                        <div class="form-group">
+                            <div id="cpImageList"></div>
+                            <div style="display:flex; gap:8px; margin-top:10px;">
+                                <input type="text" id="cpNewImageUrl" class="form-input" style="flex:1;" placeholder="이미지 URL 또는 &lt;img src='...'&gt; 붙여넣기">
+                                <button type="button" class="btn btn-outline btn-sm" onclick="addCoupangImage()">+ 추가</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Options -->
+                <div class="step-indicator">
+                    <div class="step-number">3</div>
+                    <span>옵션 설정</span>
+                </div>
+                <div class="form-group option-section">
+                    <div class="option-grid">
+                        <div class="option-row">
+                            <span class="option-label">차종 (모델명)</span>
+                            <input type="text" id="cpOptModel" class="form-input" placeholder="예: 싼타페 TM(운전석), 싼타페 TM(조수석)">
+                        </div>
+                        <div class="option-row">
+                            <span class="option-label">수량</span>
+                            <input type="text" id="cpOptProduct" class="form-input" value="1개" placeholder="예: 1개">
+                        </div>
+                    </div>
+                </div>
+
+
+
+                <!-- Step 4: Description -->
+                <div class="step-indicator">
+                    <div class="step-number">4</div>
+                    <span>상세설명 (ESM HTML)</span>
+                </div>
+                <div class="form-group">
+                    <textarea id="cpEsmHtml" class="form-input textarea" rows="2" placeholder="ESM 탭에서 업로드 후 자동으로 채워집니다..."></textarea>
+                </div>
+
+                <!-- Register Button -->
+                <div class="submit-section">
+                    <button class="btn btn-gradient w-full" onclick="registerCoupang()" id="coupangRegisterBtn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                        쿠팡 상품등록 실행
+                    </button>
+                </div>
+
+                <!-- Log -->
+                <div class="log-container mt-lg">
+                    <div class="log-header"><h3>쿠팡 작업 로그</h3></div>
+                    <div class="log-window" id="coupangLogWindow">
+                        <div class="log-entry system">> 시스템 준비 완료. API 설정을 완료해주세요.</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Imweb Panel -->
+            <!-- ============ 아임웹 B2B몰 탭 ============ -->
+            <section class="panel glass-panel tab-pane" id="imwebTab" style="display:none;">
+                <div class="panel-header" style="justify-content: space-between; display: flex;">
+                    <h2>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        아임웹 B2B몰 상품 등록 (블랙스토어B2B)
+                    </h2>
+                    <button class="btn btn-outline btn-sm" onclick="loginImweb('b2b')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+                        아임웹 로그인
+                    </button>
+                </div>
+
+                <div class="form-group row" style="margin-bottom: 20px;">
+                    <label class="form-label" style="font-weight: 600;">작업 모드</label>
+                    <div class="radio-group" style="background: rgba(139, 92, 246, 0.05); padding: 6px; border-radius: 6px; border: 1px solid rgba(139, 92, 246, 0.15);">
+                        <label class="radio-btn">
+                            <input type="radio" name="iwB2bWorkMode" value="copy" checked onchange="updateImwebB2bModeUI()">
+                            <span>복사 등록 (기존)</span>
+                        </label>
+                        <label class="radio-btn">
+                            <input type="radio" name="iwB2bWorkMode" value="edit" onchange="updateImwebB2bModeUI()">
+                            <span>기존 상품 수정</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="iwB2bCopyArea">
+                <div class="step-indicator">
+                    <div class="step-number">1</div>
+                    <span>차량 정보 (카테고리: 광각미러 &gt; 국산차·수입차 &gt; 제조사)</span>
+                </div>
+                <div class="form-group">
+                    <button class="btn btn-outline btn-sm" onclick="syncImwebCategories()" id="btnSyncCategories">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;vertical-align:middle;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                        <span>카테고리 동기화</span>
+                    </button>
+                    <div style="font-size:11px;color:#9ca3af;margin-top:6px;">아임웹에 카테고리(제조사·차종)가 추가되면 눌러서 목록을 갱신합니다.</div>
+                </div>
+                <div class="form-group row">
+                    <label class="form-label">국산차 / 수입차</label>
+                    <div class="radio-group">
+                        <label class="radio-btn">
+                            <input type="radio" name="iwNationality" value="국산차" checked onchange="updateImwebBrandOptions()">
+                            <span>국산차</span>
+                        </label>
+                        <label class="radio-btn">
+                            <input type="radio" name="iwNationality" value="수입차" onchange="updateImwebBrandOptions()">
+                            <span>수입차</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group row dual-input">
+                    <div class="input-col">
+                        <label class="form-label">제조사명 (브랜드)</label>
+                        <select id="iwBrand" class="form-input" onchange="updateImwebModelOptions()">
+                            <option value="">-- 카테고리 로딩중 --</option>
+                        </select>
+                    </div>
+                    <div class="input-col">
+                        <label class="form-label">모델명</label>
+                        <select id="iwModel" class="form-input">
+                            <option value="">-- 제조사를 먼저 선택하세요 --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group row dual-input">
+                    <div class="input-col">
+                        <label class="form-label">제목용 제조사 (선택 사항)</label>
+                        <input type="text" id="iwTitleBrand" class="form-input" placeholder="비워두면 카테고리 제조사 사용">
+                    </div>
+                    <div class="input-col">
+                        <label class="form-label">제목용 차종명 (선택 사항)</label>
+                        <input type="text" id="iwTitleModel" class="form-input" placeholder="비워두면 카테고리 모델명 사용">
+                    </div>
+                </div>
+                <div class="form-group row dual-input">
+                    <div class="input-col">
+                        <label class="form-label">연식</label>
+                        <input type="text" id="iwYear" class="form-input" placeholder="예: 18~23">
+                    </div>
+                    <div class="input-col">
+                        <label class="form-label">상품 코드</label>
+                        <input type="text" id="iwCode" class="form-input" placeholder="예: 1234">
+                    </div>
+                </div>
+
+                <div class="step-indicator">
+                    <div class="step-number">2</div>
+                    <span>등록 옵션</span>
+                </div>
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <label class="checkbox-btn">
+                            <input type="checkbox" id="iwBsaO" checked>
+                            <span>BSA O</span>
+                        </label>
+                        <label class="checkbox-btn">
+                            <input type="checkbox" id="iwBsaX">
+                            <span>BSA X</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <label class="checkbox-btn">
+                            <input type="checkbox" id="iwRegisterIndiv" checked>
+                            <span>개별 판매 상품 등록</span>
+                        </label>
+                        <label class="checkbox-btn">
+                            <input type="checkbox" id="iwRegisterSet" checked>
+                            <span>세트 판매 상품 등록</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="step-indicator">
+                    <div class="step-number">3</div>
+                    <span>이미지 URL</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">대표 이미지 URL</label>
+                    <input type="text" id="iwMainImageUrl" class="form-input" placeholder="ESM 탭에서 업로드한 대표이미지(사이드미러) 주소를 넣으세요">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">조견표 이미지 URL (국내용)</label>
+                    <input type="text" id="iwSpecImageUrl" class="form-input" placeholder="ESM 탭에서 업로드한 조견표 이미지 주소를 넣으세요">
+                </div>
+
+                <div class="submit-section">
+                    <button class="btn btn-gradient w-full" onclick="registerImwebB2b()" id="imwebRegisterBtn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                        B2B몰 상품 자동 등록 실행
+                    </button>
+                </div>
+                </div> <!-- iwB2bCopyArea 끝 -->
+
+                <!-- ============ [수정 모드 전용] 기존 상품 편집 패널 ============ -->
+                <div id="iwB2bEditPanel" style="display:none;">
+                    <div class="step-indicator">
+                        <div class="step-number">1</div>
+                        <span>차량 정보 (카테고리: 광각미러 &gt; 국산차·수입차 &gt; 제조사)</span>
+                    </div>
+                    <div class="form-group row">
+                        <label class="form-label">국산차 / 수입차</label>
+                        <div class="radio-group">
+                            <label class="radio-btn">
+                                <input type="radio" name="iwB2bEditNationality" value="국산차" checked onchange="updateB2bEditBrandOptions()">
+                                <span>국산차</span>
+                            </label>
+                            <label class="radio-btn">
+                                <input type="radio" name="iwB2bEditNationality" value="수입차" onchange="updateB2bEditBrandOptions()">
+                                <span>수입차</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group row dual-input">
+                        <div class="input-col">
+                            <label class="form-label">제조사명 (브랜드)</label>
+                            <select id="iwB2bEditBrand" class="form-input" onchange="updateB2bEditModelOptions()">
+                                <option value="">-- 제조사 선택 --</option>
+                            </select>
+                        </div>
+                        <div class="input-col">
+                            <label class="form-label">모델명</label>
+                            <select id="iwB2bEditModel" class="form-input">
+                                <option value="">-- 제조사를 먼저 선택하세요 --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">상품 코드</label>
+                        <input type="text" id="iwB2bEditCodeInput" class="form-input" placeholder="예: Y103">
+                    </div>
+                    <div class="form-group" style="background: rgba(139, 92, 246, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed rgba(139, 92, 246, 0.3); margin-bottom: 12px; margin-top: 12px;">
+                        <label class="form-label" style="color: #6d28d9; font-weight: 600;">아임웹 B2B몰 상품 URL 입력 (자동 파싱)</label>
+                        <input type="text" id="iwB2bEditUrlInput" class="form-input" placeholder="예: https://bb-store.co.kr/shop_view?idx=927" oninput="parseIwB2bProductUrl(this.value)">
+                        <input type="hidden" id="iwB2bEditIdxInput" value="">
+                    </div>
+                    <div class="submit-section" style="margin-top:12px;">
+                        <button class="btn btn-outline w-full" onclick="searchImwebB2bProducts()" id="iwB2bLoadBtn">
+                            🔍 상품 검색
+                        </button>
+                    </div>
+
+                    <!-- 검색 결과: 개별/세트가 각각 별도 상품이라 어느 것을 수정할지 고른다 -->
+                    <div id="iwB2bSearchResult" style="display:none; margin-top:12px;">
+                        <label class="form-label">검색 결과 — 수정할 상품 선택</label>
+                        <div id="iwB2bResultList"></div>
+                    </div>
+
+                    <div id="iwB2bEditLoaded" style="display:none; margin-top:20px; border-top: 1px dashed rgba(139, 92, 246, 0.2); padding-top:20px;">
+                        <div class="form-group">
+                            <label class="form-label">상품명 (수정 가능)</label>
+                            <input type="text" id="iwB2bEditTitle" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">판매가 (수정 가능)</label>
+                            <input type="number" id="iwB2bEditPrice" class="form-input">
+                        </div>
+                        <div class="step-indicator">
+                            <div class="step-number">A</div>
+                            <span>옵션 목록 편집 (추가 / 삭제)</span>
+                        </div>
+                        <div class="form-group">
+                            <div id="iwB2bOptionList"></div>
+                            <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addImwebB2bOption()">+ 옵션 추가</button>
+                        </div>
+                        <div class="step-indicator">
+                            <div class="step-number">B</div>
+                            <span>상세페이지 조견표 이미지 (추가 / 삭제)</span>
+                        </div>
+                        <div class="form-group">
+                            <div id="iwB2bImageList"></div>
+                            <div style="display:flex; gap:8px; margin-top:10px;">
+                                <input type="text" id="iwB2bNewImageUrl" class="form-input" style="flex:1;"
+                                       placeholder="이미지 URL 또는 &lt;img src='...'&gt; 붙여넣기">
+                                <button type="button" class="btn btn-outline btn-sm" style="color:#dc2626;border-color:#dc2626;" onclick="addImwebB2bImage()">+ 맨 위에 추가</button>
+                            </div>
+                        </div>
+                        <div class="submit-section" style="margin-top:24px;">
+                            <button class="btn btn-gradient w-full" onclick="updateImwebB2bProduct()" id="iwB2bUpdateBtn">
+                                💾 아임웹 B2B몰 상품 수정 실행
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="log-container mt-lg">
+                    <div class="log-header"><h3>아임웹 작업 로그</h3></div>
+                    <div class="log-window" id="imwebLogWindow">
+                        <div class="log-entry system">> 시스템 준비 완료.</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============ 아임웹 본사·해외몰 탭 ============ -->
+            <section class="panel glass-panel tab-pane" id="imwebBoardTab" style="display:none;">
+                <div class="panel-header" style="justify-content: space-between; display: flex;">
+                    <h2>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                        아임웹 본사·해외몰 게시판 포스팅 (옵틱글래스)
+                    </h2>
+                    <button class="btn btn-outline btn-sm" onclick="loginImweb('board')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+                        아임웹 로그인
+                    </button>
+                </div>
+
+                <div class="form-group row" style="margin-bottom: 20px;">
+                    <label class="form-label" style="font-weight: 600;">작업 모드</label>
+                    <div class="radio-group" style="background: rgba(139, 92, 246, 0.05); padding: 6px; border-radius: 6px; border: 1px solid rgba(139, 92, 246, 0.15);">
+                        <label class="radio-btn">
+                            <input type="radio" name="iwBoardWorkMode" value="copy" checked onchange="updateImwebBoardModeUI()">
+                            <span>복사 등록 (기존)</span>
+                        </label>
+                        <label class="radio-btn">
+                            <input type="radio" name="iwBoardWorkMode" value="edit" onchange="updateImwebBoardModeUI()">
+                            <span>기존 상품 수정</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="iwBoardCopyArea">
+                <div class="step-indicator">
+                    <div class="step-number">1</div>
+                    <span>포스팅 대상 게시판</span>
+                </div>
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <label class="checkbox-btn">
+                            <input type="checkbox" id="iwTargetHead" checked>
+                            <span>본사몰 (한국어)</span>
+                        </label>
+                        <label class="checkbox-btn">
+                            <input type="checkbox" id="iwTargetUs">
+                            <span>해외몰 (영문)</span>
+                        </label>
+                        <label class="checkbox-btn">
+                            <input type="checkbox" id="iwTargetJp">
+                            <span>일본몰 (일문)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="step-indicator">
+                    <div class="step-number">2</div>
+                    <span>차량 정보 (게시판 매칭용)</span>
+                </div>
+                <div class="form-group row">
+                    <label class="form-label">국산차 / 수입차</label>
+                    <div class="radio-group">
+                        <label class="radio-btn">
+                            <input type="radio" name="iwBoardNationality" value="국산차" checked onchange="updateBoardBrandOptions()">
+                            <span>국산차</span>
+                        </label>
+                        <label class="radio-btn">
+                            <input type="radio" name="iwBoardNationality" value="수입차" onchange="updateBoardBrandOptions()">
+                            <span>수입차</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group row dual-input">
+                    <div class="input-col">
+                        <label class="form-label">제조사명 (브랜드)</label>
+                        <select id="iwBoardBrand" class="form-input" onchange="updateBoardModelOptions()">
+                            <option value="">-- 카테고리 로딩중 --</option>
+                        </select>
+                    </div>
+                    <div class="input-col">
+                        <label class="form-label">모델명</label>
+                        <select id="iwBoardModel" class="form-input">
+                            <option value="">-- 제조사를 먼저 선택하세요 --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">상품 코드</label>
+                    <input type="text" id="iwBoardCode" class="form-input" placeholder="예: 612">
+                </div>
+
+                <div class="step-indicator">
+                    <div class="step-number">3</div>
+                    <span>제목 표기</span>
+                </div>
+                <div class="form-group row dual-input">
+                    <div class="input-col">
+                        <label class="form-label">한글 제조사 (본사몰용)</label>
+                        <input type="text" id="iwBoardTitleBrand" class="form-input" placeholder="예: 인피니티">
+                    </div>
+                    <div class="input-col">
+                        <label class="form-label">한글 차종 (본사몰용)</label>
+                        <input type="text" id="iwBoardTitleModel" class="form-input" placeholder="예: G25">
+                    </div>
+                </div>
+                <div class="form-group row dual-input">
+                    <div class="input-col">
+                        <label class="form-label">영문 제조사 (해외·일본몰용)</label>
+                        <input type="text" id="iwBoardTitleBrandEn" class="form-input" placeholder="예: INFINITI">
+                    </div>
+                    <div class="input-col">
+                        <label class="form-label">영문 차종 (해외·일본몰용)</label>
+                        <input type="text" id="iwBoardTitleModelEn" class="form-input" placeholder="예: G25">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">세대 표기 (해외·일본몰용, 예: 4th gen)</label>
+                    <input type="text" id="iwBoardGeneration" class="form-input" placeholder="예: 4th gen  →  ※ INFINITI G25 Fitment Guide ※ / 4th gen [No.612]">
+                </div>
+
+                <div class="step-indicator">
+                    <div class="step-number">4</div>
+                    <span>조견표 이미지 URL</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">국내용 조견표 이미지 URL (본사몰)</label>
+                    <input type="text" id="iwBoardSpecImageUrl" class="form-input" placeholder="본사몰 게시글에 넣을 국내용 조견표 이미지 주소">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">해외용 조견표 이미지 URL (해외·일본몰)</label>
+                    <input type="text" id="iwBoardSpecImageUrlEn" class="form-input" placeholder="해외·일본몰 게시글에 넣을 해외용 조견표 이미지 주소">
+                </div>
+
+                <div class="submit-section">
+                    <button class="btn btn-gradient w-full" onclick="registerImwebBoard()" id="imwebBoardRegisterBtn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                        본사·해외몰 게시판 자동 포스팅 실행
+                    </button>
+                </div>
+                </div> <!-- iwBoardCopyArea 끝 -->
+
+                <!-- ============ [수정 모드 전용] 기존 게시글 편집 패널 ============ -->
+                <div id="iwBoardEditPanel" style="display:none;">
+                    <div class="form-group row dual-input" style="margin-top:12px;">
+                        <div class="input-col">
+                            <label class="form-label">검색할 상품 코드</label>
+                            <input type="text" id="iwBoardEditCodeInput" class="form-input" placeholder="예: 612">
+                        </div>
+                        <div class="input-col">
+                            <label class="form-label">대상 언어 게시판</label>
+                            <select id="iwBoardEditLang" class="form-input">
+                                <option value="ko" selected>본사몰 (한국어)</option>
+                                <option value="en">해외몰 (영문)</option>
+                                <option value="jp">일본몰 (일문)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">브랜드 (게시판 이름 매칭용)</label>
+                        <select id="iwBoardEditBrand" class="form-input">
+                            <!-- 로드 시 동적으로 로드되는 카테고리의 브랜드 목록을 사용 -->
+                        </select>
+                    </div>
+                    <div class="submit-section" style="margin-top:12px;">
+                        <button class="btn btn-outline w-full" onclick="searchImwebBoardPosts()" id="iwBoardLoadBtn">
+                            🔍 게시글 검색
+                        </button>
+                    </div>
+
+                    <!-- 검색 결과: 같은 코드가 여러 게시글에 걸릴 수 있어(예: G25/G37 둘 다 [612]) 골라서 불러온다 -->
+                    <div id="iwBoardSearchResult" style="display:none; margin-top:12px;">
+                        <label class="form-label">검색 결과 — 수정할 게시글 선택</label>
+                        <div id="iwBoardResultList"></div>
+                    </div>
+
+                    <div id="iwBoardEditLoaded" style="display:none; margin-top:20px; border-top: 1px dashed rgba(139, 92, 246, 0.2); padding-top:20px;">
+                        <div class="form-group">
+                            <label class="form-label">게시글 제목 (수정 가능)</label>
+                            <input type="text" id="iwBoardEditTitle" class="form-input">
+                        </div>
+                        <div class="step-indicator">
+                            <div class="step-number">A</div>
+                            <span>조견표 이미지 (교체 / 추가 / 삭제)</span>
+                        </div>
+                        <div class="form-group">
+                            <div id="iwBoardImageList"></div>
+                            <div style="display:flex; gap:8px; margin-top:10px;">
+                                <input type="text" id="iwBoardNewImageUrl" class="form-input" style="flex:1;"
+                                       placeholder="새 조견표 이미지 URL 또는 &lt;img src='...'&gt; 붙여넣기">
+                                <button type="button" class="btn btn-outline btn-sm" style="color:#2563eb;border-color:#2563eb;" onclick="replaceImwebBoardImage()">🔄 이미지 교체</button>
+                                <button type="button" class="btn btn-outline btn-sm" style="color:#dc2626;border-color:#dc2626;" onclick="addImwebBoardImage()">+ 추가</button>
+                            </div>
+                            <div style="font-size:11px;color:#9ca3af;margin-top:6px;">
+                                보통은 <b style="color:#2563eb;">교체</b>를 씁니다 — 아래 URL을 붙여넣고 교체하면 기존 조견표 이미지가 바뀝니다.
+                                위 목록의 URL 칸을 직접 고쳐도 교체됩니다.
+                            </div>
+                        </div>
+                        <div class="submit-section" style="margin-top:24px;">
+                            <button class="btn btn-gradient w-full" onclick="updateImwebBoardPost()" id="iwBoardUpdateBtn">
+                                💾 아임웹 본사·해외몰 게시글 수정 실행
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="log-container mt-lg">
+                    <div class="log-header"><h3>아임웹 작업 로그</h3></div>
+                    <div class="log-window" id="imwebBoardLogWindow">
+                        <div class="log-entry system">> 시스템 준비 완료.</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+        <script>
+        const { ipcRenderer } = require('electron');
+
+        // ── State ──
+        let esmImagePath = '';
+        let esmCategory = '자동차';
+        let selectedFolder = '';
+        let lastEsmUrl = ''; // ESM 업로드 후 URL 저장
+
+        const TEMPLATE_ID_CAR = '13427230028';
+        const TEMPLATE_ID_MOTO = '13427256339';
+
+        // ── Tabs ──
+        function switchTab(tabId) {
+            // Hide all tab panes
+            document.querySelectorAll('.tab-pane').forEach(pane => {
+                pane.style.display = 'none';
+            });
+            // Show selected tab pane
+            document.getElementById(tabId).style.display = 'block';
+
+            // Update tab button styles
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+        }
+
+        // ── ESM Category Toggle ──
+        function setEsmCategory(cat) {
+            esmCategory = cat;
+            document.getElementById('btnCategoryCar').classList.toggle('active', cat === '자동차');
+            document.getElementById('btnCategoryMoto').classList.toggle('active', cat === '오토바이');
+            const parentFolder = cat === '자동차' ? '조견표' : '조견표 바이크';
+            document.getElementById('pathCategorySegment').textContent = parentFolder;
+            document.getElementById('folderParentName').textContent = parentFolder;
+            
+            // Reset folder selection
+            const select = document.getElementById('folderSelect');
+            select.innerHTML = '<option value="">-- 폴더를 조회해주세요 --</option>';
+            select.disabled = true;
+            selectedFolder = '';
+            updateUploadBtnState();
+        }
+
+        // ── Image Selection ──
+        async function selectEsmImage() {
+            const result = await ipcRenderer.invoke('select-file', {
+                filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'] }]
+            });
+            if (result.canceled) return;
+            
+            esmImagePath = result.filePath;
+            const fileName = esmImagePath.split(/[\\/]/).pop();
+            
+            // Update UI
+            document.getElementById('esmFileName').textContent = fileName;
+            document.getElementById('esmImagePlaceholder').classList.add('has-file');
+            document.getElementById('fileNameBanner').style.display = 'flex';
+            document.getElementById('fileNameDisplay').textContent = fileName;
+            
+            // Show image preview
+            const preview = document.getElementById('esmImagePreview');
+            preview.src = `file://${esmImagePath}`;
+            preview.style.display = 'block';
+            
+            addLog('esm', `이미지 선택: ${fileName}`, 'success');
+            updateUploadBtnState();
+        }
+
+        // ── Auto Generated Image Loading ──
+        async function loadAutoGeneratedImage() {
+            const inputField = document.getElementById('autoFileNameInput');
+            let customName = inputField ? inputField.value.trim() : '';
+            if (customName === '') customName = 'OPTICGLASS_생성이미지';
+            
+            const btn = document.getElementById('esmAutoUploadBox');
+            btn.style.opacity = '0.5';
+            
+            const result = await ipcRenderer.invoke('load-auto-image', customName);
+            btn.style.opacity = '1';
+            
+            if (!result.success) {
+                addLog('esm', result.error, 'error');
+                alert(result.error);
+                return;
+            }
+            
+            esmImagePath = result.filePath;
+            const fileName = customName + '.jpg';
+            
+            // Update UI
+            document.getElementById('esmFileName').textContent = fileName;
+            document.getElementById('esmImagePlaceholder').classList.add('has-file');
+            document.getElementById('fileNameBanner').style.display = 'flex';
+            document.getElementById('fileNameDisplay').textContent = fileName;
+            
+            // Show image preview
+            const preview = document.getElementById('esmImagePreview');
+            preview.src = `file://${esmImagePath}?t=${new Date().getTime()}`; // 캐시 방지
+            preview.style.display = 'block';
+            
+            addLog('esm', `AI 자동 생성 이미지 불러오기 성공: ${fileName}`, 'success');
+            updateUploadBtnState();
+        }
+
+        // ── Folder Listing ──
+        async function loadFolders() {
+            const btn = document.getElementById('btnLoadFolders');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader-sm"></span> 조회중...';
+            addLog('esm', `${esmCategory} 폴더 조회 시작...`, 'process');
+            
+            const result = await ipcRenderer.invoke('esm-list-folders', { category: esmCategory });
+            
+            btn.disabled = false;
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> 폴더 조회';
+            
+            if (result.success) {
+                const select = document.getElementById('folderSelect');
+                select.innerHTML = '<option value="">-- 폴더를 선택하세요 --</option>';
+                
+                if (result.folders.length === 0) {
+                    addLog('esm', '하위 폴더가 없습니다. 현재 경로에 바로 업로드합니다.', 'system');
+                    select.innerHTML = '<option value="">(현재 폴더에 업로드)</option>';
+                } else {
+                    for (const folder of result.folders) {
+                        const opt = document.createElement('option');
+                        opt.value = folder.name;
+                        opt.textContent = `📁 ${folder.name}`;
+                        select.appendChild(opt);
+                    }
+                    addLog('esm', `${result.folders.length}개 폴더 발견`, 'success');
+                }
+                
+                select.disabled = false;
+                select.onchange = () => {
+                    selectedFolder = select.value;
+                    updateUploadBtnState();
+                };
+            } else {
+                addLog('esm', `폴더 조회 실패: ${result.error}`, 'error');
+            }
+        }
+
+        // ── Upload ──
+        function updateUploadBtnState() {
+            const btn = document.getElementById('btnUpload');
+            btn.disabled = !esmImagePath;
+        }
+
+        async function uploadESM() {
+            if (!esmImagePath) {
+                addLog('esm', '업로드할 이미지를 선택해주세요.', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('btnUpload');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader"></span> 업로드 중...';
+            
+            addLog('esm', `업로드 시작: ${esmCategory} > ${selectedFolder || '(루트)'}`, 'process');
+            
+            const result = await ipcRenderer.invoke('esm-upload', {
+                filePath: esmImagePath,
+                category: esmCategory,
+                targetFolder: selectedFolder
+            });
+
+            btn.disabled = false;
+            btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg><span>업로드</span>';
+            
+            if (result.success) {
+                addLog('esm', '✓ 업로드 성공!', 'success');
+                document.getElementById('esmHtmlOutput').value = result.html;
+                document.getElementById('btnCopyHtml').style.display = 'flex';
+                lastEsmUrl = result.url;
+                
+                // Auto-fill ALL platform panels
+                document.getElementById('naverEsmHtml').value = result.html;
+                document.getElementById('cpEsmHtml').value = result.html;
+                document.getElementById('iwSpecImageUrl').value = result.url;
+                document.getElementById('iwBoardSpecImageUrl').value = result.url;
+                document.getElementById('iwBoardSpecImageUrlEn').value = result.url;
+                addLog('esm', `URL: ${result.url}`, 'system');
+            } else {
+                addLog('esm', `업로드 실패: ${result.error}`, 'error');
+            }
+        }
+
+        // ── Copy HTML ──
+        function copyHtml() {
+            const textarea = document.getElementById('esmHtmlOutput');
+            textarea.select();
+            try {
+                navigator.clipboard.writeText(textarea.value);
+            } catch(e) {
+                document.execCommand('copy');
+            }
+            
+            const btn = document.getElementById('btnCopyHtml');
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> 복사됨!';
+            btn.classList.add('copied');
+            setTimeout(() => {
+                btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> 복사';
+                btn.classList.remove('copied');
+            }, 2000);
+        }
+
+        function updateForm() {
+            const category = document.querySelector('input[name="category"]:checked').value;
+            const priceInput = document.getElementById('price');
+            const templateIdInput = document.getElementById('templateIdInput');
+            const workMode = document.querySelector('input[name="workMode"]:checked').value;
+
+            if (category === '자동차') {
+                priceInput.value = 115000;
+                priceInput.readOnly = false;
+                if (workMode === 'copy') templateIdInput.value = TEMPLATE_ID_CAR;
+            } else {
+                priceInput.value = 60000;
+                priceInput.readOnly = true;
+                if (workMode === 'copy') templateIdInput.value = TEMPLATE_ID_MOTO;
+            }
+            updateTitlePreview();
+        }
+
+        function updateTitlePreview() {
+            const category = document.querySelector('input[name="category"]:checked').value;
+            const brand = document.getElementById('brand').value.trim();
+            const model = document.getElementById('model').value.trim();
+            
+            let title = '';
+            if (category === '자동차') {
+                title = `옵틱글래스 ${brand} ${model} 광각 사이드 와이드미러`.replace(/\s+/g, ' ').trim();
+            } else {
+                title = `옵틱글래스 오토바이 ${brand} ${model} 광각 사이드 와이드미러`.replace(/\s+/g, ' ').trim();
+            }
+            document.getElementById('titlePreview').value = title;
+        }
+
+        // ── Logging ──
+        function addLog(target, msg, type = 'info') {
+            const logMap = {
+                'esm': 'esmLogWindow',
+                'naver': 'naverLogWindow',
+                'coupang': 'coupangLogWindow',
+                'imweb': 'imwebLogWindow',
+                'imwebBoard': 'imwebBoardLogWindow'
+            };
+            const logId = logMap[target] || 'naverLogWindow';
+            const logWindow = document.getElementById(logId);
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const time = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+            entry.innerText = `[${time}] ${msg}`;
+            logWindow.appendChild(entry);
+            logWindow.scrollTop = logWindow.scrollHeight;
+        }
+
+        // ── Platform Login ──
+        async function loginESM() {
+            addLog('esm', 'ESM Plus 로그인 창을 엽니다...', 'system');
+            const result = await ipcRenderer.invoke('esm-login');
+            if (result.success) {
+                document.getElementById('esmLoginStatus').classList.add('online');
+                addLog('esm', '✓ ESM 로그인 성공!', 'success');
+            } else {
+                addLog('esm', `로그인 실패: ${result.error}`, 'error');
+            }
+        }
+
+        async function loginNaver() {
+            addLog('naver', '스마트스토어 로그인 창을 엽니다...', 'system');
+            const result = await ipcRenderer.invoke('naver-login');
+            if (result.success) {
+                addLog('naver', '✓ 스마트스토어 로그인 성공!', 'success');
+            } else {
+                addLog('naver', `로그인 실패: ${result.error}`, 'error');
+            }
+        }
+
+        async function loginImweb(type) {
+            let targetUrl = '';
+            if (type === 'b2b') {
+                targetUrl = 'https://bbstore37.imweb.me/admin/shopping/product';
+                addLog('imweb', '아임웹 B2B몰 로그인 창을 엽니다... (열린 브라우저에서 로그인해 주세요)', 'system');
+            } else {
+                targetUrl = 'https://optic-glass.imweb.me/admin/contents/post/list?page=1&page_size=20';
+                addLog('imwebBoard', '아임웹 본사·해외몰 로그인 창을 엽니다... (열린 브라우저에서 로그인해 주세요)', 'system');
+            }
+            
+            const result = await ipcRenderer.invoke('imweb-login', { targetUrl });
+            if (result.success) {
+                const dot = document.getElementById('imwebLoginStatus');
+                if (dot) dot.classList.add('online');
+                if (type === 'b2b') {
+                    addLog('imweb', '✓ 아임웹 B2B몰 로그인 성공 및 사이트 관리 페이지 진입 완료!', 'success');
+                } else {
+                    addLog('imwebBoard', '✓ 아임웹 본사·해외몰 로그인 성공 및 사이트 관리 페이지 진입 완료!', 'success');
+                }
+            } else {
+                if (type === 'b2b') {
+                    addLog('imweb', `로그인 실패: ${result.error}`, 'error');
+                } else {
+                    addLog('imwebBoard', `로그인 실패: ${result.error}`, 'error');
+                }
+            }
+        }
+
+        function updateModeUI() {
+            const mode = document.querySelector('input[name="workMode"]:checked').value;
+            const btn = document.getElementById('registerBtn');
+            const templateLabel = document.querySelector('#templateInfo .info-label');
+            const templateInput = document.getElementById('templateIdInput');
+            const category = document.querySelector('input[name="category"]:checked').value;
+            
+            if (mode === 'copy') {
+                btn.innerText = '스마트스토어 복사등록 실행';
+                templateLabel.innerText = '템플릿 ID (복사본):';
+                if (!templateInput.value) {
+                    templateInput.value = category === '자동차' ? TEMPLATE_ID_CAR : TEMPLATE_ID_MOTO;
+                }
+            } else {
+                btn.innerText = '스마트스토어 상품수정 실행';
+                templateLabel.innerText = '수정할 상품번호:';
+                if (templateInput.value === TEMPLATE_ID_CAR || templateInput.value === TEMPLATE_ID_MOTO) {
+                    templateInput.value = '';
+                }
+            }
+
+            // 복사등록 전용 영역은 수정 모드에서만 숨긴다 (마크업은 그대로, display만 토글).
+            ssCopyOnlyBlocks().forEach(el => { if (el) el.style.display = (mode === 'copy') ? '' : 'none'; });
+            document.getElementById('ssEditPanel').style.display = (mode === 'copy') ? 'none' : '';
+        }
+
+        // 기존 마크업에 id를 추가하지 않기 위해, 이미 id가 있는 입력에서 부모를 찾아 올라간다.
+        function ssCopyOnlyBlocks() {
+            const byInput = id => { const el = document.getElementById(id); return el ? el.closest('.form-group') : null; };
+            const stepByText = txt => {
+                const tab = document.getElementById('naverTab') || document;
+                return Array.from(tab.querySelectorAll('.step-indicator'))
+                    .find(s => s.textContent.includes(txt)) || null;
+            };
+            return [
+                document.querySelector('input[name="category"]')?.closest('.form-group'),
+                byInput('brand'),
+                byInput('price'),
+                byInput('titlePreview'),
+                byInput('naverEsmHtml'),
+                byInput('optionModel'),
+                stepByText('옵션 설정'),
+                stepByText('상세설명'),
+            ];
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // [수정 모드] 스마트스토어 기존 상품 불러오기 / 편집 / 저장
+        // 복사등록 로직과 완전히 분리되어 있음.
+        // ══════════════════════════════════════════════════════════════════
+        let ssEditState = null;   // { originNo, title, groups[], options[], detailImages[] }
+
+        function parseSsProductUrl(url) {
+            url = url.trim();
+            if (!url) return;
+            // Matches /products/123456 or naProductNo=123456 or /products/detail/123456
+            const match = url.match(/\/products\/(\d+)/) || url.match(/[?&]naProductNo=(\d+)/) || url.match(/\/products\/detail\/(\d+)/);
+            if (match && match[1]) {
+                document.getElementById('templateIdInput').value = match[1];
+                addLog('naver', `✓ URL에서 상품번호 파싱 완료: ${match[1]}`, 'success');
+            }
+        }
+
+        // 제조사·차종으로 스마트스토어 상품번호를 찾아 "수정할 상품번호"에 채운다.
+        async function findSmartstoreId() {
+            const brand = document.getElementById('ssFindBrand').value.trim();
+            const model = document.getElementById('ssFindModel').value.trim();
+            const box = document.getElementById('ssFindResult');
+            if (!brand && !model) { addLog('naver', '제조사 또는 차종을 입력해주세요.', 'error'); return; }
+
+            box.innerHTML = '<span style="font-size:12px;color:#9ca3af;">스마트스토어에서 찾는 중... (브라우저가 열립니다)</span>';
+            const res = await ipcRenderer.invoke('smartstore-find-id', { brand, model });
+            if (!res.success) { box.innerHTML = ''; addLog('naver', `번호 찾기 실패: ${res.error}`, 'error'); return; }
+
+            const rows = res.rows || [];
+            if (!rows.length) {
+                box.innerHTML = '<span style="font-size:12px;color:#dc2626;">일치하는 상품을 찾지 못했습니다.</span>';
+                addLog('naver', `"${brand} ${model}" 상품을 찾지 못했습니다.`, 'error');
+                return;
+            }
+            if (rows.length === 1) {
+                document.getElementById('templateIdInput').value = rows[0].id;
+                box.innerHTML = `<span style="font-size:12px;color:#059669;">✓ 채움: ${escAttr(rows[0].name)} (번호 ${rows[0].id})</span>`;
+                addLog('naver', `✓ 상품번호 ${rows[0].id} 채움 — ${rows[0].name}`, 'success');
+                return;
+            }
+            box.innerHTML = `<div style="font-size:12px;color:#374151;margin-bottom:4px;">${rows.length}건 검색됨 — 선택:</div>` +
+                rows.map(r => `
+                    <div style="display:flex;gap:8px;align-items:center;border:1px solid #e5e7eb;border-radius:4px;padding:6px;margin-bottom:4px;">
+                        <span style="flex:1;font-size:12px;">${escAttr(r.name)}</span>
+                        <span style="font-size:11px;color:#6b7280;">${r.id}</span>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="pickSmartstoreId('${r.id}','${escAttr(r.name)}')">선택</button>
+                    </div>`).join('');
+            addLog('naver', `${rows.length}건 검색됨 — 하나를 선택하세요.`, 'system');
+        }
+
+        function pickSmartstoreId(id, name) {
+            document.getElementById('templateIdInput').value = id;
+            document.getElementById('ssFindResult').innerHTML =
+                `<span style="font-size:12px;color:#059669;">✓ 채움: ${escAttr(name)} (번호 ${id})</span>`;
+            addLog('naver', `✓ 상품번호 ${id} 채움 — ${name}`, 'success');
+        }
+
+        async function loadSmartstoreProduct() {
+            const no = document.getElementById('templateIdInput').value.trim();
+            if (!no) { addLog('naver', '불러올 상품번호를 입력해주세요.', 'error'); return; }
+            const btn = document.getElementById('ssLoadBtn');
+            btn.disabled = true; const orig = btn.innerHTML;
+            btn.innerHTML = '<span class="loader"></span> 불러오는 중... (브라우저가 열립니다)';
+            addLog('naver', `상품 불러오기 시작 (번호: ${no})...`, 'process');
+
+            const res = await ipcRenderer.invoke('smartstore-load-product', no);
+            btn.disabled = false; btn.innerHTML = orig;
+            if (!res.success) { addLog('naver', `불러오기 실패: ${res.error}`, 'error'); return; }
+
+            ssEditState = res.product;
+            document.getElementById('ssEditTitle').value = ssEditState.title;
+            document.getElementById('ssEditLoaded').style.display = '';
+
+            // 옵션 추가 입력부의 라벨을 이 상품의 실제 그룹명으로 맞추고,
+            // 모델명은 기존 옵션 값으로 미리 채워 둔다 (보통 모든 옵션이 동일).
+            const gs = ssEditState.groups || [];
+            ['ssAddLabel0', 'ssAddLabel1', 'ssAddLabel2'].forEach((id, k) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const row = el.closest('.option-row');
+                if (k < gs.length) { el.innerText = gs[k]; if (row) row.style.display = ''; }
+                else if (row) { row.style.display = 'none'; }   // 그룹이 적은 상품이면 칸을 숨김
+            });
+            const first = ssEditState.options[0];
+            if (first) {
+                document.getElementById('ssAddModel').value = first.names[0] || '';
+                const stockEl = document.getElementById('ssAddStock');
+                if (stockEl) stockEl.value = first.stockQuantity ?? 999;
+                const pas = ssEditState.options.find(o => (o.names[2] || '').includes('조수석'));
+                if (pas) document.getElementById('ssAddPassengerPrice').value = pas.price;
+            }
+
+            renderSmartstoreOptions();
+            renderSmartstoreImages();
+            addLog('naver', `✓ 불러오기 완료 — 옵션 ${ssEditState.options.length}개, 상세이미지 ${ssEditState.detailImages.length}장`, 'success');
+        }
+
+        function renderSmartstoreOptions() {
+            const wrap = document.getElementById('ssOptionList');
+            const opts = ssEditState ? ssEditState.options : [];
+            const groups = (ssEditState && ssEditState.groups) || [];
+            if (!opts.length) { wrap.innerHTML = '<div style="color:#9ca3af;font-size:13px;">옵션이 없습니다.</div>'; return; }
+            wrap.innerHTML = opts.map((o, i) => {
+                const inputs = o.names.map((v, k) => `
+                    <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:140px;">
+                        <span style="font-size:11px;color:#6b7280;white-space:nowrap;">${escAttr(groups[k] || ('옵션' + (k + 1)))}</span>
+                        <input type="text" class="form-input" style="flex:1;" value="${escAttr(v)}"
+                               onchange="ssEditState.options[${i}].names[${k}]=this.value; renderSmartstoreOptions();">
+                    </div>`).join('');
+                const preview = o.names.filter(Boolean).join(' / ');
+                return `
+                <div style="border:${o.isNew ? '2px dashed #ffffff' : '1px solid #e5e7eb'};border-radius:6px;padding:8px;margin-bottom:8px;">
+                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                        ${inputs}
+                        <input type="number" class="form-input" style="width:90px;" value="${o.price}"
+                               onchange="ssEditState.options[${i}].price=this.value" title="옵션가(차액)" placeholder="옵션가">
+                        <input type="number" class="form-input" style="width:80px;" value="${o.stockQuantity}"
+                               onchange="ssEditState.options[${i}].stockQuantity=this.value" title="재고" placeholder="재고">
+                        <button type="button" class="btn btn-outline btn-sm" style="color:#dc2626;" onclick="removeSmartstoreOption(${i})">삭제</button>
+                    </div>
+                    <div style="font-size:11px;margin-top:6px;color:#6b7280;">
+                        ${escAttr(preview)}
+                        <span style="color:${o.isNew ? '#2563eb' : '#9ca3af'};margin-left:8px;">${o.isNew ? '신규 옵션' : '기존 옵션'}</span>
+                        <span style="margin-left:8px;">옵션가 ${o.price > 0 ? '+' : ''}${o.price}원</span>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderSmartstoreImages() {
+            const wrap = document.getElementById('ssImageList');
+            const imgs = ssEditState ? ssEditState.detailImages : [];
+            if (!imgs.length) { wrap.innerHTML = '<div style="color:#9ca3af;font-size:13px;">상세 이미지가 없습니다.</div>'; return; }
+            wrap.innerHTML = imgs.map((im, i) => `
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+                    <span style="width:22px;color:#6b7280;font-size:12px;">${i + 1}</span>
+                    <img src="${escAttr(im.url)}" style="width:44px;height:44px;object-fit:cover;border:1px solid #e5e7eb;border-radius:4px;background:#f9fafb;">
+                    <input type="text" class="form-input" style="flex:1;font-size:11px;" value="${escAttr(decodeURIComponent(im.url))}" readonly>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="moveSmartstoreImage(${i},-1)">▲</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="moveSmartstoreImage(${i},1)">▼</button>
+                    <button type="button" class="btn btn-outline btn-sm" style="color:#dc2626;" onclick="removeSmartstoreImage(${i})">삭제</button>
+                </div>`).join('');
+        }
+
+        // 옵션 추가 — 복사등록의 "옵션 입력"과 동일한 방식.
+        // 모델명 / 상품선택 / 운전석,조수석 을 받아 좌석별로 한 줄씩 만든다.
+        // 운전석은 옵션가 0, 조수석은 지정한 옵션가(기본 -10000)를 적용한다.
+        function addSmartstoreOption() {
+            if (!ssEditState) return;
+            const model = document.getElementById('ssAddModel').value.trim();
+            const product = document.getElementById('ssAddProduct').value.trim();
+            const seatRaw = document.getElementById('ssAddSeat').value.trim();
+            const stock = parseInt(document.getElementById('ssAddStock').value) || 0;
+            const passengerPrice = parseInt(document.getElementById('ssAddPassengerPrice').value) || 0;
+
+            const groupCount = (ssEditState.groups && ssEditState.groups.length) || 3;
+            if (!model) { addLog('naver', '모델명을 입력해주세요.', 'error'); return; }
+            if (groupCount >= 2 && !product) { addLog('naver', '상품선택 값을 입력해주세요.', 'error'); return; }
+
+            const seats = groupCount >= 3
+                ? seatRaw.split(',').map(s => s.trim()).filter(Boolean)
+                : [null];
+            if (groupCount >= 3 && !seats.length) { addLog('naver', '운전석/조수석 값을 입력해주세요.', 'error'); return; }
+
+            let added = 0;
+            for (const seat of seats) {
+                const names = [model, product, seat].slice(0, groupCount);
+                const dup = ssEditState.options.some(o => o.names.join('|') === names.join('|'));
+                if (dup) { addLog('naver', `이미 있는 옵션입니다: ${names.filter(Boolean).join(' / ')}`, 'error'); continue; }
+                ssEditState.options.push({
+                    isNew: true,
+                    names,
+                    price: (seat && seat.includes('조수석')) ? passengerPrice : 0,
+                    stockQuantity: stock,
+                    usable: true,
+                });
+                added++;
+            }
+            if (!added) return;
+            renderSmartstoreOptions();
+            document.getElementById('ssAddProduct').value = '';
+            addLog('naver', `옵션 ${added}줄을 추가했습니다. (저장을 눌러야 반영됩니다)`, 'success');
+        }
+        function removeSmartstoreOption(i) {
+            if (!ssEditState) return;
+            if (ssEditState.options.length <= 1) { addLog('naver', '옵션은 최소 1개는 있어야 합니다.', 'error'); return; }
+            ssEditState.options.splice(i, 1); renderSmartstoreOptions();
+        }
+        function addSmartstoreImage() {
+            if (!ssEditState) return;
+            const inp = document.getElementById('ssNewImageUrl');
+            let v = inp.value.trim(); if (!v) return;
+            const m = v.match(/src=["']([^"']+)["']/i); if (m) v = m[1];
+            ssEditState.detailImages.unshift({ url: v, isNew: true });   // 맨 위에 추가
+            inp.value = ''; renderSmartstoreImages();
+            addLog('naver', '상세이미지를 맨 위에 추가했습니다.', 'system');
+        }
+        function removeSmartstoreImage(i) {
+            if (!ssEditState) return;
+            ssEditState.detailImages.splice(i, 1); renderSmartstoreImages();
+        }
+        function moveSmartstoreImage(i, d) {
+            if (!ssEditState) return;
+            const a = ssEditState.detailImages, j = i + d;
+            if (j < 0 || j >= a.length) return;
+            [a[i], a[j]] = [a[j], a[i]]; renderSmartstoreImages();
+        }
+
+        async function saveSmartstoreEdit() {
+            if (!ssEditState) { addLog('naver', '먼저 "상품 불러오기"를 눌러주세요.', 'error'); return; }
+            for (let i = 0; i < ssEditState.options.length; i++) {
+                const o = ssEditState.options[i];
+                const k = o.names.findIndex(v => !String(v || '').trim());
+                if (k >= 0) { addLog('naver', `${i + 1}번 옵션의 "${(ssEditState.groups || [])[k] || ('옵션' + (k + 1))}" 값이 비어 있습니다.`, 'error'); return; }
+            }
+            if (!ssEditState.detailImages.length) { addLog('naver', '상세 이미지는 최소 1장 필요합니다.', 'error'); return; }
+
+            const btn = document.getElementById('registerBtn');
+            btn.disabled = true; btn.innerHTML = '<span class="loader"></span> 저장 중...';
+            addLog('naver', `상품수정 저장 시작 — 옵션 ${ssEditState.options.length}개, 이미지 ${ssEditState.detailImages.length}장`, 'process');
+
+            const result = await ipcRenderer.invoke('smartstore-update-product', {
+                originNo: ssEditState.originNo,
+                title: document.getElementById('ssEditTitle').value.trim(),
+                options: ssEditState.options,
+                detailImages: ssEditState.detailImages,
+            });
+
+            btn.disabled = false; updateModeUI();
+            if (result.success) addLog('naver', `✓ ${result.message}`, 'success');
+            else addLog('naver', `상품수정 실패: ${result.error}`, 'error');
+        }
+
+        async function registerNaver() {
+            // 수정 모드는 전용 저장 함수로 분기 (아래 복사등록 로직은 그대로 유지)
+            if (document.querySelector('input[name="workMode"]:checked').value === 'edit') return saveSmartstoreEdit();
+            const category = document.querySelector('input[name="category"]:checked').value;
+            const workMode = document.querySelector('input[name="workMode"]:checked').value;
+            const title = document.getElementById('titlePreview').value;
+            const price = document.getElementById('price').value;
+            const stock = document.getElementById('stock').value;
+            const optionModel = document.getElementById('optionModel').value;
+            const optionProduct = document.getElementById('optionProduct').value;
+            const optionSeat = document.getElementById('optionSeat').value;
+            const esmHtml = document.getElementById('naverEsmHtml').value;
+            const brand = document.getElementById('brand').value.trim();
+            const model = document.getElementById('model').value.trim();
+
+            // In copy mode, require all fields. In edit mode, allow empty fields except HTML and ID.
+            if (workMode === 'copy') {
+                if (!brand || !model || !title) {
+                    addLog('naver', '제조사명과 모델명을 입력해주세요.', 'error');
+                    return;
+                }
+                if (!optionModel) {
+                    addLog('naver', '옵션 > 모델명을 입력해주세요.', 'error');
+                    return;
+                }
+                if (!optionProduct) {
+                    addLog('naver', '옵션 > 상품선택을 입력해주세요.', 'error');
+                    return;
+                }
+            }
+
+            if (!esmHtml) {
+                addLog('naver', 'ESM HTML이 없습니다. 먼저 ESM 업로드를 진행해주세요.', 'error');
+                return;
+            }
+
+            const templateId = document.getElementById('templateIdInput').value.trim();
+
+            if (!templateId) {
+                addLog('naver', '템플릿 ID(상품번호)를 입력해주세요.', 'error');
+                return;
+            }
+
+            const modeText = workMode === 'copy' ? '복사등록' : '상품수정';
+            addLog('naver', `${modeText} 시작 (ID: ${templateId})...`, 'process');
+            
+            const btn = document.getElementById('registerBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader"></span> 처리 중...';
+
+            const result = await ipcRenderer.invoke('naver-register', {
+                templateId, category, title, price, stock,
+                optionModel, optionProduct, optionSeat,
+                mainImagePath: '', esmHtml, mode: workMode
+            });
+
+            if (result.success) {
+                addLog('naver', `✓ 등록 완료! URL: ${result.url}`, 'success');
+            } else {
+                addLog('naver', `등록 실패: ${result.error}`, 'error');
+            }
+
+            btn.disabled = false;
+            // Restore button text based on current mode
+            const currentMode = document.querySelector('input[name="workMode"]:checked').value;
+            btn.innerHTML = currentMode === 'copy' ? '스마트스토어 복사등록 실행' : '스마트스토어 상품수정 실행';
+        }
+
+        // ────────────────────────────────────────────
+        // Coupang Functions (Open API)
+        // ────────────────────────────────────────────
+
+        const CP_TEMPLATE_CAR = '13670011949'; // 기본 고정할 템플릿 ID
+        const CP_TEMPLATE_MOTO = '16237601401';
+
+        function updateCoupangModeUI() {
+            const mode = document.querySelector('input[name="cpWorkMode"]:checked').value;
+            const btn = document.getElementById('coupangRegisterBtn');
+            const idLabel = document.getElementById('cpProductIdLabel');
+            const idInput = document.getElementById('cpProductIdInput');
+            const category = document.querySelector('input[name="cpCategory"]:checked').value;
+
+            if (mode === 'copy') {
+                btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> 쿠팡 복사등록 실행';
+                idLabel.innerText = '템플릿 ID:';
+                idInput.value = category === '자동차' ? CP_TEMPLATE_CAR : CP_TEMPLATE_MOTO;
+            } else {
+                btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> 쿠팡 상품수정 실행';
+                idLabel.innerText = '수정할 상품 ID:';
+                if (idInput.value === CP_TEMPLATE_CAR || idInput.value === CP_TEMPLATE_MOTO) {
+                    idInput.value = '';
+                }
+            }
+
+            // 복사등록 전용 영역은 수정 모드에서만 숨긴다 (마크업은 그대로 두고 display만 토글).
+            cpCopyOnlyBlocks().forEach(el => { if (el) el.style.display = (mode === 'copy') ? '' : 'none'; });
+            document.getElementById('cpEditPanel').style.display = (mode === 'copy') ? 'none' : '';
+        }
+
+        // ── [수정 모드] 복사등록 전용 블록 목록 ─────────────────────────────
+        // 기존 마크업에 id를 추가하지 않기 위해, 이미 id가 있는 입력에서 부모를 찾아 올라간다.
+        function cpCopyOnlyBlocks() {
+            const byInput = id => {
+                const el = document.getElementById(id);
+                return el ? el.closest('.form-group') : null;
+            };
+            const stepByText = txt => {
+                const tab = document.getElementById('coupangTab') || document;
+                return Array.from(tab.querySelectorAll('.step-indicator'))
+                    .find(s => s.textContent.includes(txt)) || null;
+            };
+            return [
+                document.querySelector('input[name="cpCategory"]')?.closest('.form-group'),
+                byInput('cpBrand'),
+                byInput('cpTitlePreview'),
+                byInput('cpPrice'),
+                stepByText('옵션 설정'),
+                byInput('cpOptModel'),
+                stepByText('상세설명'),
+                byInput('cpEsmHtml'),
+            ];
+        }
+
+        function updateCoupangForm() {
+            const category = document.querySelector('input[name="cpCategory"]:checked').value;
+            const mode = document.querySelector('input[name="cpWorkMode"]:checked').value;
+            const priceInput = document.getElementById('cpPrice');
+            const idInput = document.getElementById('cpProductIdInput');
+
+            if (category === '자동차') {
+                priceInput.value = 115000;
+                if (mode === 'copy') idInput.value = CP_TEMPLATE_CAR;
+            } else {
+                priceInput.value = 60000;
+                if (mode === 'copy') idInput.value = CP_TEMPLATE_MOTO;
+            }
+            updateCoupangTitle();
+        }
+
+        function updateCoupangTitle() {
+            const category = document.querySelector('input[name="cpCategory"]:checked').value;
+            const brand = document.getElementById('cpBrand').value.trim();
+            const model = document.getElementById('cpModel').value.trim();
+            
+            let title = '';
+            if (category === '자동차') {
+                title = `옵틱글래스 ${brand} ${model} 광각 사이드 와이드미러`.replace(/\s+/g, ' ').trim();
+            } else {
+                title = `옵틱글래스 오토바이 ${brand} ${model} 광각 사이드 와이드미러`.replace(/\s+/g, ' ').trim();
+            }
+            document.getElementById('cpTitlePreview').value = title;
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // [수정 모드] 기존 상품 불러오기 / 옵션·상세이미지 편집 / 저장
+        // 복사등록 로직과 완전히 분리되어 있음.
+        // ══════════════════════════════════════════════════════════════════
+        let cpEditState = null;   // { productId, title, options[], detailImages[] }
+
+        // 제조사·차종으로 구글 시트에서 등록상품ID를 찾아 "수정할 상품 ID"에 채운다.
+        async function findCoupangIdFromSheet() {
+            const brand = document.getElementById('cpFindBrand').value.trim();
+            const model = document.getElementById('cpFindModel').value.trim();
+            const box = document.getElementById('cpFindResult');
+            if (!brand && !model) { addLog('coupang', '제조사 또는 차종을 입력해주세요.', 'error'); return; }
+
+            box.innerHTML = '<span style="font-size:12px;color:#9ca3af;">시트에서 찾는 중...</span>';
+            const res = await ipcRenderer.invoke('coupang-find-id', { brand, model });
+            if (!res.success) { box.innerHTML = ''; addLog('coupang', `ID 찾기 실패: ${res.error}`, 'error'); return; }
+
+            const rows = res.rows || [];
+            const src = res.source === 'sheet' ? '시트' : 'API';
+            if (res.source === 'sheet') addLog('coupang', `쿠팡 API 검색 실패로 시트에서 조회했습니다. (${res.apiError || ''})`, 'system');
+            if (!rows.length) {
+                box.innerHTML = '<span style="font-size:12px;color:#dc2626;">일치하는 상품을 찾지 못했습니다.</span>';
+                addLog('coupang', `${src}에서 "${brand} ${model}" 상품을 찾지 못했습니다.`, 'error');
+                return;
+            }
+            if (rows.length === 1) {
+                document.getElementById('cpProductIdInput').value = rows[0].id;
+                box.innerHTML = `<span style="font-size:12px;color:#059669;">✓ 채움: ${escAttr(rows[0].name)} (ID ${rows[0].id})</span>`;
+                addLog('coupang', `✓ 상품 ID ${rows[0].id} 채움 — ${rows[0].name}`, 'success');
+                return;
+            }
+            // 여러 건 → 골라서 채우기
+            box.innerHTML = `<div style="font-size:12px;color:#374151;margin-bottom:4px;">${rows.length}건 검색됨 — 선택:</div>` +
+                rows.map(r => `
+                    <div style="display:flex;gap:8px;align-items:center;border:1px solid #e5e7eb;border-radius:4px;padding:6px;margin-bottom:4px;">
+                        <span style="flex:1;font-size:12px;">${escAttr(r.name)}</span>
+                        <span style="font-size:11px;color:#6b7280;">${r.id}</span>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="pickCoupangId('${r.id}','${escAttr(r.name)}')">선택</button>
+                    </div>`).join('');
+            addLog('coupang', `시트에서 ${rows.length}건 검색됨 — 하나를 선택하세요.`, 'system');
+        }
+
+        function pickCoupangId(id, name) {
+            document.getElementById('cpProductIdInput').value = id;
+            document.getElementById('cpFindResult').innerHTML =
+                `<span style="font-size:12px;color:#059669;">✓ 채움: ${escAttr(name)} (ID ${id})</span>`;
+            addLog('coupang', `✓ 상품 ID ${id} 채움 — ${name}`, 'success');
+        }
+
+        async function loadCoupangProduct() {
+            const productId = document.getElementById('cpProductIdInput').value.trim();
+            if (!productId) {
+                addLog('coupang', '불러올 상품 ID를 입력해주세요.', 'error');
+                return;
+            }
+            const btn = document.getElementById('cpLoadBtn');
+            btn.disabled = true;
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<span class="loader"></span> 불러오는 중...';
+
+            addLog('coupang', `상품 불러오기 시작 (ID: ${productId})...`, 'process');
+            const res = await ipcRenderer.invoke('coupang-load-product', productId);
+
+            btn.disabled = false;
+            btn.innerHTML = orig;
+
+            if (!res.success) {
+                addLog('coupang', `불러오기 실패: ${res.error}`, 'error');
+                return;
+            }
+            cpEditState = res.product;
+            document.getElementById('cpEditTitle').value = cpEditState.title;
+            document.getElementById('cpEditLoaded').style.display = '';
+            renderCoupangOptions();
+            renderCoupangImages();
+            addLog('coupang', `✓ 불러오기 완료 — 옵션 ${cpEditState.options.length}개, 상세이미지 ${cpEditState.detailImages.length}장`, 'success');
+        }
+
+        function renderCoupangOptions() {
+            const wrap = document.getElementById('cpOptionList');
+            const opts = cpEditState ? cpEditState.options : [];
+            if (!opts.length) {
+                wrap.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:8px 0;">옵션이 없습니다.</div>';
+                return;
+            }
+            wrap.innerHTML = opts.map((o, i) => {
+                // 구매옵션은 속성이 여러 개일 수 있다 (예: 수량 + 차종) → 각각 따로 입력받는다.
+                const attrInputs = (o.attrs && o.attrs.length)
+                    ? o.attrs.map((a, k) => `
+                        <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:150px;">
+                            <span style="font-size:11px;color:#6b7280;white-space:nowrap;">${escAttr(a.typeName)}</span>
+                            <input type="text" class="form-input" style="flex:1;" value="${escAttr(a.value)}"
+                                   onchange="cpEditState.options[${i}].attrs[${k}].value=this.value; renderCoupangOptions();"
+                                   placeholder="${escAttr(a.typeName)}">
+                        </div>`).join('')
+                    : `<input type="text" class="form-input" style="flex:2;" value="${escAttr(o.itemName)}"
+                              onchange="cpEditState.options[${i}].itemName=this.value" placeholder="옵션명">`;
+                const preview = (o.attrs && o.attrs.length)
+                    ? o.attrs.map(a => String(a.value || '').trim()).filter(Boolean).join(' ')
+                    : o.itemName;
+                return `
+                <div style="border:${o.isNew ? '2px dashed #ffffff' : '1px solid #e5e7eb'};border-radius:6px;padding:8px;margin-bottom:8px;">
+                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                        <img src="${escAttr(o.imageUrl)}" title="이 옵션의 대표이미지"
+                             style="width:40px;height:40px;object-fit:cover;border:1px solid ${o.imageInherited ? '#2563eb' : '#e5e7eb'};border-radius:4px;background:#f9fafb;flex:none;">
+                        ${attrInputs}
+                        <input type="number" class="form-input" style="width:100px;" value="${o.salePrice}"
+                               onchange="cpEditState.options[${i}].salePrice=this.value" placeholder="판매가">
+                        <input type="number" class="form-input" style="width:80px;" value="${o.stock}"
+                               onchange="cpEditState.options[${i}].stock=this.value" placeholder="재고">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="changeCoupangOptionImage(${i})" title="대표이미지 변경">🖼</button>
+                        <button type="button" class="btn btn-outline btn-sm" style="color:#dc2626;" onclick="removeCoupangOption(${i})">삭제</button>
+                    </div>
+                    <div style="font-size:11px;margin-top:6px;margin-left:48px;color:#6b7280;">
+                        옵션명: <b style="color:#111827;">${escAttr(preview)}</b>
+                        <span style="color:${o.isNew ? '#2563eb' : '#9ca3af'};margin-left:8px;">${o.isNew ? '신규 옵션' : '기존 옵션'}</span>
+                        ${o.imageInherited ? '<span style="color:#2563eb;"> · 대표이미지 상속됨</span>' : ''}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderCoupangImages() {
+            const wrap = document.getElementById('cpImageList');
+            const imgs = cpEditState ? cpEditState.detailImages : [];
+            if (!imgs.length) {
+                wrap.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:8px 0;">상세 이미지가 없습니다.</div>';
+                return;
+            }
+            wrap.innerHTML = imgs.map((im, i) => `
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+                    <span style="width:22px;color:#6b7280;font-size:12px;">${i + 1}</span>
+                    <img src="${escAttr(im.url)}" style="width:44px;height:44px;object-fit:cover;border:1px solid #e5e7eb;border-radius:4px;background:#f9fafb;">
+                    <input type="text" class="form-input" style="flex:1;font-size:11px;" value="${escAttr(im.url)}" readonly
+                           title="${escAttr(im.blockType)} 형식">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="moveCoupangImage(${i},-1)" title="위로">▲</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="moveCoupangImage(${i},1)" title="아래로">▼</button>
+                    <button type="button" class="btn btn-outline btn-sm" style="color:#dc2626;" onclick="removeCoupangImage(${i})">삭제</button>
+                </div>
+            `).join('');
+        }
+
+        function escAttr(s) {
+            return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        }
+
+        function addCoupangOption() {
+            if (!cpEditState) return;
+            const last = cpEditState.options[cpEditState.options.length - 1];
+            const base = cpEditState.options[0];   // 신규 옵션은 첫 번째 기존 옵션을 복제해서 만들어진다
+            cpEditState.options.push({
+                isNew: true, itemName: '',
+                // 구매옵션 속성 구조는 그대로 물려받고 값만 채워넣게 한다.
+                // 수량 같은 단위 속성은 기존 값을 유지해야 쿠팡 검증을 통과한다.
+                attrs: base && base.attrs ? base.attrs.map(a => ({ ...a })) : [],
+                salePrice: last ? last.salePrice : 0,
+                stock: last ? last.stock : 0,
+                imageUrl: base ? base.imageUrl : '',
+                imageInherited: true,
+            });
+            renderCoupangOptions();
+        }
+
+        // 옵션별 대표이미지 변경 (비워두면 기존/상속 이미지를 그대로 사용)
+        function changeCoupangOptionImage(i) {
+            if (!cpEditState) return;
+            const o = cpEditState.options[i];
+            const cur = o.imageUrl || '';
+            const v = prompt('이 옵션의 대표이미지 URL을 입력하세요.\n(비우고 확인하면 기존 이미지를 그대로 사용합니다)', cur);
+            if (v === null) return;                 // 취소
+            let url = v.trim();
+            const m = url.match(/src=["']([^"']+)["']/i);
+            if (m) url = m[1];
+            o.imageUrl = url;
+            o.imageInherited = false;
+            renderCoupangOptions();
+            addLog('coupang', url ? `옵션 ${i + 1} 대표이미지 변경 예약됨` : `옵션 ${i + 1} 대표이미지 유지`, 'system');
+        }
+
+        function removeCoupangOption(i) {
+            if (!cpEditState) return;
+            if (cpEditState.options.length <= 1) {
+                addLog('coupang', '옵션은 최소 1개는 있어야 합니다.', 'error');
+                return;
+            }
+            cpEditState.options.splice(i, 1);
+            renderCoupangOptions();
+        }
+
+        function addCoupangImage() {
+            if (!cpEditState) return;
+            const input = document.getElementById('cpNewImageUrl');
+            let v = input.value.trim();
+            if (!v) return;
+            const m = v.match(/src=["']([^"']+)["']/i);   // <img src="..."> 붙여넣기 지원
+            if (m) v = m[1];
+            // 새 이미지는 복사등록에서 검증된 HTML 블록 형식으로 저장된다.
+            // 맨 위(첫 번째)에 추가한다.
+            cpEditState.detailImages.unshift({ raw: v, url: v, blockType: 'HTML', isNew: true });
+            input.value = '';
+            renderCoupangImages();
+            addLog('coupang', '상세이미지를 맨 위에 추가했습니다. (▼로 순서 조정 가능)', 'system');
+        }
+
+        function removeCoupangImage(i) {
+            if (!cpEditState) return;
+            cpEditState.detailImages.splice(i, 1);
+            renderCoupangImages();
+        }
+
+        function moveCoupangImage(i, dir) {
+            if (!cpEditState) return;
+            const arr = cpEditState.detailImages;
+            const j = i + dir;
+            if (j < 0 || j >= arr.length) return;
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+            renderCoupangImages();
+        }
+
+        async function saveCoupangEdit() {
+            const productId = document.getElementById('cpProductIdInput').value.trim();
+            if (!productId) {
+                addLog('coupang', '수정할 상품 ID를 입력해주세요.', 'error');
+                return;
+            }
+            if (!cpEditState) {
+                addLog('coupang', '먼저 "상품 불러오기"를 눌러주세요.', 'error');
+                return;
+            }
+            for (let i = 0; i < cpEditState.options.length; i++) {
+                const o = cpEditState.options[i];
+                if (o.attrs && o.attrs.length) {
+                    const blank = o.attrs.find(a => !String(a.value || '').trim());
+                    if (blank) {
+                        addLog('coupang', `${i + 1}번 옵션의 "${blank.typeName}" 값이 비어 있습니다.`, 'error');
+                        return;
+                    }
+                } else if (!String(o.itemName || '').trim()) {
+                    addLog('coupang', `${i + 1}번 옵션명이 비어 있습니다.`, 'error');
+                    return;
+                }
+            }
+
+            const btn = document.getElementById('coupangRegisterBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader"></span> 처리 중...';
+            addLog('coupang', `상품수정 저장 시작 (ID: ${productId}) — 옵션 ${cpEditState.options.length}개, 이미지 ${cpEditState.detailImages.length}장`, 'process');
+
+            const result = await ipcRenderer.invoke('coupang-update', {
+                productId,
+                title: document.getElementById('cpEditTitle').value.trim(),
+                options: cpEditState.options,
+                detailImages: cpEditState.detailImages,
+            });
+
+            btn.disabled = false;
+            updateCoupangModeUI();
+
+            if (result.success) {
+                addLog('coupang', `✓ ${result.message}`, 'success');
+                addLog('coupang', '변경 내용은 쿠팡 승인 후 반영됩니다.', 'system');
+            } else {
+                addLog('coupang', `상품수정 실패: ${result.error}`, 'error');
+            }
+        }
+
+        async function registerCoupang() {
+            const mode = document.querySelector('input[name="cpWorkMode"]:checked').value;
+            // 수정 모드는 전용 저장 함수로 분기 (아래 복사등록 로직은 그대로 유지)
+            if (mode === 'edit') return saveCoupangEdit();
+            const category = document.querySelector('input[name="cpCategory"]:checked').value;
+            const title = document.getElementById('cpTitlePreview').value;
+            const price = document.getElementById('cpPrice').value;
+            const stock = document.getElementById('cpStock').value;
+            const optionModel = document.getElementById('cpOptModel').value;
+            const optionProduct = document.getElementById('cpOptProduct').value;
+            const esmHtml = document.getElementById('cpEsmHtml').value;
+            const brand = document.getElementById('cpBrand').value.trim();
+            const model = document.getElementById('cpModel').value.trim();
+            const productId = document.getElementById('cpProductIdInput').value.trim();
+
+            // Validation
+            if (mode === 'copy') {
+                if (!brand || !model) {
+                    addLog('coupang', '제조사명과 모델명을 입력해주세요.', 'error');
+                    return;
+                }
+            } else {
+                if (!productId) {
+                    addLog('coupang', '수정할 상품 ID를 입력해주세요.', 'error');
+                    return;
+                }
+            }
+
+            if (!esmHtml) {
+                addLog('coupang', 'ESM HTML이 없습니다. ESM 탭에서 이미지를 먼저 업로드해주세요.', 'error');
+                return;
+            }
+
+            const modeText = mode === 'copy' ? '복사등록' : '상품수정';
+            addLog('coupang', `쿠팡 ${modeText} 시작: ${mode === 'copy' ? title : '(ID: ' + productId + ')'}`, 'process');
+            
+            const btn = document.getElementById('coupangRegisterBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader"></span> 처리 중...';
+
+            let result;
+            if (mode === 'copy') {
+                console.log('COUPANG_REGISTER_PARAMS:', JSON.stringify({ productId, category, title, price, stock, optionModel, optionProduct, esmHtml, esmImageUrl: lastEsmUrl }, null, 2));
+                result = await ipcRenderer.invoke('coupang-register', {
+                    productId,
+                    category, title, price, stock,
+                    optionModel, optionProduct,
+                    esmHtml, esmImageUrl: lastEsmUrl
+                });
+            } else {
+                result = await ipcRenderer.invoke('coupang-update', {
+                    productId, category, title, price, stock,
+                    esmHtml, esmImageUrl: lastEsmUrl
+                });
+            }
+
+            btn.disabled = false;
+            updateCoupangModeUI();
+
+            if (result.success) {
+                addLog('coupang', `✓ ${result.message}`, 'success');
+                if (result.productId) {
+                    addLog('coupang', `상품 ID: ${result.productId}`, 'system');
+                }
+            } else {
+                addLog('coupang', `${modeText} 실패: ${result.error}`, 'error');
+            }
+        }
+
+        // Load saved config on tab init
+        async function loadCoupangConfig() {
+            const result = await ipcRenderer.invoke('coupang-load-config');
+            if (result.success && result.config) {
+                const c = result.config;
+                document.getElementById('cpVendorId').value = c.vendorId || '';
+                document.getElementById('cpAccessKey').value = c.accessKey || '';
+                document.getElementById('cpSecretKey').value = c.secretKey || '';
+                document.getElementById('cpOutboundCode').value = c.outboundShippingPlaceCode || '';
+                document.getElementById('cpReturnCode').value = c.returnCenterCode || '';
+                document.getElementById('cpCategoryCode').value = c.displayCategoryCode || '';
+                document.getElementById('cpAsPhone').value = c.afterServiceContactNumber || '';
+
+                if (c.vendorId && c.accessKey) {
+                    addLog('coupang', '저장된 API 설정을 불러왔습니다.', 'system');
+                }
+            }
+        }
+
+        async function saveCoupangConfig() {
+            const vendorId = document.getElementById('cpVendorId').value.trim();
+            const accessKey = document.getElementById('cpAccessKey').value.trim();
+            const secretKey = document.getElementById('cpSecretKey').value.trim();
+            const outboundShippingPlaceCode = document.getElementById('cpOutboundCode').value.trim();
+            const returnCenterCode = document.getElementById('cpReturnCode').value.trim();
+            const displayCategoryCode = document.getElementById('cpCategoryCode').value.trim() || null;
+            const afterServiceContactNumber = document.getElementById('cpAsPhone').value.trim();
+
+            if (!vendorId || !accessKey || !secretKey) {
+                addLog('coupang', '업체코드, Access Key, Secret Key를 모두 입력해주세요.', 'error');
+                return;
+            }
+
+            const config = { vendorId, accessKey, secretKey, outboundShippingPlaceCode, returnCenterCode, displayCategoryCode, afterServiceContactNumber };
+
+            addLog('coupang', 'API 설정 저장 중...', 'process');
+            const result = await ipcRenderer.invoke('coupang-save-config', config);
+
+            if (result.success) {
+                addLog('coupang', '✓ API 설정이 저장되었습니다.', 'success');
+            } else {
+                addLog('coupang', `설정 저장 실패: ${result.error}`, 'error');
+            }
+        }
+
+        async function testCoupangConnection() {
+            const btn = document.getElementById('btnTestCp');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader-sm"></span> 테스트 중...';
+            addLog('coupang', 'API 연결 테스트 중...', 'process');
+
+            await saveCoupangConfig();
+
+            const result = await ipcRenderer.invoke('coupang-test-connection');
+
+            btn.disabled = false;
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> 연결 테스트';
+
+            if (result.success) {
+                document.getElementById('coupangConnectionDot').classList.add('online');
+                document.getElementById('coupangStatusText').textContent = '연결됨';
+                addLog('coupang', `✓ ${result.message}`, 'success');
+            } else {
+                document.getElementById('coupangConnectionDot').classList.remove('online');
+                document.getElementById('coupangStatusText').textContent = '연결 실패';
+                addLog('coupang', `연결 실패: ${result.error}`, 'error');
+            }
+        }
+
+        async function queryCoupangShippingPlaces() {
+            addLog('coupang', '출고지/반품지 코드를 조회합니다...', 'process');
+
+            // 쿠팡 API 429 (Too Many Requests) 방지를 위해 순차적으로 호출 (약간의 딜레이 추가)
+            const shippingResult = await ipcRenderer.invoke('coupang-get-shipping-places');
+            await new Promise(r => setTimeout(r, 500)); // 0.5초 대기
+            const returnResult = await ipcRenderer.invoke('coupang-get-return-centers');
+
+            if (shippingResult.success && shippingResult.data?.length > 0) {
+                const places = shippingResult.data;
+                addLog('coupang', `출고지 ${places.length}개 발견:`, 'success');
+                places.forEach((p, i) => {
+                    addLog('coupang', `  [${i}] 코드: ${p.outboundShippingPlaceCode || p.placeCode} / ${p.shippingPlaceName || p.placeName || ''}`, 'system');
+                });
+                const codeField = document.getElementById('cpOutboundCode');
+                if (!codeField.value && places[0]) {
+                    codeField.value = places[0].outboundShippingPlaceCode || places[0].placeCode || '';
+                }
+            } else {
+                addLog('coupang', `출고지 조회 실패: ${shippingResult.error || '데이터 없음'}`, 'error');
+            }
+
+            if (returnResult.success && returnResult.data?.length > 0) {
+                const centers = returnResult.data;
+                addLog('coupang', `반품지 ${centers.length}개 발견:`, 'success');
+                centers.forEach((c, i) => {
+                    addLog('coupang', `  [${i}] 코드: ${c.returnCenterCode || c.centerCode} / ${c.shippingPlaceName || c.centerName || ''}`, 'system');
+                });
+                const returnField = document.getElementById('cpReturnCode');
+                if (!returnField.value && centers[0]) {
+                    returnField.value = centers[0].returnCenterCode || centers[0].centerCode || '';
+                }
+            } else {
+                addLog('coupang', `반품지 조회 실패: ${returnResult.error || '데이터 없음'}`, 'error');
+            }
+        }
+
+        ipcRenderer.on('log', (event, msg) => addLog('naver', msg, 'process'));
+
+        // Initialize
+        updateForm();
+        updateCoupangTitle();
+        updateCoupangModeUI();
+                // ────────────────────────────────────────────
+        // Imweb Functions
+        // ────────────────────────────────────────────
+        let imwebCategories = { 국산차: {}, 수입차: {} };
+
+        function fillBrandSelect(selectId, nationality) {
+            const brands = Object.keys(imwebCategories[nationality] || {}).sort();
+            const sel = document.getElementById(selectId);
+            if (!sel) return;
+            sel.innerHTML = brands.length
+                ? brands.map(b => `<option value="${b}">${b}</option>`).join('')
+                : '<option value="">-- 제조사 없음 --</option>';
+        }
+
+        function fillModelSelect(selectId, nationality, brand) {
+            const models = (imwebCategories[nationality] && imwebCategories[nationality][brand]) || [];
+            const sel = document.getElementById(selectId);
+            if (!sel) return;
+            sel.innerHTML = models.length
+                ? models.map(m => `<option value="${m}">${m}</option>`).join('')
+                : '<option value="">-- 모델 없음 --</option>';
+        }
+
+        function fillBoardEditBrands() {
+            const select = document.getElementById('iwBoardEditBrand');
+            if (!select) return;
+            select.innerHTML = '';
+            
+            if (!imwebCategories) {
+                select.innerHTML = '<option value="">-- 카테고리를 먼저 동기화하세요 --</option>';
+                return;
+            }
+            
+            const kBrands = Object.keys(imwebCategories['국산차'] || {});
+            const fBrands = Object.keys(imwebCategories['수입차'] || {});
+            
+            const allBrands = Array.from(new Set([...kBrands, ...fBrands])).sort();
+            
+            if (!allBrands.length) {
+                select.innerHTML = '<option value="">-- 카테고리를 먼저 동기화하세요 --</option>';
+                return;
+            }
+            
+            allBrands.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b;
+                opt.textContent = b;
+                select.appendChild(opt);
+            });
+        }
+
+        async function loadImwebCategories() {
+            const result = await ipcRenderer.invoke('imweb-load-categories');
+            if (result.success && result.categories) {
+                imwebCategories = result.categories;
+                updateImwebBrandOptions();      // B2B 탭
+                updateBoardBrandOptions();      // 본사·해외몰 탭
+                fillBoardEditBrands();          // 게시글 수정 브랜드 드롭다운
+                updateB2bEditBrandOptions();    // B2B 수정 브랜드 드롭다운
+            } else {
+                addLog('imweb', `카테고리 목록 로드 실패: ${result.error}`, 'error');
+                document.getElementById('iwBrand').innerHTML = '<option value="">-- 카테고리 로드 실패 --</option>';
+            }
+        }
+
+        async function syncImwebCategories() {
+            const btn = document.getElementById('btnSyncCategories');
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader-sm"></span> 동기화 중...';
+            addLog('imweb', '아임웹 카테고리 동기화를 시작합니다 (관리자 로그인이 필요할 수 있습니다)...', 'process');
+            try {
+                const result = await ipcRenderer.invoke('imweb-sync-categories');
+                if (result.success) {
+                    imwebCategories = result.categories;
+                    updateImwebBrandOptions();
+                    updateBoardBrandOptions();
+                    fillBoardEditBrands();
+                    updateB2bEditBrandOptions();
+                    const d = Object.keys(result.categories['국산차'] || {}).length;
+                    const f = Object.keys(result.categories['수입차'] || {}).length;
+                    addLog('imweb', `✓ 카테고리 동기화 완료! (국산차 ${d}개 / 수입차 ${f}개 제조사)`, 'success');
+                } else {
+                    addLog('imweb', `동기화 실패: ${result.error}`, 'error');
+                }
+            } catch (e) {
+                addLog('imweb', `동기화 오류: ${e.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+            }
+        }
+
+        // ── B2B 탭 드롭다운 ──
+        function updateImwebBrandOptions() {
+            const nat = document.querySelector('input[name="iwNationality"]:checked').value;
+            fillBrandSelect('iwBrand', nat);
+            updateImwebModelOptions();
+        }
+        function updateImwebModelOptions() {
+            const nat = document.querySelector('input[name="iwNationality"]:checked').value;
+            fillModelSelect('iwModel', nat, document.getElementById('iwBrand').value);
+        }
+
+        // ── B2B 수정 탭 드롭다운 ──
+        function updateB2bEditBrandOptions() {
+            const nat = document.querySelector('input[name="iwB2bEditNationality"]:checked').value;
+            fillBrandSelect('iwB2bEditBrand', nat);
+            updateB2bEditModelOptions();
+        }
+        function updateB2bEditModelOptions() {
+            const nat = document.querySelector('input[name="iwB2bEditNationality"]:checked').value;
+            fillModelSelect('iwB2bEditModel', nat, document.getElementById('iwB2bEditBrand').value);
+        }
+
+        // ── 본사·해외몰 탭 드롭다운 ──
+        function updateBoardBrandOptions() {
+            const nat = document.querySelector('input[name="iwBoardNationality"]:checked').value;
+            fillBrandSelect('iwBoardBrand', nat);
+            updateBoardModelOptions();
+        }
+        function updateBoardModelOptions() {
+            const nat = document.querySelector('input[name="iwBoardNationality"]:checked').value;
+            fillModelSelect('iwBoardModel', nat, document.getElementById('iwBoardBrand').value);
+        }
+
+        let iwB2bEditState = null;   // 불러온 상품 { prodNo, title, price, optionGroups, combos, detailImages }
+        let iwBoardEditState = null; // { code, lang, brand, title, detailImages: [] }
+
+        function updateImwebB2bModeUI() {
+            const mode = document.querySelector('input[name="iwB2bWorkMode"]:checked').value;
+            const copyArea = document.getElementById('iwB2bCopyArea');
+            const editPanel = document.getElementById('iwB2bEditPanel');
+            if (copyArea && editPanel) {
+                copyArea.style.display = (mode === 'copy') ? '' : 'none';
+                editPanel.style.display = (mode === 'copy') ? 'none' : '';
+            }
+        }
+        function updateImwebBoardModeUI() {
+            const mode = document.querySelector('input[name="iwBoardWorkMode"]:checked').value;
+            const copyArea = document.getElementById('iwBoardCopyArea');
+            const editPanel = document.getElementById('iwBoardEditPanel');
+            if (copyArea && editPanel) {
+                copyArea.style.display = (mode === 'copy') ? '' : 'none';
+                editPanel.style.display = (mode === 'copy') ? 'none' : '';
+            }
+        }
+
+        function parseIwB2bProductUrl(url) {
+            url = url.trim();
+            if (!url) return;
+            const match = url.match(/[?&]idx=(\d+)/) || url.match(/\/detail\?idx=(\d+)/) || url.match(/\/(\d+)\/?$/);
+            if (match && match[1]) {
+                document.getElementById('iwB2bEditIdxInput').value = match[1];
+                addLog('imweb', `✓ B2B URL에서 상품 번호(idx) 파싱 완료: ${match[1]}`, 'success');
+            }
+        }
+
+        function parseIwBoardProductUrl(url) {
+            url = url.trim();
+            if (!url) return;
+            const codeMatch = url.match(/[?&]code=([^&]+)/);
+            const idxMatch = url.match(/[?&]idx=(\d+)/);
+            if (codeMatch && codeMatch[1]) {
+                document.getElementById('iwBoardEditCodeInput').value = codeMatch[1];
+                addLog('imwebBoard', `✓ 게시글 URL에서 코드(code) 파싱 완료: ${codeMatch[1]}`, 'success');
+            } else if (idxMatch && idxMatch[1]) {
+                document.getElementById('iwBoardEditCodeInput').value = idxMatch[1];
+                addLog('imwebBoard', `✓ 게시글 URL에서 번호(idx) 파싱 완료: ${idxMatch[1]}`, 'success');
+            }
+        }
+
+        // ── B2B 상품 불러오기 및 렌더링 ──
+        // ── 1) 검색 → 세트+개별이 한 묶음으로 나온다 ──
+        async function searchImwebB2bProducts() {
+            const idx = document.getElementById('iwB2bEditIdxInput').value.trim();
+            const brand = document.getElementById('iwB2bEditBrand').value.trim();
+            const model = document.getElementById('iwB2bEditModel').value.trim();
+            const code = document.getElementById('iwB2bEditCodeInput').value.trim();
+
+            if (!idx && !brand && !model && !code) {
+                addLog('imweb', '검색할 상품 코드 또는 상품 URL을 입력해주세요.', 'error');
+                return;
+            }
+            if (!idx) {
+                if (!brand) { addLog('imweb', '제조사를 선택해주세요.', 'error'); return; }
+                if (!model) { addLog('imweb', '차종을 선택해주세요.', 'error'); return; }
+            }
+
+            const btn = document.getElementById('iwB2bLoadBtn');
+            btn.disabled = true;
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<span class="loader-sm"></span> 검색 중... (브라우저가 열립니다)';
+            
+            addLog('imweb', idx ? `[B2B] 상품 번호(idx: ${idx})로 세트+개별 묶음 조회 중...` : `[B2B] 검색 중 (${brand} / ${model} / ${code})...`, 'process');
+
+            const res = await ipcRenderer.invoke('imweb-search-products', { brand, model, code, idx });
+            btn.disabled = false; btn.innerHTML = orig;
+            if (!res.success) { addLog('imweb', `검색 실패: ${res.error}`, 'error'); return; }
+
+            document.getElementById('iwB2bSearchResult').style.display = '';
+            document.getElementById('iwB2bEditLoaded').style.display = 'none';
+            iwB2bEditState = null;
+
+            document.getElementById('iwB2bResultList').innerHTML = res.groups.map(g => `
+                <div style="border:1px solid #e5e7eb;border-radius:6px;padding:10px;margin-bottom:8px;">
+                    <div style="font-size:13px;font-weight:600;margin-bottom:6px;">${escAttr(g.baseKey)}</div>
+                    ${g.items.map(i => `
+                        <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:#6b7280;margin-bottom:3px;">
+                            <span style="font-size:11px;padding:2px 6px;border-radius:4px;background:${i.type === 'set' ? '#dbeafe' : '#dcfce7'};color:#111827;">
+                                ${i.type === 'set' ? '세트' : (i.type === 'indiv' ? '개별' : '기타')}
+                            </span>
+                            <span style="flex:1;">${escAttr(i.name)}</span>
+                            <span>${Number(i.price).toLocaleString()}원</span>
+                        </div>`).join('')}
+                    <button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;"
+                            onclick="loadImwebB2bGroup([${g.items.map(i => i.prodNo).join(',')}])">
+                        📥 ${g.items.length}개 함께 불러오기
+                    </button>
+                </div>`).join('');
+            addLog('imweb', `✓ ${res.groups.length}묶음 검색됨 — 수정할 묶음을 불러오세요.`, 'success');
+        }
+
+        // ── 2) 짝을 함께 불러오기 ──
+        async function loadImwebB2bGroup(prodNos) {
+            addLog('imweb', `[B2B] 상품 ${prodNos.join(', ')} 함께 불러오는 중...`, 'process');
+            const res = await ipcRenderer.invoke('imweb-load-group', { prodNos });
+            if (!res.success) { addLog('imweb', `불러오기 실패: ${res.error}`, 'error'); return; }
+
+            iwB2bEditState = res.group;   // { baseKey, products[], sharedGroups[] }
+            // 상세이미지는 세트 기준으로 하나만 편집해 양쪽에 함께 적용한다
+            iwB2bEditState.detailImages = (iwB2bEditState.products[0].detailImages || []).slice();
+
+            document.getElementById('iwB2bEditTitle').value = iwB2bEditState.baseKey;
+            document.getElementById('iwB2bEditLoaded').style.display = '';
+            rebuildImwebB2bCombos();
+            renderImwebB2bOptions();
+            renderImwebB2bImages();
+            addLog('imweb', `✓ ${iwB2bEditState.products.map(p => (p.type === 'set' ? '세트' : '개별') + '(' + p.prodNo + ')').join(' + ')} 불러오기 완료`, 'success');
+        }
+
+        // 공통 옵션 값이 바뀌면 각 상품의 조합을 다시 만든다 (아임웹은 모든 조합을 요구)
+        function rebuildImwebB2bCombos() {
+            if (!iwB2bEditState) return;
+            const shared = iwB2bEditState.sharedGroups || [];
+            for (const p of iwB2bEditState.products) {
+                const prev = new Map((p.combos || []).map(c => [String(c.displayText).trim(), c]));
+                // 이 상품의 옵션 순서대로: 공통이면 공통 값, 아니면 자기 값
+                const lists = p.optionGroups.map(g => {
+                    const s = shared.find(x => x.name === g.name);
+                    return s ? s.values.map(v => String(v).trim()) : g.values.map(v => String(v.valueName).trim());
+                });
+                let rows = [[]];
+                for (const vals of lists) {
+                    const next = [];
+                    for (const row of rows) for (const v of vals) next.push([...row, v]);
+                    rows = next;
+                }
+                p.combos = rows.map(names => {
+                    const text = names.join(' / ');
+                    const old = prev.get(text);
+                    return old ? { ...old, displayText: text }
+                               : { optionDetailCode: null, displayText: text, price: 0, stock: 0, isNew: true };
+                });
+            }
+        }
+
+        // ── 옵션 편집: 공통 옵션(차종/연식)은 한 번에, 개별 전용(구성)은 그 상품만 ──
+        function renderImwebB2bOptions() {
+            const wrap = document.getElementById('iwB2bOptionList');
+            if (!iwB2bEditState) { wrap.innerHTML = ''; return; }
+            const shared = iwB2bEditState.sharedGroups || [];
+
+            const sharedHtml = shared.map((g, gi) => `
+                <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;margin-bottom:8px;">
+                    <div style="font-size:12px;color:#374151;margin-bottom:6px;">
+                        공통 옵션 <b>${escAttr(g.name)}</b>
+                        <span style="color:#2563eb;font-size:11px;">— 세트·개별 모두에 적용</span>
+                    </div>
+                    ${g.values.map((v, vi) => `
+                        <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
+                            <input type="text" class="form-input" style="flex:1;" value="${escAttr(v)}"
+                                   onchange="iwB2bEditState.sharedGroups[${gi}].values[${vi}]=this.value; rebuildImwebB2bCombos(); renderImwebB2bOptions();">
+                            <button type="button" class="btn btn-outline btn-sm" style="color:#dc2626;"
+                                    onclick="removeImwebB2bOptionValue(${gi},${vi})">삭제</button>
+                        </div>`).join('')}
+                    <div style="display:flex;gap:6px;margin-top:6px;">
+                        <input type="text" class="form-input" style="flex:1;" id="iwB2bNewOptVal${gi}"
+                               placeholder="추가할 ${escAttr(g.name)} 값 입력"
+                               onkeydown="if(event.key==='Enter'){event.preventDefault();addImwebB2bOptionValue(${gi});}">
+                        <button type="button" class="btn btn-outline btn-sm" style="color:#dc2626;border-color:#dc2626;" onclick="addImwebB2bOptionValue(${gi})">+ 추가</button>
+                    </div>
+                </div>`).join('');
+
+            const perProduct = iwB2bEditState.products.map((p, pi) => {
+                const own = p.optionGroups.filter(g => !shared.some(s => s.name === g.name));
+                const ownHtml = own.map(g => `
+                    <div style="font-size:11px;color:#6b7280;margin:4px 0 6px 0;">
+                        ${escAttr(g.name)}: ${g.values.map(v => escAttr(v.valueName)).join(' | ')}
+                        <span style="color:#9ca3af;">(이 상품 전용 — 유지됨)</span>
+                    </div>`).join('');
+                const comboHtml = (p.combos || []).map((c, ci) => `
+                    <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px;">
+                        <span style="flex:1;font-size:11px;color:${c.isNew ? '#2563eb' : '#6b7280'};">
+                            ${escAttr(c.displayText)}${c.isNew ? ' <b>(신규)</b>' : ''}
+                        </span>
+                        <input type="number" class="form-input" style="width:100px;${c.isNew ? 'border-color:#2563eb;' : ''}" value="${c.price}"
+                               title="옵션 조합 가격" onchange="iwB2bEditState.products[${pi}].combos[${ci}].price=this.value">
+                        <input type="number" class="form-input" style="width:80px;" value="${c.stock}"
+                               title="재고" onchange="iwB2bEditState.products[${pi}].combos[${ci}].stock=this.value">
+                    </div>`).join('');
+                return `
+                <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px;margin-bottom:8px;">
+                    <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+                        <span style="font-size:11px;padding:2px 6px;border-radius:4px;background:${p.type === 'set' ? '#dbeafe' : '#dcfce7'};">
+                            ${p.type === 'set' ? '세트' : '개별'}
+                        </span>
+                        <span style="flex:1;font-size:12px;color:#374151;">${escAttr(iwB2bEditState.baseKey + ' ' + p.suffix)}</span>
+                        <span style="font-size:11px;color:#6b7280;">판매가</span>
+                        <input type="number" class="form-input" style="width:110px;" value="${p.price}"
+                               onchange="iwB2bEditState.products[${pi}].price=this.value">
+                    </div>
+                    ${ownHtml}
+                    ${comboHtml}
+                </div>`;
+            }).join('');
+
+            wrap.innerHTML = sharedHtml + perProduct +
+                '<div style="font-size:11px;color:#9ca3af;">옵션 값을 추가/삭제하면 두 상품의 조합이 모두 다시 만들어집니다. ' +
+                '조합별 가격·재고를 직접 입력하세요. <b style="color:#2563eb;">신규 조합은 파란 테두리</b>로 표시됩니다.</div>';
+        }
+
+        function addImwebB2bOptionValue(gi) {
+            if (!iwB2bEditState) return;
+            const g = iwB2bEditState.sharedGroups[gi];
+            const input = document.getElementById('iwB2bNewOptVal' + gi);
+            const val = input ? input.value.trim() : '';
+            if (!val) { addLog('imweb', `추가할 "${g.name}" 값을 입력해주세요.`, 'error'); return; }
+            if (g.values.some(v => String(v).trim() === val)) {
+                addLog('imweb', `이미 있는 값입니다: ${val}`, 'error'); return;
+            }
+            g.values.push(val);
+            rebuildImwebB2bCombos();
+            renderImwebB2bOptions();
+            addLog('imweb', `공통 옵션 "${g.name}" 값 추가: ${val} (세트·개별 모두 적용, 저장 필요)`, 'success');
+        }
+
+        function removeImwebB2bOptionValue(gi, vi) {
+            if (!iwB2bEditState) return;
+            const g = iwB2bEditState.sharedGroups[gi];
+            if (g.values.length <= 1) { addLog('imweb', '옵션 값은 최소 1개는 있어야 합니다.', 'error'); return; }
+            g.values.splice(vi, 1);
+            rebuildImwebB2bCombos();
+            renderImwebB2bOptions();
+        }
+
+        // ── 상세페이지 이미지 (세트·개별 공통 적용) ──
+        function renderImwebB2bImages() {
+            const wrap = document.getElementById('iwB2bImageList');
+            if (!iwB2bEditState) { wrap.innerHTML = ''; return; }
+            const imgs = iwB2bEditState.detailImages || [];
+            if (!imgs.length) { wrap.innerHTML = '<div style="color:#9ca3af;font-size:13px;">상세 이미지가 없습니다.</div>'; return; }
+            wrap.innerHTML = imgs.map((u, i) => `
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+                    <span style="width:22px;color:#6b7280;font-size:12px;">${i + 1}</span>
+                    <img src="${escAttr(u)}" style="width:44px;height:44px;object-fit:cover;border:1px solid #e5e7eb;border-radius:4px;background:#f9fafb;">
+                    <input type="text" class="form-input" style="flex:1;font-size:11px;" value="${escAttr(decodeURIComponent(u))}" readonly>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="moveImwebB2bImage(${i},-1)">▲</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="moveImwebB2bImage(${i},1)">▼</button>
+                    <button type="button" class="btn btn-outline btn-sm" style="color:#dc2626;" onclick="removeImwebB2bImage(${i})">삭제</button>
+                </div>`).join('');
+        }
+
+        function addImwebB2bImage() {
+            if (!iwB2bEditState) { addLog('imweb', '먼저 상품을 불러와주세요.', 'error'); return; }
+            const input = document.getElementById('iwB2bNewImageUrl');
+            let url = input ? input.value.trim() : '';
+            if (!url) { addLog('imweb', '추가할 이미지 주소를 입력해주세요.', 'error'); return; }
+            const m = url.match(/src=["']([^"']+)["']/i); if (m) url = m[1];
+            iwB2bEditState.detailImages.unshift(url);
+            input.value = '';
+            renderImwebB2bImages();
+            addLog('imweb', '상세이미지를 맨 위에 추가했습니다. (세트·개별 모두 적용, 저장 필요)', 'success');
+        }
+
+        function removeImwebB2bImage(i) {
+            if (!iwB2bEditState) return;
+            iwB2bEditState.detailImages.splice(i, 1);
+            renderImwebB2bImages();
+        }
+
+        function moveImwebB2bImage(i, d) {
+            if (!iwB2bEditState) return;
+            const a = iwB2bEditState.detailImages, j = i + d;
+            if (j < 0 || j >= a.length) return;
+            [a[i], a[j]] = [a[j], a[i]];
+            renderImwebB2bImages();
+        }
+
+        // ── 3) 짝을 함께 저장 ──
+        async function updateImwebB2bProduct() {
+            if (!iwB2bEditState) { addLog('imweb', '먼저 상품을 불러와주세요.', 'error'); return; }
+            const baseKey = document.getElementById('iwB2bEditTitle').value.trim();
+            if (!baseKey) { addLog('imweb', '상품명(공통 부분)을 입력해주세요.', 'error'); return; }
+            if (!iwB2bEditState.detailImages.length) { addLog('imweb', '상세 이미지는 최소 1장 필요합니다.', 'error'); return; }
+            for (const g of iwB2bEditState.sharedGroups) {
+                if (g.values.some(v => !String(v).trim())) { addLog('imweb', `옵션 "${g.name}"에 빈 값이 있습니다.`, 'error'); return; }
+            }
+
+            const btn = document.getElementById('iwB2bUpdateBtn');
+            btn.disabled = true;
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<span class="loader"></span> 수정 적용 중...';
+            addLog('imweb', `[B2B] ${iwB2bEditState.products.length}개 상품 함께 저장 중...`, 'process');
+
+            const result = await ipcRenderer.invoke('imweb-update-group', {
+                baseKey,
+                sharedGroups: iwB2bEditState.sharedGroups.map(g => ({ name: g.name, values: g.values.map(v => String(v).trim()) })),
+                detailImages: iwB2bEditState.detailImages,
+                products: iwB2bEditState.products.map(p => ({
+                    prodNo: p.prodNo,
+                    price: p.price,
+                    combos: (p.combos || []).map(c => ({
+                        optionDetailCode: c.optionDetailCode, displayText: c.displayText,
+                        price: c.price, stock: c.stock,
+                    })),
+                })),
+            });
+
+            btn.disabled = false; btn.innerHTML = orig;
+            if (result.success) addLog('imweb', `✓ ${result.message}`, 'success');
+            else addLog('imweb', `수정 실패: ${result.error}`, 'error');
+        }
+
+
+        // ── 1) 코드로 게시글 검색 → 결과에서 선택 (같은 코드가 여러 글에 걸릴 수 있음) ──
+        async function searchImwebBoardPosts() {
+            const code = document.getElementById('iwBoardEditCodeInput').value.trim();
+            const lang = document.getElementById('iwBoardEditLang').value;
+            const brand = document.getElementById('iwBoardEditBrand').value.trim();
+            if (!code) { addLog('imwebBoard', '검색할 상품 코드를 입력해주세요.', 'error'); return; }
+            if (!brand) { addLog('imwebBoard', '브랜드를 선택해주세요.', 'error'); return; }
+
+            const btn = document.getElementById('iwBoardLoadBtn');
+            btn.disabled = true; const orig = btn.innerHTML;
+            btn.innerHTML = '<span class="loader-sm"></span> 검색 중... (브라우저가 열립니다)';
+            addLog('imwebBoard', `[게시판] 검색 (${brand} / ${document.getElementById('iwBoardEditLang').selectedOptions[0].text} / ${code})...`, 'process');
+
+            const res = await ipcRenderer.invoke('imweb-search-posts', { code, lang, brand });
+            btn.disabled = false; btn.innerHTML = orig;
+            if (!res.success) { addLog('imwebBoard', `검색 실패: ${res.error}`, 'error'); return; }
+
+            document.getElementById('iwBoardSearchResult').style.display = '';
+            document.getElementById('iwBoardEditLoaded').style.display = 'none';
+            iwBoardEditState = null;
+            document.getElementById('iwBoardResultList').innerHTML = res.rows.map(r => `
+                <div style="display:flex;gap:8px;align-items:center;border:1px solid #e5e7eb;border-radius:6px;padding:8px;margin-bottom:6px;">
+                    <span style="flex:1;font-size:13px;">${escAttr(r.subject)}</span>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="loadImwebBoardPost('${r.postCode}', '${escAttr(r.subject)}', '${lang}', '${escAttr(brand)}', '${escAttr(code)}')">불러오기</button>
+                </div>`).join('');
+            addLog('imwebBoard', `✓ ${res.rows.length}건 검색됨 — 수정할 게시글을 불러오세요.`, 'success');
+        }
+
+        // ── 2) 선택한 게시글 불러오기 ──
+        async function loadImwebBoardPost(postCode, subject, lang, brand, code) {
+            addLog('imwebBoard', `[게시판] "${subject}" 불러오는 중...`, 'process');
+            const result = await ipcRenderer.invoke('imweb-load-post', { postCode });
+            if (!result.success) { addLog('imwebBoard', `불러오기 실패: ${result.error}`, 'error'); return; }
+
+            iwBoardEditState = {
+                code, lang, brand,
+                postCode: result.post.postCode,
+                title: result.post.subject,
+                detailImages: (result.post.images || []).slice(),
+            };
+            document.getElementById('iwBoardEditTitle').value = iwBoardEditState.title;
+            renderImwebBoardImages();
+            document.getElementById('iwBoardEditLoaded').style.display = '';
+            addLog('imwebBoard', `✓ 불러오기 완료 — "${iwBoardEditState.title}", 이미지 ${iwBoardEditState.detailImages.length}장`, 'success');
+        }
+
+        function renderImwebBoardImages() {
+            const wrap = document.getElementById('iwBoardImageList');
+            if (!wrap) return;
+            const imgs = iwBoardEditState ? iwBoardEditState.detailImages : [];
+            if (!imgs.length) {
+                wrap.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:8px 0;">게시글 본문에 등록된 조견표 이미지가 없습니다.</div>';
+                return;
+            }
+            let html = '';
+            imgs.forEach((img, i) => {
+                html += `
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; background:rgba(0,0,0,0.02); padding:6px; border-radius:4px;">
+                    <span style="font-size:11px; color:#6b7280; min-width:30px;">#${i+1}</span>
+                    <div style="width:60px; height:60px; border-radius:4px; overflow:hidden; background:#f3f4f6; display:flex; align-items:center; justify-content:center; border:1px solid #e5e7eb;">
+                        <img src="${escAttr(img)}" style="max-width:100%; max-height:100%; object-fit:contain;" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\'><rect width=\'60\' height=\'60\' fill=\'%23f3f4f6\'/><text x=\'50%\' y=\'50%\' font-size=\'10\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%239ca3af\'>No Image</text></svg>'">
+                    </div>
+                    <input type="text" class="form-input" value="${escAttr(img)}" onchange="iwBoardEditState.detailImages[${i}]=this.value; renderImwebBoardImages();" style="flex:1; font-size:12px;">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="moveImwebBoardImage(${i}, -1)" ${i===0 ? 'disabled' : ''}>▲</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="moveImwebBoardImage(${i}, 1)" ${i===imgs.length-1 ? 'disabled' : ''}>▼</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="deleteImwebBoardImage(${i})" style="color:#dc2626; border-color:#fca5a5;">삭제</button>
+                </div>`;
+            });
+            wrap.innerHTML = html;
+        }
+
+        function _iwBoardImageInput() {
+            const input = document.getElementById('iwBoardNewImageUrl');
+            let v = input ? input.value.trim() : '';
+            if (!v) return null;
+            const m = v.match(/src=["']([^"']+)["']/i); if (m) v = m[1];
+            return { input, url: v };
+        }
+
+        // 교체: 기존 조견표(첫 이미지)를 새 URL로 바꾼다. (사용자가 보통 원하는 동작)
+        function replaceImwebBoardImage() {
+            if (!iwBoardEditState) { addLog('imwebBoard', '먼저 게시글을 불러와주세요.', 'error'); return; }
+            const got = _iwBoardImageInput();
+            if (!got) { addLog('imwebBoard', '교체할 이미지 주소를 입력해주세요.', 'error'); return; }
+            if (iwBoardEditState.detailImages.length) iwBoardEditState.detailImages[0] = got.url;
+            else iwBoardEditState.detailImages.push(got.url);
+            got.input.value = '';
+            renderImwebBoardImages();
+            addLog('imwebBoard', '조견표 이미지를 교체했습니다. (저장을 눌러야 반영)', 'success');
+        }
+
+        // 추가: 새 이미지를 아래에 덧붙인다. (2장 이상 필요할 때만)
+        function addImwebBoardImage() {
+            if (!iwBoardEditState) { addLog('imwebBoard', '먼저 게시글을 불러와주세요.', 'error'); return; }
+            const got = _iwBoardImageInput();
+            if (!got) { addLog('imwebBoard', '추가할 이미지 주소를 입력해주세요.', 'error'); return; }
+            iwBoardEditState.detailImages.push(got.url);
+            got.input.value = '';
+            renderImwebBoardImages();
+            addLog('imwebBoard', '조견표 이미지를 추가했습니다. (저장을 눌러야 반영)', 'success');
+        }
+
+        function deleteImwebBoardImage(i) {
+            if (!iwBoardEditState) return;
+            iwBoardEditState.detailImages.splice(i, 1);
+            renderImwebBoardImages();
+        }
+
+        function moveImwebBoardImage(i, d) {
+            if (!iwBoardEditState) return;
+            const arr = iwBoardEditState.detailImages;
+            const target = i + d;
+            if (target < 0 || target >= arr.length) return;
+            const temp = arr[i];
+            arr[i] = arr[target];
+            arr[target] = temp;
+            renderImwebBoardImages();
+        }
+
+        async function updateImwebBoardPost() {
+            if (!iwBoardEditState) return;
+            const title = document.getElementById('iwBoardEditTitle').value.trim();
+            if (!title) { addLog('imwebBoard', '게시글 제목을 입력해주세요.', 'error'); return; }
+
+            const btn = document.getElementById('iwBoardUpdateBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader-sm"></span> 수정 적용 중...';
+            addLog('imwebBoard', `[게시판] 글 수정 작업 제출 중...`, 'process');
+
+            try {
+                const result = await ipcRenderer.invoke('imweb-update-post', {
+                    postCode: iwBoardEditState.postCode,
+                    subject: title,
+                    images: iwBoardEditState.detailImages
+                });
+
+                if (result.success) {
+                    addLog('imwebBoard', `✓ [게시판] 글 수정 완료!`, 'success');
+                } else {
+                    addLog('imwebBoard', `수정 실패: ${result.error}`, 'error');
+                }
+            } catch (e) {
+                addLog('imwebBoard', `수정 오류: ${e.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '💾 아임웹 본사·해외몰 게시글 수정 실행';
+            }
+        }
+
+        async function loadImwebConfig() { /* 사이트 URL은 이제 코드에 고정되어 별도 설정이 필요 없습니다. */ }
+        async function saveImwebConfig() { /* no-op (설정 항목 제거됨) */ }
+
+        // ============ B2B몰 상품 등록 ============
+        let imwebMainImagePath = '';
+        async function selectImwebMainImage() {
+            const result = await ipcRenderer.invoke('select-file', {
+                filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'] }]
+            });
+            if (result.canceled) return;
+            imwebMainImagePath = result.filePath;
+            const fileName = imwebMainImagePath.split(/[\\/]/).pop();
+            document.getElementById('iwMainImageName').textContent = '선택됨: ' + fileName;
+            addLog('imweb', `대표 이미지 선택: ${fileName}`, 'success');
+        }
+
+        async function registerImwebB2b() {
+            const isEditMode = document.querySelector('input[name="iwB2bWorkMode"]:checked').value === 'edit';
+            const brand = document.getElementById('iwBrand').value.trim();
+            const model = document.getElementById('iwModel').value.trim();
+            const titleBrand = document.getElementById('iwTitleBrand').value.trim() || brand;
+            const titleModel = document.getElementById('iwTitleModel').value.trim() || model;
+            const year = document.getElementById('iwYear').value.trim();
+            const code = document.getElementById('iwCode').value.trim();
+            const nationality = document.querySelector('input[name="iwNationality"]:checked').value;
+            const bsaO = document.getElementById('iwBsaO').checked;
+            const bsaX = document.getElementById('iwBsaX').checked;
+            const registerIndiv = document.getElementById('iwRegisterIndiv').checked;
+            const registerSet = document.getElementById('iwRegisterSet').checked;
+            const mainImageUrl = document.getElementById('iwMainImageUrl').value.trim();
+            const specImageUrl = document.getElementById('iwSpecImageUrl').value.trim();
+
+            if (!brand || !model || !year || !code) {
+                addLog('imweb', '제조사명, 모델명, 연식, 상품 코드를 모두 입력해주세요.', 'error'); return;
+            }
+            if (!registerIndiv && !registerSet) {
+                addLog('imweb', '등록 방식을 선택해주세요 (개별/세트 중 최소 하나).', 'error'); return;
+            }
+            if (!bsaO && !bsaX) {
+                addLog('imweb', 'BSA O 또는 BSA X 중 최소 하나를 선택해주세요.', 'error'); return;
+            }
+            if (!specImageUrl) {
+                addLog('imweb', '조견표 이미지 URL(국내용)을 입력해주세요.', 'error'); return;
+            }
+            if (!isEditMode && !mainImageUrl) {
+                addLog('imweb', '대표 이미지 URL을 입력해주세요. (API 등록은 이미지가 필수입니다)', 'error'); return;
+            }
+
+            const modeText = isEditMode ? '수정' : '등록';
+            addLog('imweb', `B2B몰 상품 ${modeText} 작업 시작...`, 'process');
+            const btn = document.getElementById('imwebRegisterBtn');
+            btn.disabled = true;
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<span class="loader"></span> 진행 중...';
+
+            const result = await ipcRenderer.invoke('imweb-register', {
+                targetB2b: true, targetHead: false, targetUs: false, targetJp: false,
+                isEditMode,
+                brand, model, titleBrand, titleModel, year, code,
+                nationality, bsaO, bsaX, registerIndiv, registerSet,
+                mainImageUrl, specImageUrl
+            });
+
+            btn.disabled = false;
+            btn.innerHTML = orig;
+            if (result.success) addLog('imweb', `✓ ${result.message}`, 'success');
+            else addLog('imweb', `작업 실패: ${result.error}`, 'error');
+        }
+
+        // ============ 본사·해외몰 게시판 포스팅 ============
+        async function registerImwebBoard() {
+            const isEditMode = document.querySelector('input[name="iwBoardWorkMode"]:checked').value === 'edit';
+            const targetHead = document.getElementById('iwTargetHead').checked;
+            const targetUs = document.getElementById('iwTargetUs').checked;
+            const targetJp = document.getElementById('iwTargetJp').checked;
+
+            const brand = document.getElementById('iwBoardBrand').value.trim();
+            const model = document.getElementById('iwBoardModel').value.trim();
+            const code = document.getElementById('iwBoardCode').value.trim();
+            const nationality = document.querySelector('input[name="iwBoardNationality"]:checked').value;
+
+            const titleBrand = document.getElementById('iwBoardTitleBrand').value.trim() || brand;
+            const titleModel = document.getElementById('iwBoardTitleModel').value.trim() || model;
+            const titleBrandEn = document.getElementById('iwBoardTitleBrandEn').value.trim();
+            const titleModelEn = document.getElementById('iwBoardTitleModelEn').value.trim();
+            const generation = document.getElementById('iwBoardGeneration').value.trim();
+
+            const specImageUrl = document.getElementById('iwBoardSpecImageUrl').value.trim();
+            const specImageUrlEn = document.getElementById('iwBoardSpecImageUrlEn').value.trim();
+
+            if (!targetHead && !targetUs && !targetJp) {
+                addLog('imwebBoard', '포스팅할 게시판을 최소 하나 이상 선택해주세요.', 'error'); return;
+            }
+            if (!brand || !code) {
+                addLog('imwebBoard', '제조사, 상품 코드를 입력해주세요.', 'error'); return;
+            }
+            if (targetHead && !specImageUrl) {
+                addLog('imwebBoard', '국내용 조견표 이미지 URL을 입력해주세요 (본사몰).', 'error'); return;
+            }
+            if ((targetUs || targetJp) && !specImageUrlEn) {
+                addLog('imwebBoard', '해외용 조견표 이미지 URL을 입력해주세요 (해외·일본몰).', 'error'); return;
+            }
+            if ((targetUs || targetJp) && (!titleBrandEn || !titleModelEn)) {
+                addLog('imwebBoard', '영문 제조사·차종을 입력해주세요 (해외·일본몰).', 'error'); return;
+            }
+            if ((targetUs || targetJp) && !generation) {
+                addLog('imwebBoard', '세대 표기(예: 4th gen)를 입력해주세요 (해외·일본몰).', 'error'); return;
+            }
+
+            const modeText = isEditMode ? '수정' : '포스팅';
+            addLog('imwebBoard', `본사·해외몰 게시판 ${modeText} 작업 시작...`, 'process');
+            const btn = document.getElementById('imwebBoardRegisterBtn');
+            btn.disabled = true;
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<span class="loader"></span> 진행 중...';
+
+            const result = await ipcRenderer.invoke('imweb-register', {
+                targetB2b: false, targetHead, targetUs, targetJp,
+                isEditMode,
+                brand, model, code, nationality,
+                titleBrand, titleModel, titleBrandEn, titleModelEn, generation,
+                specImageUrl, specImageUrlEn
+            });
+
+            btn.disabled = false;
+            btn.innerHTML = orig;
+            btn.innerHTML = orig;
+            if (result.success) addLog('imwebBoard', `✓ ${result.message}`, 'success');
+            else addLog('imwebBoard', `작업 실패: ${result.error}`, 'error');
+        }
+
+        ipcRenderer.on('imweb-log', (event, msg) => addLog('imweb', msg, 'process'));
+        ipcRenderer.on('imweb-board-log', (event, msg) => addLog('imwebBoard', msg, 'process'));
+
+        // AI 이미지 생성 폼 전송 이벤트 (일렉트론 내부 IPC 호출)
+        const aiForm = document.getElementById('aiImageForm');
+        if (aiForm) {
+            aiForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const form = e.target;
+                const brand = form.brand.value.trim();
+                const carClass = form.carClass.value.trim();
+                const no = form.no.value.trim();
+                const gen = form.gen.value.trim();
+                const year = form.year.value.trim();
+                const code = form.code.value.trim();
+                const includeLogo = form.includeLogo.checked;
+                const mirrorSide = form.mirrorSide.value;
+                const skipAIValue = form.querySelector('input[name="skipAI"]:checked').value === 'on';
+                const bsaType = form.querySelector('input[name="bsaType"]:checked').value;
+                
+                const mirrorFileInput = form.mirror;
+                if (mirrorFileInput.files.length === 0) {
+                    alert('거울 사진을 업로드해주세요.');
+                    return;
+                }
+                const mirrorPath = mirrorFileInput.files[0].path; // Electron absolute path!
+
+                const submitBtn = document.getElementById('aiSubmitBtn');
+                const loader = document.getElementById('aiLoader');
+                const resultContainer = document.getElementById('aiResultContainer');
+                const resultImage = document.getElementById('aiResultImage');
+                const downloadBtn = document.getElementById('aiDownloadBtn');
+
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '생성 중...';
+                loader.style.display = 'block';
+                resultContainer.style.display = 'none';
+                downloadBtn.style.display = 'none';
+
+                try {
+                    const data = {
+                        brand,
+                        carClass,
+                        no,
+                        gen,
+                        year,
+                        code,
+                        includeLogo,
+                        mirrorSide,
+                        skipAI: skipAIValue,
+                        bsaType,
+                        mirrorPath,
+                        manualBsa: true
+                    };
+
+                    const result = await ipcRenderer.invoke('generate-ai-image', data);
+
+                    if (!result.success) {
+                        throw new Error(result.error || '알 수 없는 오류가 발생했습니다.');
+                    }
+
+                    const imageUrl = `data:image/jpeg;base64,${result.base64}`;
+                    
+                    resultImage.src = imageUrl;
+                    resultContainer.style.display = 'block';
+                    
+                    const bsaLogo = document.getElementById('draggableBsaLogo');
+                    const bsaInstruction = document.getElementById('bsaInstructionText');
+                    const bsaSizeControl = document.getElementById('bsaSizeControl');
+                    
+                    if (bsaType === 'bsa' || bsaType === 'bsaOption') {
+                        bsaLogo.src = bsaType === 'bsaOption' ? '../../data/bsa_option_logo.png' : '../../data/bsa_logo.png';
+                        bsaLogo.style.display = 'block';
+                        bsaLogo.style.top = '60%';
+                        bsaLogo.style.left = '15%';
+                        bsaLogo.style.width = '15%';
+                        bsaInstruction.style.display = 'block';
+                        bsaSizeControl.style.display = 'block';
+                        
+                        document.getElementById('bsaSizeSlider').value = 15;
+                        document.getElementById('bsaSizeDisplay').innerText = '15%';
+                    } else {
+                        bsaLogo.style.display = 'none';
+                        bsaInstruction.style.display = 'none';
+                        bsaSizeControl.style.display = 'none';
+                    }
+                    
+                    // Add filename to autoFileNameInput in ESM tab automatically
+                    const autoInput = document.getElementById('autoFileNameInput');
+                    if (autoInput) {
+                        autoInput.value = `OPTICGLASS_${brand}_${mirrorSide === 'passenger' ? '조수석' : '운전석'}`;
+                    }
+                    
+                    // Override downloadBtn onclick to combine image with BSA logo if needed
+                    downloadBtn.style.display = 'flex';
+                    downloadBtn.onclick = function(e) {
+                        e.preventDefault();
+                        if (bsaType === 'bsa' || bsaType === 'bsaOption') {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            const img = new Image();
+                            img.onload = function() {
+                                canvas.width = img.width;
+                                canvas.height = img.height;
+                                ctx.drawImage(img, 0, 0);
+                                
+                                const bsaImg = new Image();
+                                bsaImg.onload = function() {
+                                    const logoDOM = document.getElementById('draggableBsaLogo');
+                                    
+                                    const leftPct = parseFloat(logoDOM.style.left) / 100;
+                                    const topPct = parseFloat(logoDOM.style.top) / 100;
+                                    const widthPct = parseFloat(logoDOM.style.width) / 100;
+                                    
+                                    // The logo width is widthPct of the image's width
+                                    const targetW = img.width * widthPct;
+                                    const bsaScale = targetW / bsaImg.width; 
+                                    const targetH = bsaImg.height * bsaScale;
+                                    
+                                    const x = img.width * leftPct;
+                                    const y = img.height * topPct;
+                                    
+                                    ctx.drawImage(bsaImg, x, y, targetW, targetH);
+                                    
+                                    const base64Data = canvas.toDataURL('image/jpeg', 0.95);
+                                    
+                                    // Save the merged image to the backend so ESM hosting can pick it up
+                                    ipcRenderer.invoke('save-merged-image', { base64Data }).then(() => {
+                                        const link = document.createElement('a');
+                                        link.download = `OPTICGLASS_${brand}_${carClass || '이미지'}.jpg`;
+                                        link.href = base64Data;
+                                        link.click();
+                                    });
+                                };
+                                bsaImg.src = bsaType === 'bsaOption' ? '../../data/bsa_option_logo.png' : '../../data/bsa_logo.png';
+                            };
+                            img.src = imageUrl;
+                        } else {
+                            // Save without BSA
+                            ipcRenderer.invoke('save-merged-image', { base64Data: imageUrl }).then(() => {
+                                const link = document.createElement('a');
+                                link.download = `OPTICGLASS_${brand}_${carClass || '이미지'}.jpg`;
+                                link.href = imageUrl;
+                                link.click();
+                            });
+                        }
+                    };
+                } catch (error) {
+                    alert('오류 발생: ' + error.message);
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg> 이미지 생성하기';
+                    loader.style.display = 'none';
+                }
+            });
+        }
+
+        loadImwebConfig();
+        loadImwebCategories();
+        loadCoupangConfig();
+        updateImwebB2bModeUI();
+        updateImwebBoardModeUI();
+        // Draggable BSA Logo Logic
+        const bsaLogo = document.getElementById('draggableBsaLogo');
+        const wrapper = document.getElementById('aiImageWrapper');
+        let isDragging = false;
+        
+        bsaLogo.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            isDragging = true;
+            let rect = bsaLogo.getBoundingClientRect();
+            let shiftX = e.clientX - rect.left;
+            let shiftY = e.clientY - rect.top;
+        
+            function moveAt(clientX, clientY) {
+                let wrapperRect = wrapper.getBoundingClientRect();
+                let newLeft = clientX - shiftX - wrapperRect.left;
+                let newTop = clientY - shiftY - wrapperRect.top;
+                
+                if (newLeft < 0) newLeft = 0;
+                if (newTop < 0) newTop = 0;
+                if (newLeft + bsaLogo.offsetWidth > wrapper.offsetWidth) newLeft = wrapper.offsetWidth - bsaLogo.offsetWidth;
+                if (newTop + bsaLogo.offsetHeight > wrapper.offsetHeight) newTop = wrapper.offsetHeight - bsaLogo.offsetHeight;
+        
+                let leftPct = (newLeft / wrapper.offsetWidth) * 100;
+                let topPct = (newTop / wrapper.offsetHeight) * 100;
+        
+                bsaLogo.style.left = leftPct + '%';
+                bsaLogo.style.top = topPct + '%';
+            }
+        
+            function onMouseMove(e) {
+                if (isDragging) moveAt(e.clientX, e.clientY);
+            }
+        
+            document.addEventListener('mousemove', onMouseMove);
+        
+            document.addEventListener('mouseup', function() {
+                isDragging = false;
+                document.removeEventListener('mousemove', onMouseMove);
+            }, { once: true });
+        });
+        
+        bsaLogo.ondragstart = function() {
+            return false;
+        };
+
+        
+        // Slider logic for logo size
+        const bsaSizeSlider = document.getElementById('bsaSizeSlider');
+        const bsaSizeDisplay = document.getElementById('bsaSizeDisplay');
+        if (bsaSizeSlider) {
+            bsaSizeSlider.addEventListener('input', function() {
+                const val = this.value;
+                bsaSizeDisplay.innerText = val + '%';
+                if (bsaLogo) {
+                    bsaLogo.style.width = val + '%';
+                }
+            });
+        }
+
+    </script>
+</body>
+</html>

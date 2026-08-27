@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VERY UP VER2 - 런처</title>
+    <link rel="stylesheet" href="launcher.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="launcher-bg">
+        <!-- 배경 글로우 -->
+        <div class="glow glow-left"></div>
+        <div class="glow glow-right"></div>
+
+        <div class="launcher-wrap">
+            <!-- 로고 -->
+            <div class="launcher-logo">
+                <h1>VERY UP</h1>
+                <span class="ver-badge">VER 2.0</span>
+            </div>
+            <p class="launcher-sub">시작할 프로그램을 선택하세요</p>
+
+            <!-- 버튼 카드 영역 -->
+            <div class="card-grid">
+
+                <!-- 베리씨드 카드 -->
+                <button class="app-card seed-card" onclick="launchSeed()">
+                    <div class="card-icon seed-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M12 22V12"/>
+                            <path d="M12 12C12 7 7 4 2 4c0 5 3 9 10 8"/>
+                            <path d="M12 12c0-5 5-8 10-8 0 5-3 9-10 8"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <h2>베리씨드</h2>
+                        <p>AI 이미지 생성 &amp; ESM 이미지 호스팅</p>
+                        <ul class="card-features">
+                            <li>🇰🇷 KOREA &nbsp;🇺🇸 USA</li>
+                            <li>🇯🇵 JAPAN &nbsp;🇦🇪 ARAB</li>
+                            <li>국가별 템플릿 이미지 생성</li>
+                        </ul>
+                    </div>
+                    <div class="card-arrow">→</div>
+                </button>
+
+                <!-- 베리업 카드 -->
+                <button class="app-card up-card" onclick="launchUp()">
+                    <div class="card-icon up-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                            <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
+                            <polyline points="7.5 19.79 7.5 14.6 3 12"/>
+                            <polyline points="21 12 16.5 14.6 16.5 19.79"/>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                            <line x1="12" y1="22.08" x2="12" y2="12"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <h2>베리업</h2>
+                        <p>멀티 플랫폼 상품 등록 &amp; 수정 관리</p>
+                        <ul class="card-features">
+                            <li>신규 등록 / 상품 수정 모드</li>
+                            <li>국가 × 플랫폼 현황판</li>
+                            <li>KOREA · USA · JAPAN · ARAB</li>
+                        </ul>
+                    </div>
+                    <div class="card-arrow">→</div>
+                </button>
+
+            </div>
+
+            <p class="launcher-footer">VERY UP VER2 &nbsp;·&nbsp; Optic Glass Commerce Automation</p>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        function launchSeed() {
+            ipcRenderer.send('launch-app', 'seed');
+        }
+        function launchUp() {
+            ipcRenderer.send('launch-app', 'up');
+        }
+    </script>
+</body>
+</html>

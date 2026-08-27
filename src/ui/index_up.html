@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VERY UP VER2</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ── 기본 리셋 & 다크 테마 ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-base:       #0f172a;
+      --bg-panel:      #1e293b;
+      --bg-card:       #263045;
+      --bg-input:      #0f172a;
+      --border:        #334155;
+      --accent:        #3b82f6;
+      --accent-hover:  #2563eb;
+      --accent-success:#22c55e;
+      --accent-warn:   #f59e0b;
+      --accent-danger: #ef4444;
+      --text-primary:  #f1f5f9;
+      --text-secondary:#94a3b8;
+      --text-muted:    #475569;
+      --inactive-bg:   #1e293b;
+      --inactive-text: #334155;
+      --radius:        6px;
+      --transition:    0.15s ease;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: 'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
+      font-size: 13px;
+      overflow: hidden;
+    }
+
+    /* ── 앱 셸 ── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* ── 상단 헤더 ── */
+    #header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      -webkit-app-region: drag;
+    }
+    #header button, #header label, #header input {
+      -webkit-app-region: no-drag;
+    }
+
+    #btn-back {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 5px 10px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 12px;
+      transition: background var(--transition), color var(--transition);
+    }
+    #btn-back:hover {
+      background: var(--bg-card);
+      color: var(--text-primary);
+    }
+
+    #app-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      flex: 1;
+    }
+
+    /* ── 모드 선택 ── */
+    #mode-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: var(--bg-base);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #mode-bar span { color: var(--text-secondary); font-size: 12px; }
+
+    .mode-radio { display: none; }
+    .mode-label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 12px;
+      transition: all var(--transition);
+      user-select: none;
+    }
+    .mode-label .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      border: 2px solid var(--text-muted);
+      transition: all var(--transition);
+    }
+    .mode-radio:checked + .mode-label {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: rgba(59,130,246,0.08);
+    }
+    .mode-radio:checked + .mode-label .dot {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* ── 메인 (좌우 분할) ── */
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── SECTION 7 (좌측) ── */
+    #section7 {
+      width: 380px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 14px;
+      gap: 12px;
+    }
+
+    .section-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* 입력 폼 */
+    .field-group { display: flex; flex-direction: column; gap: 8px; }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .field label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .field input, .field textarea {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      border-radius: var(--radius);
+      padding: 6px 9px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color var(--transition);
+      width: 100%;
+    }
+    .field input:focus, .field textarea:focus {
+      border-color: var(--accent);
+    }
+    .field textarea {
+      resize: vertical;
+      min-height: 60px;
+      font-family: inherit;
+    }
+
+    /* 최근 사진 버튼 */
+    #btn-load-photo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: var(--bg-card);
+      border: 1px dashed var(--border);
+      color: var(--text-secondary);
+      border-radius: var(--radius);
+      padding: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      width: 100%;
+      transition: all var(--transition);
+    }
+    #btn-load-photo:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ── 현황판 ── */
+    .board-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    .board-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    #status-board {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    #status-board thead th {
+      padding: 5px 4px;
+      color: var(--text-muted);
+      font-weight: 500;
+      text-align: center;
+      font-size: 10px;
+    }
+    #status-board thead th:first-child { text-align: left; }
+
+    #status-board tbody tr {
+      border-top: 1px solid var(--border);
+      transition: background var(--transition);
+    }
+    #status-board tbody tr:hover { background: rgba(255,255,255,0.02); }
+    #status-board tbody tr.row-checked {
+      border-left: 3px solid var(--accent);
+    }
+
+    #status-board td {
+      padding: 5px 4px;
+      text-align: center;
+      vertical-align: middle;
+    }
+    #status-board td.country-cell {
+      text-align: left;
+      font-weight: 600;
+      font-size: 11px;
+      color: var(--text-secondary);
+      padding-left: 4px;
+    }
+
+    /* 활성 셀 */
+    .platform-cell {
+      cursor: pointer;
+      user-select: none;
+    }
+    .platform-cell .cell-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 3px;
+      border-radius: 4px;
+      transition: background var(--transition);
+    }
+    .platform-cell:hover .cell-inner { background: rgba(59,130,246,0.1); }
+    .platform-cell .cell-inner.checked { background: rgba(59,130,246,0.15); }
+
+    .platform-cell input[type="checkbox"] {
+      width: 13px; height: 13px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .platform-cell .plat-name {
+      font-size: 9px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .platform-cell .cell-inner.checked .plat-name { color: var(--accent); }
+
+    /* 비활성 셀 */
+    .inactive-cell {
+      background: var(--inactive-bg);
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    /* ── 실행 버튼 ── */
+    #btn-run {
+      width: 100%;
+      padding: 10px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background var(--transition), transform 0.05s;
+      letter-spacing: 0.04em;
+    }
+    #btn-run:hover { background: var(--accent-hover); }
+    #btn-run:active { transform: scale(0.98); }
+    #btn-run:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ── SECTION 8 (우측) ── */
+    #section8 {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #section8-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    #section8-header .sec-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    #section8-header .sec-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    #btn-clear-log {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: var(--radius);
+      padding: 3px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    #btn-clear-log:hover { border-color: var(--accent-danger); color: var(--accent-danger); }
+
+    #section8-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* ── 로그 윈도우 ── */
+    #log-window {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .log-entry {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 5px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    .log-entry .log-time {
+      color: var(--text-muted);
+      font-size: 10px;
+      white-space: nowrap;
+      padding-top: 1px;
+      min-width: 52px;
+    }
+    .log-entry .log-icon { font-size: 12px; line-height: 1.4; }
+    .log-entry .log-msg { flex: 1; line-height: 1.5; }
+
+    .log-entry.info  { background: rgba(59,130,246,0.06); color: var(--text-primary); }
+    .log-entry.ok    { background: rgba(34,197,94,0.07);  color: #86efac; }
+    .log-entry.warn  { background: rgba(245,158,11,0.07); color: #fcd34d; }
+    .log-entry.error { background: rgba(239,68,68,0.08);  color: #fca5a5; }
+
+    /* ── 상품 수정 카드 ── */
+    .product-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      animation: fadeIn 0.25s ease;
+    }
+    .product-card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+    }
+    .product-card-header .platform-badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 10px;
+      background: rgba(59,130,246,0.15);
+      color: var(--accent);
+      letter-spacing: 0.05em;
+    }
+    .product-card-header .card-title {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .product-card-header .card-status {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .product-card-body { padding: 10px 12px; }
+
+    .searching-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 0;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .search-results { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+
+    .result-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--bg-input);
+      cursor: pointer;
+      transition: border-color var(--transition), background var(--transition);
+    }
+    .result-item:hover { border-color: var(--accent); background: rgba(59,130,246,0.06); }
+    .result-item.selected { border-color: var(--accent); background: rgba(59,130,246,0.1); }
+
+    .result-item .result-thumb {
+      width: 36px; height: 36px;
+      object-fit: cover;
+      border-radius: 3px;
+      background: var(--bg-card);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .result-item .result-info { flex: 1; }
+    .result-item .result-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .result-item .result-id { font-size: 10px; color: var(--text-muted); }
+
+    .edit-form {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .edit-form .field input, .edit-form .field textarea {
+      font-size: 12px;
+    }
+    .edit-form-actions {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+      margin-top: 4px;
+    }
+
+    .btn-sm {
+      padding: 5px 12px;
+      border-radius: var(--radius);
+      font-size: 12px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all var(--transition);
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-ghost {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--text-secondary);
+    }
+    .btn-ghost:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+
+    .no-results {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 12px;
+      padding: 14px 0;
+    }
+
+    /* ── 스크롤바 ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* 빈 상태 */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 10px;
+      color: var(--text-muted);
+      font-size: 12px;
+      opacity: 0.6;
+    }
+    .empty-state .empty-icon { font-size: 36px; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ══ 헤더 ══ -->
+  <div id="header">
+    <button id="btn-back" title="런처로 돌아가기">← 런처로</button>
+    <div id="app-title">✦ VERY UP VER2</div>
+  </div>
+
+  <!-- ══ 모드 선택 바 ══ -->
+  <div id="mode-bar">
+    <span>모드:</span>
+
+    <input type="radio" name="mode" id="mode-new" class="mode-radio" value="new" checked />
+    <label for="mode-new" class="mode-label">
+      <span class="dot"></span> 신규등록
+    </label>
+
+    <input type="radio" name="mode" id="mode-edit" class="mode-radio" value="edit" />
+    <label for="mode-edit" class="mode-label">
+      <span class="dot"></span> 상품수정
+    </label>
+  </div>
+
+  <!-- ══ 메인 ══ -->
+  <div id="main">
+
+    <!-- ── SECTION 7 (좌측) ── -->
+    <div id="section7">
+      <div class="section-title">Section 7 — 상품 정보</div>
+
+      <!-- 텍스트 입력 -->
+      <div class="field-group">
+        <div class="field">
+          <label for="inp-size">사이즈</label>
+          <input type="text" id="inp-size" placeholder="예: S / M / L / XL" />
+        </div>
+        <div class="field">
+          <label for="inp-model">모델명</label>
+          <input type="text" id="inp-model" placeholder="예: VU-2024-001" />
+        </div>
+        <div class="field">
+          <label for="inp-dealer">거래처</label>
+          <input type="text" id="inp-dealer" placeholder="거래처명 입력" />
+        </div>
+        <div class="field">
+          <label for="inp-mfr">제조사</label>
+          <input type="text" id="inp-mfr" placeholder="제조사명 입력" />
+        </div>
+        <div class="field">
+          <label for="inp-gov">공신 정보</label>
+          <textarea id="inp-gov" placeholder="공신 정보를 입력하세요"></textarea>
+        </div>
+        <div class="field">
+          <label for="inp-text">본문 텍스트</label>
+          <textarea id="inp-text" placeholder="등록/수정에 사용할 본문 텍스트를 입력하세요" style="min-height:80px;"></textarea>
+        </div>
+      </div>
+
+      <!-- 최근 사진 불러오기 -->
+      <button id="btn-load-photo">📁 최근 사진 불러오기</button>
+
+      <!-- 현황판 -->
+      <div class="board-title">현황판</div>
+      <table id="status-board">
+        <thead>
+          <tr>
+            <th>나라</th>
+            <th>자사몰</th>
+            <th>B2B</th>
+            <th>오픈1</th>
+            <th>오픈2</th>
+          </tr>
+        </thead>
+        <tbody id="board-body">
+          <!-- JS로 렌더링 -->
+        </tbody>
+      </table>
+
+      <!-- 실행 버튼 (신규등록 모드에서만 표시) -->
+      <button id="btn-run">🚀 신규 등록 실행</button>
+    </div><!-- /section7 -->
+
+    <!-- ── SECTION 8 (우측) ── -->
+    <div id="section8">
+      <div id="section8-header">
+        <div>
+          <div class="sec-label">Section 8</div>
+          <div class="sec-desc" id="sec8-desc">신규등록 — 실행 로그</div>
+        </div>
+        <button id="btn-clear-log" title="로그 지우기">초기화</button>
+      </div>
+      <div id="section8-body">
+        <!-- 로그 or 카드 -->
+        <div id="log-window"></div>
+        <div id="card-area" style="display:none; flex-direction:column; gap:12px;"></div>
+        <div id="empty-state" class="empty-state">
+          <div class="empty-icon">📋</div>
+          <div>실행하거나 체크박스를 선택하면 여기에 결과가 표시됩니다.</div>
+        </div>
+      </div>
+    </div><!-- /section8 -->
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+/* ══════════════════════════════════════════════
+   플랫폼 데이터
+══════════════════════════════════════════════ */
+const PLATFORMS = {
+  KOREA: [
+    { type: 'own',   name: '아임웹',    label: '자사몰',    active: true  },
+    { type: 'b2b',   name: 'B2B몰',     label: 'B2B',       active: true  },
+    { type: 'open1', name: '오픈마켓1', label: '오픈마켓1', active: true  },
+    { type: 'open2', name: '오픈마켓2', label: '오픈마켓2', active: true  },
+  ],
+  USA: [
+    { type: 'own',   name: '아임웹', label: '자사몰',    active: true  },
+    { type: 'b2b',   name: '',       label: 'B2B',       active: false },
+    { type: 'open1', name: '아마존', label: '오픈마켓1', active: true  },
+    { type: 'open2', name: '이베이', label: '오픈마켓2', active: true  },
+  ],
+  JAPAN: [
+    { type: 'own',   name: '아임웹',  label: '자사몰',    active: true  },
+    { type: 'b2b',   name: '',        label: 'B2B',       active: false },
+    { type: 'open1', name: '아마존',  label: '오픈마켓1', active: true  },
+    { type: 'open2', name: '라쿠텐', label: '오픈마켓2', active: true  },
+  ],
+  ARAB: [
+    { type: 'own',   name: '쇼피파이', label: '자사몰',    active: true  },
+    { type: 'b2b',   name: '',         label: 'B2B',       active: false },
+    { type: 'open1', name: '',         label: '오픈마켓1', active: false },
+    { type: 'open2', name: '',         label: '오픈마켓2', active: false },
+  ],
+};
+
+const TYPE_ORDER = ['own', 'b2b', 'open1', 'open2'];
+
+/* ══════════════════════════════════════════════
+   상태
+══════════════════════════════════════════════ */
+let currentMode = 'new'; // 'new' | 'edit'
+
+// checked[country][type] = boolean
+const checked = {};
+Object.keys(PLATFORMS).forEach(country => {
+  checked[country] = {};
+  PLATFORMS[country].forEach(p => { checked[country][p.type] = false; });
+});
+
+/* ══════════════════════════════════════════════
+   IPC 헬퍼 (Electron 환경 아닐 때 fallback)
+══════════════════════════════════════════════ */
+const ipc = (() => {
+  if (window.require) {
+    try { return window.require('electron').ipcRenderer; } catch(e) {}
+  }
+  // 개발용 stub
+  return {
+    send: (ch, ...args) => console.log('[IPC send]', ch, ...args),
+    invoke: async (ch, ...args) => {
+      console.log('[IPC invoke]', ch, ...args);
+      await new Promise(r => setTimeout(r, 800));
+      // 검색 결과 더미 데이터 반환 (개발용)
+      if (ch === 'veryup-search-product') {
+        return {
+          items: [
+            { id: 'PROD-001', name: '샘플 상품 A', price: '29000', stock: '100', description: '샘플 설명 A' },
+            { id: 'PROD-002', name: '샘플 상품 B', price: '45000', stock: '50',  description: '샘플 설명 B' },
+          ]
+        };
+      }
+      return { ok: true, stub: true };
+    },
+    on: (ch, fn) => {},
+  };
+})();
+
+/* ══════════════════════════════════════════════
+   DOM refs
+══════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const boardBody  = $('board-body');
+const logWindow  = $('log-window');
+const cardArea   = $('card-area');
+const emptyState = $('empty-state');
+const sec8Desc   = $('sec8-desc');
+const btnRun     = $('btn-run');
+const btnClear   = $('btn-clear-log');
+
+/* ══════════════════════════════════════════════
+   현황판 렌더링
+══════════════════════════════════════════════ */
+function renderBoard() {
+  boardBody.innerHTML = '';
+  Object.keys(PLATFORMS).forEach(country => {
+    const platforms = PLATFORMS[country];
+    const tr = document.createElement('tr');
+
+    // 나라 셀
+    const tdCountry = document.createElement('td');
+    tdCountry.className = 'country-cell';
+    tdCountry.textContent = country;
+    tr.appendChild(tdCountry);
+
+    // 플랫폼 셀
+    TYPE_ORDER.forEach(type => {
+      const plat = platforms.find(p => p.type === type);
+      const td = document.createElement('td');
+
+      if (!plat || !plat.active) {
+        td.className = 'inactive-cell';
+        tr.appendChild(td);
+        return;
+      }
+
+      td.className = 'platform-cell';
+      td.dataset.country = country;
+      td.dataset.type = type;
+
+      const inner = document.createElement('div');
+      inner.className = 'cell-inner';
+      inner.id = `cell-${country}-${type}`;
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.id = `cb-${country}-${type}`;
+      cb.checked = checked[country][type];
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'plat-name';
+      nameEl.textContent = plat.name;
+
+      inner.appendChild(cb);
+      inner.appendChild(nameEl);
+      td.appendChild(inner);
+      tr.appendChild(td);
+
+      // 클릭 이벤트
+      td.addEventListener('click', e => {
+        if (e.target === cb) return; // 체크박스 자체 클릭은 change에서 처리
+        cb.checked = !cb.checked;
+        handleCheck(country, type, cb.checked);
+      });
+      cb.addEventListener('change', () => handleCheck(country, type, cb.checked));
+    });
+
+    boardBody.appendChild(tr);
+    updateRowHighlight(country, tr);
+  });
+}
+
+function updateRowHighlight(country, trEl) {
+  let tr = trEl;
+  if (!tr) {
+    // 행 직접 탐색
+    Array.from(boardBody.rows).forEach(row => {
+      const cc = row.querySelector('.country-cell');
+      if (cc && cc.textContent === country) tr = row;
+    });
+  }
+  if (!tr) return;
+  const anyChecked = Object.values(checked[country]).some(v => v);
+  tr.classList.toggle('row-checked', anyChecked);
+}
+
+function syncCellUI(country, type) {
+  const inner = document.getElementById(`cell-${country}-${type}`);
+  if (!inner) return;
+  const cb = inner.querySelector('input[type="checkbox"]');
+  if (cb) cb.checked = checked[country][type];
+  inner.classList.toggle('checked', checked[country][type]);
+}
+
+/* ══════════════════════════════════════════════
+   체크 핸들러
+══════════════════════════════════════════════ */
+function handleCheck(country, type, isChecked) {
+  checked[country][type] = isChecked;
+  syncCellUI(country, type);
+  updateRowHighlight(country);
+
+  if (currentMode === 'edit') {
+    if (isChecked) {
+      searchProduct(country, type);
+    } else {
+      removeCard(country, type);
+    }
+  }
+  updateEmptyState();
+}
+
+/* ══════════════════════════════════════════════
+   로그
+══════════════════════════════════════════════ */
+function addLog(msg, level = 'info') {
+  const icons = { info: 'ℹ️', ok: '✅', warn: '⚠️', error: '❌' };
+  const now = new Date();
+  const hh = now.getHours().toString().padStart(2, '0');
+  const mm = now.getMinutes().toString().padStart(2, '0');
+  const ss = now.getSeconds().toString().padStart(2, '0');
+  const time = `${hh}:${mm}:${ss}`;
+
+  const el = document.createElement('div');
+  el.className = `log-entry ${level}`;
+  el.innerHTML = `
+    <span class="log-time">${time}</span>
+    <span class="log-icon">${icons[level] || 'ℹ️'}</span>
+    <span class="log-msg">${escHtml(msg)}</span>
+  `;
+  logWindow.appendChild(el);
+
+  // 스크롤 최하단 이동
+  requestAnimationFrame(() => {
+    const body = $('section8-body');
+    body.scrollTop = body.scrollHeight;
+  });
+
+  updateEmptyState();
+}
+
+/* ══════════════════════════════════════════════
+   상품 검색 (수정 모드)
+══════════════════════════════════════════════ */
+async function searchProduct(country, type) {
+  const plat = PLATFORMS[country].find(p => p.type === type);
+  if (!plat) return;
+
+  const searchText = $('inp-model').value.trim() || $('inp-text').value.trim() || '';
+  const cardId = `card-${country}-${type}`;
+
+  // 기존 카드 제거 후 새로 생성
+  removeCard(country, type);
+
+  const card = document.createElement('div');
+  card.className = 'product-card';
+  card.id = cardId;
+  card.innerHTML = `
+    <div class="product-card-header">
+      <span class="platform-badge">${escHtml(country)}</span>
+      <span class="card-title">${escHtml(plat.name)} — ${escHtml(plat.label)}</span>
+      <span class="card-status" id="${cardId}-status">검색 중...</span>
+    </div>
+    <div class="product-card-body" id="${cardId}-body">
+      <div class="searching-indicator">
+        <div class="spinner"></div>
+        <span>${escHtml(plat.name)}에서 상품 검색 중${searchText ? ' (' + escHtml(searchText) + ')' : ''}...</span>
+      </div>
+    </div>
+  `;
+  cardArea.appendChild(card);
+  updateEmptyState();
+
+  try {
+    const result = await ipc.invoke('veryup-search-product', {
+      country, platform: plat.name, searchText,
+    });
+    renderSearchResult(cardId, country, type, plat, result);
+  } catch (err) {
+    const body = document.getElementById(`${cardId}-body`);
+    if (body) body.innerHTML = `<div class="no-results">❌ 검색 오류: ${escHtml(String(err.message || err))}</div>`;
+    const status = document.getElementById(`${cardId}-status`);
+    if (status) status.textContent = '오류';
+  }
+}
+
+function renderSearchResult(cardId, country, type, plat, result) {
+  const body = document.getElementById(`${cardId}-body`);
+  const status = document.getElementById(`${cardId}-status`);
+  if (!body) return;
+
+  const items = (result && Array.isArray(result.items)) ? result.items : [];
+
+  if (status) status.textContent = items.length > 0 ? `${items.length}개 검색됨` : '결과 없음';
+
+  if (items.length === 0) {
+    body.innerHTML = '<div class="no-results">검색 결과가 없습니다.</div>';
+    return;
+  }
+
+  const resultsEl = document.createElement('div');
+  resultsEl.className = 'search-results';
+
+  items.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'result-item';
+    div.innerHTML = `
+      <div class="result-thumb">🖼️</div>
+      <div class="result-info">
+        <div class="result-name">${escHtml(item.name || '상품명 없음')}</div>
+        <div class="result-id">ID: ${escHtml(String(item.id || ''))}</div>
+      </div>
+    `;
+    div.addEventListener('click', () => {
+      resultsEl.querySelectorAll('.result-item').forEach(el => el.classList.remove('selected'));
+      div.classList.add('selected');
+      showEditForm(body, resultsEl, cardId, country, type, plat, item);
+    });
+    resultsEl.appendChild(div);
+  });
+
+  body.innerHTML = '';
+  body.appendChild(resultsEl);
+}
+
+function showEditForm(body, resultsEl, cardId, country, type, plat, item) {
+  // 기존 edit-form 제거
+  const old = body.querySelector('.edit-form');
+  if (old) old.remove();
+
+  const form = document.createElement('div');
+  form.className = 'edit-form';
+  form.innerHTML = `
+    <div class="field">
+      <label>상품명</label>
+      <input type="text" id="${cardId}-edit-name"
+        value="${escHtmlAttr(item.name || '')}" placeholder="수정할 상품명" />
+    </div>
+    <div class="field">
+      <label>가격</label>
+      <input type="text" id="${cardId}-edit-price"
+        value="${escHtmlAttr(String(item.price || ''))}" placeholder="수정할 가격" />
+    </div>
+    <div class="field">
+      <label>재고</label>
+      <input type="text" id="${cardId}-edit-stock"
+        value="${escHtmlAttr(String(item.stock || ''))}" placeholder="재고 수량" />
+    </div>
+    <div class="field">
+      <label>설명</label>
+      <textarea id="${cardId}-edit-desc" placeholder="수정할 설명">${escHtml(item.description || '')}</textarea>
+    </div>
+    <div class="edit-form-actions">
+      <button class="btn-sm btn-ghost" id="${cardId}-btn-cancel">취소</button>
+      <button class="btn-sm btn-primary" id="${cardId}-btn-apply">✔ 적용</button>
+    </div>
+  `;
+  body.appendChild(form);
+
+  // 취소
+  document.getElementById(`${cardId}-btn-cancel`).addEventListener('click', () => {
+    form.remove();
+    resultsEl.querySelectorAll('.result-item').forEach(el => el.classList.remove('selected'));
+  });
+
+  // 적용
+  document.getElementById(`${cardId}-btn-apply`).addEventListener('click', async () => {
+    const updateData = {
+      name:        document.getElementById(`${cardId}-edit-name`).value,
+      price:       document.getElementById(`${cardId}-edit-price`).value,
+      stock:       document.getElementById(`${cardId}-edit-stock`).value,
+      description: document.getElementById(`${cardId}-edit-desc`).value,
+    };
+    const applyBtn = document.getElementById(`${cardId}-btn-apply`);
+    applyBtn.disabled = true;
+    applyBtn.textContent = '적용 중...';
+
+    try {
+      await ipc.invoke('veryup-update-product', {
+        country, platform: plat.name, productId: item.id, updateData,
+      });
+      applyBtn.textContent = '✔ 완료';
+      applyBtn.style.background = 'var(--accent-success)';
+      setTimeout(() => {
+        applyBtn.textContent = '✔ 적용';
+        applyBtn.style.background = '';
+        applyBtn.disabled = false;
+      }, 2000);
+    } catch(err) {
+      applyBtn.textContent = '❌ 실패';
+      applyBtn.style.background = 'var(--accent-danger)';
+      setTimeout(() => {
+        applyBtn.textContent = '✔ 적용';
+        applyBtn.style.background = '';
+        applyBtn.disabled = false;
+      }, 2500);
+    }
+  });
+}
+
+function removeCard(country, type) {
+  const card = document.getElementById(`card-${country}-${type}`);
+  if (card) card.remove();
+}
+
+/* ══════════════════════════════════════════════
+   신규 등록 실행
+══════════════════════════════════════════════ */
+async function runRegister() {
+  const text         = $('inp-text').value.trim();
+  const size         = $('inp-size').value.trim();
+  const modelName    = $('inp-model').value.trim();
+  const dealer       = $('inp-dealer').value.trim();
+  const manufacturer = $('inp-mfr').value.trim();
+  const govCert      = $('inp-gov').value.trim();
+
+  // 선택된 플랫폼 수집
+  const platforms = [];
+  Object.keys(PLATFORMS).forEach(country => {
+    PLATFORMS[country].forEach(p => {
+      if (p.active && checked[country][p.type]) {
+        platforms.push({ country, type: p.type, name: p.name });
+      }
+    });
+  });
+
+  if (platforms.length === 0) {
+    addLog('등록할 플랫폼을 하나 이상 선택하세요.', 'warn');
+    return;
+  }
+
+  btnRun.disabled = true;
+  btnRun.textContent = '⏳ 등록 중...';
+
+  addLog(`신규 등록 시작 — 플랫폼 ${platforms.length}개 선택됨`, 'info');
+  if (modelName) addLog(`모델명: ${modelName}`, 'info');
+  if (size)      addLog(`사이즈: ${size}`, 'info');
+
+  const payload = { mode: 'new', text, size, modelName, dealer, manufacturer, govCert, platforms };
+
+  try {
+    addLog('IPC 호출: veryup-register-new', 'info');
+    const result = await ipc.invoke('veryup-register-new', payload);
+
+    if (result && Array.isArray(result.results)) {
+      result.results.forEach(r => {
+        if (r.ok) {
+          addLog(`[${r.country}] ${r.platform} — 등록 완료 (ID: ${r.productId || 'N/A'})`, 'ok');
+        } else {
+          addLog(`[${r.country}] ${r.platform} — 실패: ${r.error || '알 수 없는 오류'}`, 'error');
+        }
+      });
+    } else {
+      addLog('등록 요청 전송 완료 (메인 프로세스에서 처리 중)', 'ok');
+    }
+  } catch(err) {
+    addLog(`IPC 오류: ${err.message || String(err)}`, 'error');
+  } finally {
+    btnRun.disabled = false;
+    btnRun.textContent = '🚀 신규 등록 실행';
+  }
+}
+
+/* ══════════════════════════════════════════════
+   섹션 8 표시 모드 전환
+══════════════════════════════════════════════ */
+function setSection8Mode(mode) {
+  if (mode === 'new') {
+    logWindow.style.display = '';
+    cardArea.style.display = 'none';
+    sec8Desc.textContent = '신규등록 — 실행 로그';
+    btnClear.title = '로그 지우기';
+  } else {
+    logWindow.style.display = 'none';
+    cardArea.style.display = 'flex';
+    sec8Desc.textContent = '상품수정 — 검색 결과';
+    btnClear.title = '카드 모두 닫기';
+  }
+  updateEmptyState();
+}
+
+function updateEmptyState() {
+  if (currentMode === 'new') {
+    emptyState.style.display = logWindow.children.length > 0 ? 'none' : 'flex';
+  } else {
+    emptyState.style.display = cardArea.children.length > 0 ? 'none' : 'flex';
+  }
+}
+
+/* ══════════════════════════════════════════════
+   유틸
+══════════════════════════════════════════════ */
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,  '&amp;')
+    .replace(/</g,  '&lt;')
+    .replace(/>/g,  '&gt;')
+    .replace(/"/g,  '&quot;')
+    .replace(/'/g,  '&#39;');
+}
+function escHtmlAttr(str) {
+  return escHtml(str);
+}
+
+function uncheckAllAndClearCards() {
+  Object.keys(checked).forEach(country => {
+    Object.keys(checked[country]).forEach(type => {
+      checked[country][type] = false;
+      syncCellUI(country, type);
+    });
+    updateRowHighlight(country);
+  });
+  cardArea.innerHTML = '';
+}
+
+/* ══════════════════════════════════════════════
+   이벤트 연결
+══════════════════════════════════════════════ */
+// 뒤로가기
+$('btn-back').addEventListener('click', () => {
+  ipc.send('close-app');
+});
+
+// 최근 사진 불러오기
+$('btn-load-photo').addEventListener('click', () => {
+  ipc.send('veryup-load-recent-photo');
+  if (currentMode === 'new') addLog('최근 사진 불러오기 요청 전송', 'info');
+});
+
+// 모드 전환
+document.querySelectorAll('.mode-radio').forEach(radio => {
+  radio.addEventListener('change', () => {
+    currentMode = radio.value;
+    if (currentMode === 'new') {
+      btnRun.style.display = '';
+      uncheckAllAndClearCards();
+    } else {
+      btnRun.style.display = 'none';
+      logWindow.innerHTML = '';
+    }
+    setSection8Mode(currentMode);
+  });
+});
+
+// 실행 버튼
+btnRun.addEventListener('click', runRegister);
+
+// 초기화 버튼
+btnClear.addEventListener('click', () => {
+  if (currentMode === 'new') {
+    logWindow.innerHTML = '';
+  } else {
+    uncheckAllAndClearCards();
+  }
+  updateEmptyState();
+});
+
+/* ══════════════════════════════════════════════
+   IPC 수신 (메인 프로세스 → 렌더러)
+══════════════════════════════════════════════ */
+ipc.on('veryup-log', (event, { message, level }) => {
+  addLog(message, level || 'info');
+});
+
+ipc.on('veryup-search-result', (event, { country, platform, items }) => {
+  const platObj = (PLATFORMS[country] || []).find(p => p.name === platform);
+  if (platObj) {
+    const cardId = `card-${country}-${platObj.type}`;
+    renderSearchResult(cardId, country, platObj.type, platObj, { items });
+  }
+});
+
+/* ══════════════════════════════════════════════
+   초기화
+══════════════════════════════════════════════ */
+renderBoard();
+setSection8Mode('new');
+</script>
+</body>
+</html>
