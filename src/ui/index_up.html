@@ -1132,37 +1132,34 @@ async function runRegister() {
     return;
   }
 
-  btnRun.disabled = true;
-  btnRun.textContent = '⏳ 등록 중...';
-
-  addLog(`신규 등록 시작 — 플랫폼 ${platforms.length}개 선택됨`, 'info');
-  if (brand)    addLog(`브랜드: ${brand}`, 'info');
-  if (carModel) addLog(`차종명: ${carModel}`, 'info');
-  if (code)     addLog(`상품코드: ${code}`, 'info');
-
-  const payload = { mode: 'new', brand, carModel, year, code, price, bsa, chartHtml, platforms };
-
-  try {
-    addLog('IPC 호출: veryup-register-new', 'info');
-    const result = await ipc.invoke('veryup-register-new', payload);
-
-    if (result && Array.isArray(result.results)) {
-      result.results.forEach(r => {
-        if (r.ok) {
-          addLog(`[${r.country}] ${r.platform} — 등록 완료 (ID: ${r.productId || 'N/A'})`, 'ok');
-        } else {
-          addLog(`[${r.country}] ${r.platform} — 실패: ${r.error || '알 수 없는 오류'}`, 'error');
-        }
-      });
-    } else {
-      addLog('등록 요청 전송 완료 (메인 프로세스에서 처리 중)', 'ok');
-    }
-  } catch(err) {
-    addLog(`IPC 오류: ${err.message || String(err)}`, 'error');
-  } finally {
-    btnRun.disabled = false;
-    btnRun.textContent = '🚀 신규 등록 실행';
+  // 오른쪽 iframe 폼에 자동 입력 (매칭)
+  const frame = $('form-frame');
+  const doc = frame && frame.contentWindow && frame.contentWindow.document;
+  if (!doc || !doc.querySelector('.tab-btn')) {
+    addLog('먼저 [확인] 버튼으로 오른쪽에 등록 폼을 여세요.', 'warn');
+    return;
   }
+  // g(조견표 HTML)에서 이미지 URL 추출 (HTML이면 src만, 아니면 원문)
+  const m = chartHtml.match(/src=["']([^"']+)["']/);
+  const chartUrl = m ? m[1] : chartHtml;
+  const setVal = (id, val) => { const el = doc.getElementById(id); if (el) el.value = (val || ''); };
+
+  const filled = [];
+  // ── 아임웹 B2B (imwebTab) ──
+  if (doc.getElementById('iwTitleBrand')) {
+    setVal('iwTitleBrand', brand);   // a → 제목용 제조사
+    setVal('iwTitleModel', carModel);// b → 제목용 차종명
+    setVal('iwYear', year);          // c → 연식
+    setVal('iwCode', code);          // d → 상품코드
+    setVal('iwSpecImageUrl', chartUrl); // g → 조견표 이미지 URL
+    const bo = doc.getElementById('iwBsaO'), bx = doc.getElementById('iwBsaX');
+    if (bo && bx) { bo.checked = bsa; bx.checked = !bsa; }  // f → BSA O/X
+    filled.push('아임웹 B2B');
+  }
+  // (네이버·쿠팡·아임웹 본사 등 다른 플랫폼 매칭은 이후 추가)
+
+  if (filled.length) addLog(`자동 입력 완료: ${filled.join(', ')}`, 'ok');
+  else addLog('자동 입력할 폼이 없습니다. (확인으로 폼을 먼저 여세요)', 'warn');
 }
 
 /* ══════════════════════════════════════════════
