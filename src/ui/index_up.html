@@ -1168,7 +1168,15 @@ async function runRegister() {
     setChk('iwTargetHead', checked['KOREA'] && checked['KOREA']['own']); // korea
     setChk('iwTargetUs',   checked['USA']   && checked['USA']['own']);   // usa
     setChk('iwTargetJp',   checked['JAPAN'] && checked['JAPAN']['own']); // japan
-    filled.push('아임웹 본사·해외몰(게시판)');
+    setVal('iwBoardCode', code);              // d → 상품코드
+    setVal('iwBoardTitleBrand', brand);       // a → 한글 제조사
+    setVal('iwBoardTitleModel', carModel);    // b → 한글 차종
+    setVal('iwBoardTitleBrandEn', brand);     // a → 영문 제조사
+    setVal('iwBoardTitleModelEn', carModel);  // b → 영문 차종
+    setVal('iwBoardGeneration', gen);         // h → 세대 표기
+    setVal('iwBoardSpecImageUrl', chartUrl);  // g → 국내용 조견표 URL
+    setVal('iwBoardSpecImageUrlEn', chartUrl);// g → 해외용 조견표 URL
+    filled.push('아임웹 본사·해외몰');
   }
   // (네이버·쿠팡 등 다른 플랫폼 매칭은 이후 추가)
 
