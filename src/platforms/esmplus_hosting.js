@@ -108,12 +108,24 @@ export class ESMPlusHosting extends BasePlatform {
   async _navigateToFolder(folderPath) {
     console.log(`Navigating to Image Hosting folder: ${folderPath.join(' > ')}`);
     
-    // Navigate to Image Hosting
-    await this.page.goto('https://im.esmplus.com/IHv2/ImgMain/ImgView');
-    await this.page.waitForLoadState('networkidle');
-    await sleep(3000);
+    // 최적화: 이미 호스팅 페이지에 있고 현재 위치가 목표 경로의 앞부분이면
+    // 새로고침·중복 탐색을 건너뛰고 '남은 폴더만' 진입한다.
+    let startIdx = 0;
+    const onPage = (() => { try { return this.page.url().includes('/IHv2/ImgMain/ImgView'); } catch { return false; } })();
+    if (onPage && Array.isArray(this._currentPath)) {
+        while (startIdx < this._currentPath.length && startIdx < folderPath.length
+               && this._currentPath[startIdx] === folderPath[startIdx]) startIdx++;
+        // 마지막 목표 폴더는 항상 다시 선택 (현재 위치가 더 깊거나 다른 가지일 수 있으므로)
+        if (folderPath.length > 0 && startIdx >= folderPath.length) startIdx = folderPath.length - 1;
+        if (startIdx > 0) console.log(`  (이미 열린 ${startIdx}단계 건너뜀)`);
+    } else {
+        await this.page.goto('https://im.esmplus.com/IHv2/ImgMain/ImgView');
+        await this.page.waitForLoadState('networkidle');
+        await sleep(1500);
+    }
 
-    for (const folderName of folderPath) {
+    for (let i = startIdx; i < folderPath.length; i++) {
+        const folderName = folderPath[i];
         console.log(`  Entering folder: ${folderName}`);
         
         // Method 1: jstree API (most reliable)
@@ -145,7 +157,7 @@ export class ESMPlusHosting extends BasePlatform {
         
         if (apiSuccess) {
             console.log(`    ✓ Opened via jstree API`);
-            await sleep(2000);
+            await sleep(1000);
             continue;
         }
 
@@ -169,7 +181,7 @@ export class ESMPlusHosting extends BasePlatform {
 
         if (domSuccess) {
             console.log(`    ✓ Clicked via DOM`);
-            await sleep(2000);
+            await sleep(1000);
             continue;
         }
         
@@ -177,11 +189,12 @@ export class ESMPlusHosting extends BasePlatform {
         try {
             await this.page.dblclick(`text=${folderName}`, { timeout: 5000 });
             console.log(`    ✓ Double-clicked in grid`);
-            await sleep(2000);
+            await sleep(1000);
         } catch (e) {
             console.log(`    ⚠ Folder "${folderName}" not found by any method`);
         }
     }
+    this._currentPath = [...folderPath];  // 현재 위치 기억 (다음 호출 때 중복 탐색 방지)
   }
 
   /**
