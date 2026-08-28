@@ -644,28 +644,32 @@
       <div class="section-title" style="margin-top:16px;">상품 정보</div>
       <div class="field-group">
         <div class="field">
-          <label for="inp-size">사이즈</label>
-          <input type="text" id="inp-size" placeholder="예: S / M / L / XL" />
+          <label for="inp-brand">브랜드</label>
+          <input type="text" id="inp-brand" placeholder="예: 벤츠" />
         </div>
         <div class="field">
-          <label for="inp-model">모델명</label>
-          <input type="text" id="inp-model" placeholder="예: VU-2024-001" />
+          <label for="inp-carmodel">차종명</label>
+          <input type="text" id="inp-carmodel" placeholder="예: E클래스" />
         </div>
         <div class="field">
-          <label for="inp-dealer">거래처</label>
-          <input type="text" id="inp-dealer" placeholder="거래처명 입력" />
+          <label for="inp-year">연식</label>
+          <input type="text" id="inp-year" placeholder="예: 2020~2023" />
         </div>
         <div class="field">
-          <label for="inp-mfr">제조사</label>
-          <input type="text" id="inp-mfr" placeholder="제조사명 입력" />
+          <label for="inp-code">상품코드</label>
+          <input type="text" id="inp-code" placeholder="예: VU-2024-001" />
         </div>
         <div class="field">
-          <label for="inp-gov">공신 정보</label>
-          <textarea id="inp-gov" placeholder="공신 정보를 입력하세요"></textarea>
+          <label for="inp-price">판매가</label>
+          <input type="number" id="inp-price" placeholder="예: 50000" />
+        </div>
+        <div class="field" style="flex-direction:row;align-items:center;gap:8px;">
+          <input type="checkbox" id="inp-bsa" style="width:auto;flex:none;" />
+          <label for="inp-bsa" style="margin:0;">BSA 적용</label>
         </div>
         <div class="field">
-          <label for="inp-text">본문 텍스트</label>
-          <textarea id="inp-text" placeholder="등록/수정에 사용할 본문 텍스트를 입력하세요" style="min-height:80px;"></textarea>
+          <label for="inp-chart-html">상세페이지 조견표 HTML</label>
+          <textarea id="inp-chart-html" placeholder="사진 불러오기 버튼을 누르면 링크가 자동 입력됩니다" style="min-height:70px;"></textarea>
         </div>
       </div>
 
@@ -933,7 +937,7 @@ async function searchProduct(country, type) {
   const plat = PLATFORMS[country].find(p => p.type === type);
   if (!plat) return;
 
-  const searchText = $('inp-model').value.trim() || $('inp-text').value.trim() || '';
+  const searchText = $('inp-code').value.trim() || $('inp-carmodel').value.trim() || '';
   const cardId = `card-${country}-${type}`;
 
   // 기존 카드 제거 후 새로 생성
@@ -1094,12 +1098,13 @@ function removeCard(country, type) {
    신규 등록 실행
 ══════════════════════════════════════════════ */
 async function runRegister() {
-  const text         = $('inp-text').value.trim();
-  const size         = $('inp-size').value.trim();
-  const modelName    = $('inp-model').value.trim();
-  const dealer       = $('inp-dealer').value.trim();
-  const manufacturer = $('inp-mfr').value.trim();
-  const govCert      = $('inp-gov').value.trim();
+  const brand     = $('inp-brand').value.trim();
+  const carModel  = $('inp-carmodel').value.trim();
+  const year      = $('inp-year').value.trim();
+  const code      = $('inp-code').value.trim();
+  const price     = $('inp-price').value.trim();
+  const bsa       = $('inp-bsa').checked;
+  const chartHtml = $('inp-chart-html').value.trim();
 
   // 선택된 플랫폼 수집
   const platforms = [];
@@ -1120,10 +1125,11 @@ async function runRegister() {
   btnRun.textContent = '⏳ 등록 중...';
 
   addLog(`신규 등록 시작 — 플랫폼 ${platforms.length}개 선택됨`, 'info');
-  if (modelName) addLog(`모델명: ${modelName}`, 'info');
-  if (size)      addLog(`사이즈: ${size}`, 'info');
+  if (brand)    addLog(`브랜드: ${brand}`, 'info');
+  if (carModel) addLog(`차종명: ${carModel}`, 'info');
+  if (code)     addLog(`상품코드: ${code}`, 'info');
 
-  const payload = { mode: 'new', text, size, modelName, dealer, manufacturer, govCert, platforms };
+  const payload = { mode: 'new', brand, carModel, year, code, price, bsa, chartHtml, platforms };
 
   try {
     addLog('IPC 호출: veryup-register-new', 'info');
@@ -1221,6 +1227,13 @@ async function loadSeedPhoto(region) {
       nm.textContent = `${label} · ${res.name}`;
       box.style.display = 'block';
       addLog(`${label} 사진 불러옴: ${res.name}`, 'ok');
+      // 조견표 HTML 칸에 ESM 업로드 링크 자동 입력
+      if (res.html) {
+        $('inp-chart-html').value = res.html;
+        addLog(`${label} 조견표 HTML 자동 입력됨`, 'ok');
+      } else {
+        addLog(`${label} 조견표 HTML 없음 (베리씨드에서 ESM 업로드 먼저 하면 링크가 들어옵니다)`, 'warn');
+      }
     } else {
       addLog(`${label} 사진 불러오기 실패: ${(res && res.error) || '알 수 없음'}`, 'warn');
     }

@@ -476,7 +476,13 @@ ipcMain.handle('veryup-load-photo', async (event, { region }) => {
             return { success: false, error: `아직 생성된 ${label} 사진이 없습니다. (베리씨드에서 먼저 생성하세요)` };
         }
         const buf = fs.readFileSync(p);
-        return { success: true, path: p, name: file, dataUrl: 'data:image/jpeg;base64,' + buf.toString('base64') };
+        // ESM 업로드 때 저장된 조견표 HTML(있으면) 같이 반환
+        let html = '';
+        try {
+            const htmlFile = path.join(AI_OUTPUT_DIR, `latest_${region === 'global' ? 'global' : 'korea'}_html.txt`);
+            if (fs.existsSync(htmlFile)) html = fs.readFileSync(htmlFile, 'utf-8');
+        } catch {}
+        return { success: true, path: p, name: file, html, dataUrl: 'data:image/jpeg;base64,' + buf.toString('base64') };
     } catch (e) {
         return { success: false, error: e.message };
     }
@@ -537,6 +543,11 @@ ipcMain.handle('esm-upload', async (event, { filePath, category, targetFolder, c
         const url = await esm.uploadImage(filePath, folderPath);
         if (url) {
             const html = `<img src="${url}" />`;
+            // 국가별로 생성 HTML 저장 → 베리업 '조견표 HTML' 칸에서 불러쓰기
+            try {
+                const region = (country === 'KOREA' || !country) ? 'korea' : 'global';
+                fs.writeFileSync(path.join(AI_OUTPUT_DIR, `latest_${region}_html.txt`), html, 'utf-8');
+            } catch {}
             return { success: true, html, url };
         } else {
             return { success: false, error: 'Failed to retrieve image URL.' };
