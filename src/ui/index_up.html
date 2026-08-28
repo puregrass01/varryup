@@ -661,6 +661,10 @@
           <input type="text" id="inp-carmodel" placeholder="예: E클래스" />
         </div>
         <div class="field">
+          <label for="inp-gen">세대</label>
+          <input type="text" id="inp-gen" placeholder="예: 1세대 전기형" />
+        </div>
+        <div class="field">
           <label for="inp-year">연식</label>
           <input type="text" id="inp-year" placeholder="예: 2020~2023" />
         </div>
@@ -1111,6 +1115,7 @@ function removeCard(country, type) {
 async function runRegister() {
   const brand     = $('inp-brand').value.trim();
   const carModel  = $('inp-carmodel').value.trim();
+  const gen       = $('inp-gen').value.trim();   // h (세대)
   const year      = $('inp-year').value.trim();
   const code      = $('inp-code').value.trim();
   const price     = $('inp-price').value.trim();
