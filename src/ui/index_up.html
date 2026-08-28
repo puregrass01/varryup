@@ -1183,7 +1183,17 @@ async function runRegister() {
     setVal('iwBoardSpecImageUrlEn', chartUrl);// g → 해외용 조견표 URL
     filled.push('아임웹 본사·해외몰');
   }
-  // (네이버·쿠팡 등 다른 플랫폼 매칭은 이후 추가)
+
+  // ── 네이버 스마트스토어 (naverTab) ──
+  if (doc.getElementById('optionProduct')) {
+    setVal('brand', brand);         // a → 제조사명
+    setVal('model', carModel);      // b → 모델명
+    setVal('optionModel', `${brand} ${carModel}`.trim());              // a+b → 옵션 모델명
+    setVal('optionProduct', `${year} [No.${no}] ${bsa ? 'BSA' : ''}`.trim()); // c [No.i] f → 상품선택
+    setVal('naverEsmHtml', chartHtml); // g → 상세설명(ESM HTML)
+    filled.push('네이버');
+  }
+  // (쿠팡 등 다른 플랫폼 매칭은 이후 추가)
 
   if (filled.length) addLog(`자동 입력 완료: ${filled.join(', ')}`, 'ok');
   else addLog('자동 입력할 폼이 없습니다. (확인으로 폼을 먼저 여세요)', 'warn');
