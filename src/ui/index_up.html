@@ -1156,7 +1156,16 @@ async function runRegister() {
     if (bo && bx) { bo.checked = bsa; bx.checked = !bsa; }  // f → BSA O/X
     filled.push('아임웹 B2B');
   }
-  // (네이버·쿠팡·아임웹 본사 등 다른 플랫폼 매칭은 이후 추가)
+
+  // ── 아임웹 본사·해외몰 (imwebBoardTab) : 포스팅 대상 게시판 = 현황판 자사몰(아임웹) 동기화 ──
+  if (doc.getElementById('iwTargetHead')) {
+    const setChk = (id, on) => { const el = doc.getElementById(id); if (el) el.checked = !!on; };
+    setChk('iwTargetHead', checked['KOREA'] && checked['KOREA']['own']); // korea
+    setChk('iwTargetUs',   checked['USA']   && checked['USA']['own']);   // usa
+    setChk('iwTargetJp',   checked['JAPAN'] && checked['JAPAN']['own']); // japan
+    filled.push('아임웹 본사·해외몰(게시판)');
+  }
+  // (네이버·쿠팡 등 다른 플랫폼 매칭은 이후 추가)
 
   if (filled.length) addLog(`자동 입력 완료: ${filled.join(', ')}`, 'ok');
   else addLog('자동 입력할 폼이 없습니다. (확인으로 폼을 먼저 여세요)', 'warn');
