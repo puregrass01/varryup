@@ -468,7 +468,8 @@ ipcMain.handle('esm-login', async () => {
 
 // ESM 이미지 호스팅 폴더 경로 (국가별). KOREA=조견표, 그 외(USA 등)=Compatibility Chart
 function esmBasePath(country, category) {
-    const isCar = category === '자동차';
+    // 한글(자동차) + 영어(Car) 둘 다 자동차로 인식 (USA는 카테고리명이 영어)
+    const isCar = (category === '자동차' || category === 'Car');
     if (country === 'USA') {
         return isCar
             ? ['옵틱글래스 상세페이지', 'Compatibility Chart', 'CAR']
