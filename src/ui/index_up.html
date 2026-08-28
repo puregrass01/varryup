@@ -673,6 +673,10 @@
           <input type="text" id="inp-code" placeholder="예: VU-2024-001" />
         </div>
         <div class="field">
+          <label for="inp-no">상품번호</label>
+          <input type="text" id="inp-no" placeholder="예: 612" />
+        </div>
+        <div class="field">
           <label for="inp-price">판매가</label>
           <input type="number" id="inp-price" placeholder="예: 50000" />
         </div>
@@ -1118,6 +1122,7 @@ async function runRegister() {
   const gen       = $('inp-gen').value.trim();   // h (세대)
   const year      = $('inp-year').value.trim();
   const code      = $('inp-code').value.trim();
+  const no        = $('inp-no').value.trim();    // i (상품번호)
   const price     = $('inp-price').value.trim();
   const bsa       = $('inp-bsa').checked;
   const chartHtml = $('inp-chart-html').value.trim();
