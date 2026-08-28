@@ -1189,7 +1189,7 @@ async function runRegister() {
     setVal('brand', brand);         // a → 제조사명
     setVal('model', carModel);      // b → 모델명
     setVal('optionModel', `${brand} ${carModel}`.trim());              // a+b → 옵션 모델명
-    setVal('optionProduct', `${year} [No.${no}] ${bsa ? 'BSA' : ''}`.trim()); // c [No.i] f → 상품선택
+    setVal('optionProduct', `${year}[No.${no}]${bsa ? 'BSA' : ''}`); // c[No.i]f 붙여서, BSA는 체크시만
     setVal('naverEsmHtml', chartHtml); // g → 상세설명(ESM HTML)
     filled.push('네이버');
   }
