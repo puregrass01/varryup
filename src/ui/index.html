@@ -1289,18 +1289,30 @@
         }
 
         // URL 해시로 특정 탭 바로 열기 (베리업 iframe 임베드용). 예: index.html#imwebTab&embed
-        window.addEventListener('DOMContentLoaded', () => {
+        function __applyEmbedTab() {
             const parts = (location.hash || '').replace('#', '').split('&');
-            const tabId = parts[0];
-            if (tabId && document.getElementById(tabId)) switchTab(tabId);
-            // 임베드(베리업 iframe)에선 AI 이미지 생성 / ESM 호스팅 탭 버튼 숨김
-            if (parts.includes('embed')) {
-                document.querySelectorAll('.tab-btn').forEach(btn => {
-                    const oc = btn.getAttribute('onclick') || '';
-                    if (oc.includes('aiGenTab') || oc.includes('esmTab')) btn.style.display = 'none';
-                });
-            }
-        });
+            if (!parts.includes('embed')) return;
+            // parts[0] = 보여줄 탭들(쉼표구분). 예: imwebBoardTab,naverTab
+            const showTabs = (parts[0] || '').split(',').filter(Boolean);
+            if (!showTabs.length) return;
+            // 체크한 탭 버튼만 보이고 나머지는 숨김
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                const oc = btn.getAttribute('onclick') || '';
+                const on = showTabs.some(t => oc.includes(`'${t}'`));
+                btn.style.display = on ? '' : 'none';
+                btn.classList.remove('active');
+            });
+            // 첫 번째 탭을 활성화 (여러 개면 나머지는 버튼 클릭으로 전환)
+            document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+            const firstPane = document.getElementById(showTabs[0]);
+            if (firstPane) firstPane.style.display = 'block';
+            const firstBtn = document.querySelector(`.tab-btn[onclick*="'${showTabs[0]}'"]`);
+            if (firstBtn) firstBtn.classList.add('active');
+        }
+        // DOM이 이미 준비됐으면 바로, 아니면 로드 후 실행 (타이밍 무관하게 확실히)
+        if (document.readyState !== 'loading') __applyEmbedTab();
+        else window.addEventListener('DOMContentLoaded', __applyEmbedTab);
+        window.addEventListener('hashchange', __applyEmbedTab);
 
         // ── ESM Category Toggle ──
         function setEsmCategory(cat) {

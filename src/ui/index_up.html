@@ -1255,24 +1255,25 @@ async function loadSeedPhoto(region) {
 $('btn-load-korea').addEventListener('click', () => loadSeedPhoto('korea'));
 $('btn-load-global').addEventListener('click', () => loadSeedPhoto('global'));
 
-// 확인 버튼: 체크한 플랫폼의 등록 폼(index.html 해당 탭)을 오른쪽 iframe에 연다
-const TYPE_TO_TAB = { own: 'imwebBoardTab', b2b: 'imwebTab', open1: 'naverTab', open2: 'coupangTab' };
+// 확인 버튼: 체크한 플랫폼들만 오른쪽 iframe에 띄운다 (플랫폼명 → index.html 탭)
+const NAME_TO_TAB = { '아임웹': 'imwebBoardTab', 'B2B몰': 'imwebTab', '네이버': 'naverTab', '쿠팡': 'coupangTab' };
 $('btn-confirm-platform').addEventListener('click', () => {
-  let found = null;
+  const tabs = [];
   for (const country of Object.keys(checked)) {
     for (const type of TYPE_ORDER) {
-      if (checked[country] && checked[country][type]) { found = { country, type }; break; }
+      if (checked[country] && checked[country][type]) {
+        const plat = PLATFORMS[country].find(p => p.type === type);
+        const tab = plat && NAME_TO_TAB[plat.name];
+        if (tab && !tabs.includes(tab)) tabs.push(tab);
+      }
     }
-    if (found) break;
   }
-  if (!found) { addLog('현황판에서 플랫폼을 하나 이상 체크한 뒤 확인을 누르세요.', 'warn'); return; }
-  const tab = TYPE_TO_TAB[found.type];
-  if (!tab) { addLog(`이 칸(${found.type})은 아직 등록 폼 연결이 없습니다.`, 'warn'); return; }
+  if (!tabs.length) { addLog('등록할 플랫폼(아임웹/B2B/네이버/쿠팡)을 체크한 뒤 확인을 누르세요.', 'warn'); return; }
   const frame = $('form-frame');
-  frame.src = `index.html#${tab}&embed`;
+  frame.src = `index.html#${tabs.join(',')}&embed`;
   frame.style.display = 'block';
   const empty = $('empty-state'); if (empty) empty.style.display = 'none';
-  addLog(`${found.country} · ${found.type} 등록 폼을 열었습니다.`, 'ok');
+  addLog(`선택한 폼 ${tabs.length}개를 열었습니다.`, 'ok');
 });
 
 // 모드 전환
