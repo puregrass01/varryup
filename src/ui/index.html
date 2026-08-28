@@ -1272,14 +1272,27 @@
                 pane.style.display = 'none';
             });
             // Show selected tab pane
-            document.getElementById(tabId).style.display = 'block';
+            const pane = document.getElementById(tabId);
+            if (pane) pane.style.display = 'block';
 
             // Update tab button styles
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            event.currentTarget.classList.add('active');
+            // 클릭이면 해당 버튼, 프로그램 호출(이벤트 없음)이면 tabId로 버튼 매칭
+            if (typeof event !== 'undefined' && event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
+            } else {
+                const btn = document.querySelector(`.tab-btn[onclick*="${tabId}"]`);
+                if (btn) btn.classList.add('active');
+            }
         }
+
+        // URL 해시로 특정 탭 바로 열기 (베리업 iframe 임베드용). 예: index.html#imwebTab
+        window.addEventListener('DOMContentLoaded', () => {
+            const tabId = (location.hash || '').replace('#', '').split('&')[0];
+            if (tabId && document.getElementById(tabId)) switchTab(tabId);
+        });
 
         // ── ESM Category Toggle ──
         function setEsmCategory(cat) {

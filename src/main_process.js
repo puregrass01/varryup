@@ -248,7 +248,8 @@ function createSeedWindow() {
 function createUpWindow() {
     upWindow = new BrowserWindow({
         width: 1400, height: 900, frame: false,
-        webPreferences: { nodeIntegration: true, contextIsolation: false },
+        // nodeIntegrationInSubframes: iframe(index.html)의 등록 폼도 IPC 쓰게
+        webPreferences: { nodeIntegration: true, contextIsolation: false, nodeIntegrationInSubframes: true },
         title: 'VERY UP',
     });
     upWindow.loadFile(path.join(__dirname, 'ui/index_up.html'));
