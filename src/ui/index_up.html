@@ -1193,7 +1193,15 @@ async function runRegister() {
     setVal('naverEsmHtml', chartHtml); // g → 상세설명(ESM HTML)
     filled.push('네이버');
   }
-  // (쿠팡 등 다른 플랫폼 매칭은 이후 추가)
+
+  // ── 쿠팡 윙 (coupangTab) ──
+  if (doc.getElementById('cpOptModel')) {
+    setVal('cpBrand', brand);    // a → 제조사명
+    setVal('cpModel', carModel); // b → 모델명
+    setVal('cpOptModel', `No.${no} (${gen}/${year})${bsa ? ' BSA' : ''}`); // No.i (h/c) f, BSA는 체크시만
+    setVal('cpEsmHtml', chartHtml); // g → 상세설명
+    filled.push('쿠팡');
+  }
 
   if (filled.length) addLog(`자동 입력 완료: ${filled.join(', ')}`, 'ok');
   else addLog('자동 입력할 폼이 없습니다. (확인으로 폼을 먼저 여세요)', 'warn');
