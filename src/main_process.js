@@ -466,7 +466,20 @@ ipcMain.handle('esm-login', async () => {
     }
 });
 
-ipcMain.handle('esm-list-folders', async (event, { category }) => {
+// ESM 이미지 호스팅 폴더 경로 (국가별). KOREA=조견표, 그 외(USA 등)=Compatibility Chart
+function esmBasePath(country, category) {
+    const isCar = category === '자동차';
+    if (country === 'USA') {
+        return isCar
+            ? ['옵틱글래스 상세페이지', 'Compatibility Chart', 'CAR']
+            : ['옵틱글래스 상세페이지', 'Compatibility Chart', 'BIKE'];
+    }
+    return isCar
+        ? ['옵틱글래스 상세페이지', '조견표']
+        : ['옵틱글래스 상세페이지', '조견표 바이크'];
+}
+
+ipcMain.handle('esm-list-folders', async (event, { category, country }) => {
     try {
         await getBrowser();
         const esm = getESM();
@@ -477,9 +490,7 @@ ipcMain.handle('esm-list-folders', async (event, { category }) => {
             return { success: false, error: 'ESM 로그인이 필요합니다.' };
         }
         
-        const basePath = category === '자동차' 
-            ? ['옵틱글래스 상세페이지', '조견표'] 
-            : ['옵틱글래스 상세페이지', '조견표 바이크'];
+        const basePath = esmBasePath(country, category);
 
         const folders = await esm.listSubfolders(basePath);
         return { success: true, folders, basePath };
@@ -489,7 +500,7 @@ ipcMain.handle('esm-list-folders', async (event, { category }) => {
     }
 });
 
-ipcMain.handle('esm-upload', async (event, { filePath, category, targetFolder }) => {
+ipcMain.handle('esm-upload', async (event, { filePath, category, targetFolder, country }) => {
     try {
         await getBrowser();
         const esm = getESM();
@@ -501,9 +512,7 @@ ipcMain.handle('esm-upload', async (event, { filePath, category, targetFolder })
             return { success: false, error: 'ESM 로그인이 필요합니다. 먼저 로그인 창을 열어 로그인해주세요.' };
         }
         
-        const basePath = category === '자동차' 
-            ? ['옵틱글래스 상세페이지', '조견표'] 
-            : ['옵틱글래스 상세페이지', '조견표 바이크'];
+        const basePath = esmBasePath(country, category);
 
         // If a target folder is specified, navigate into it
         const folderPath = targetFolder ? [...basePath, targetFolder] : basePath;
