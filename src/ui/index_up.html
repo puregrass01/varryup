@@ -191,7 +191,7 @@
     }
 
     /* 최근 사진 버튼 */
-    #btn-load-photo {
+    .load-photo-btn {
       display: flex;
       align-items: center;
       justify-content: center;
@@ -206,9 +206,14 @@
       width: 100%;
       transition: all var(--transition);
     }
-    #btn-load-photo:hover {
+    .load-photo-btn:hover {
       border-color: var(--accent);
       color: var(--accent);
+    }
+    /* 사진 미리보기 */
+    #photo-preview img {
+      max-width: 100%; max-height: 150px;
+      border-radius: var(--radius); border: 1px solid var(--border);
     }
 
     /* ── 현황판 ── */
@@ -597,9 +602,46 @@
 
     <!-- ── SECTION 7 (좌측) ── -->
     <div id="section7">
-      <div class="section-title">Section 7 — 상품 정보</div>
+      <!-- 플랫폼 로그인 버튼 (맨 위) -->
+      <div id="login-buttons" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px;">
+        <button type="button" onclick="platformLogin('naver')"
+          style="padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#e6e9ee;font-size:13px;cursor:pointer;font-family:inherit;">🟢 네이버 로그인</button>
+        <button type="button" onclick="platformLogin('esm')"
+          style="padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#e6e9ee;font-size:13px;cursor:pointer;font-family:inherit;">🔵 ESM 로그인</button>
+        <button type="button" onclick="platformLogin('imweb')"
+          style="padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#e6e9ee;font-size:13px;cursor:pointer;font-family:inherit;">🟣 아임웹 로그인</button>
+      </div>
 
-      <!-- 텍스트 입력 -->
+      <!-- 최근 사진 불러오기 (KOREA / GLOBAL) -->
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <button class="load-photo-btn" id="btn-load-korea">🇰🇷 KOREA 사진 불러오기</button>
+        <button class="load-photo-btn" id="btn-load-global">🌐 GLOBAL 사진 불러오기</button>
+      </div>
+      <!-- 사진 미리보기 -->
+      <div id="photo-preview" style="display:none;margin-bottom:12px;text-align:center;">
+        <img id="photo-preview-img" alt="미리보기" />
+        <div id="photo-preview-name" style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>
+      </div>
+
+      <!-- 현황판 -->
+      <div class="board-title">현황판</div>
+      <table id="status-board" style="margin-top:8px;">
+        <thead>
+          <tr>
+            <th>나라</th>
+            <th>자사몰</th>
+            <th>B2B</th>
+            <th>오픈1</th>
+            <th>오픈2</th>
+          </tr>
+        </thead>
+        <tbody id="board-body">
+          <!-- JS로 렌더링 -->
+        </tbody>
+      </table>
+
+      <!-- 상품 정보 (현황판 아래로 이동) -->
+      <div class="section-title" style="margin-top:16px;">상품 정보</div>
       <div class="field-group">
         <div class="field">
           <label for="inp-size">사이즈</label>
@@ -627,39 +669,8 @@
         </div>
       </div>
 
-      <!-- 최근 사진 불러오기 -->
-      <button id="btn-load-photo">📁 최근 사진 불러오기</button>
-
-      <!-- 현황판 -->
-      <div class="board-title">현황판</div>
-
-      <!-- 플랫폼 로그인 버튼 -->
-      <div id="login-buttons" style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px;">
-        <button type="button" onclick="platformLogin('naver')"
-          style="padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#e6e9ee;font-size:13px;cursor:pointer;font-family:inherit;">🟢 네이버 로그인</button>
-        <button type="button" onclick="platformLogin('esm')"
-          style="padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#e6e9ee;font-size:13px;cursor:pointer;font-family:inherit;">🔵 ESM 로그인</button>
-        <button type="button" onclick="platformLogin('imweb')"
-          style="padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#e6e9ee;font-size:13px;cursor:pointer;font-family:inherit;">🟣 아임웹 로그인</button>
-      </div>
-
-      <table id="status-board">
-        <thead>
-          <tr>
-            <th>나라</th>
-            <th>자사몰</th>
-            <th>B2B</th>
-            <th>오픈1</th>
-            <th>오픈2</th>
-          </tr>
-        </thead>
-        <tbody id="board-body">
-          <!-- JS로 렌더링 -->
-        </tbody>
-      </table>
-
       <!-- 실행 버튼 (신규등록 모드에서만 표시) -->
-      <button id="btn-run">🚀 신규 등록 실행</button>
+      <button id="btn-run" style="margin-top:12px;">🚀 신규 등록 실행</button>
     </div><!-- /section7 -->
 
     <!-- ── SECTION 8 (우측) ── -->
@@ -1197,11 +1208,28 @@ $('btn-back').addEventListener('click', () => {
   ipc.send('close-app');
 });
 
-// 최근 사진 불러오기
-$('btn-load-photo').addEventListener('click', () => {
-  ipc.send('veryup-load-recent-photo');
-  if (currentMode === 'new') addLog('최근 사진 불러오기 요청 전송', 'info');
-});
+// 최근 사진 불러오기 (KOREA / GLOBAL) — 베리씨드 최신 사진 + 미리보기
+let loadedPhotoPath = '';
+async function loadSeedPhoto(region) {
+  const label = region === 'global' ? 'GLOBAL' : 'KOREA';
+  try {
+    const res = await ipc.invoke('veryup-load-photo', { region });
+    if (res && res.success) {
+      loadedPhotoPath = res.path;
+      const box = $('photo-preview'), img = $('photo-preview-img'), nm = $('photo-preview-name');
+      img.src = res.dataUrl;
+      nm.textContent = `${label} · ${res.name}`;
+      box.style.display = 'block';
+      addLog(`${label} 사진 불러옴: ${res.name}`, 'ok');
+    } else {
+      addLog(`${label} 사진 불러오기 실패: ${(res && res.error) || '알 수 없음'}`, 'warn');
+    }
+  } catch (e) {
+    addLog(`${label} 사진 불러오기 오류: ${e.message}`, 'error');
+  }
+}
+$('btn-load-korea').addEventListener('click', () => loadSeedPhoto('korea'));
+$('btn-load-global').addEventListener('click', () => loadSeedPhoto('global'));
 
 // 모드 전환
 document.querySelectorAll('.mode-radio').forEach(radio => {

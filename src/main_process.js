@@ -466,6 +466,22 @@ ipcMain.handle('esm-login', async () => {
     }
 });
 
+// 베리씨드에서 만든 최신 사진 불러오기 (region: korea | global)
+ipcMain.handle('veryup-load-photo', async (event, { region }) => {
+    try {
+        const file = region === 'global' ? 'latest_global.jpg' : 'latest_korea.jpg';
+        const p = path.join(AI_OUTPUT_DIR, file);
+        if (!fs.existsSync(p)) {
+            const label = region === 'global' ? 'GLOBAL' : 'KOREA';
+            return { success: false, error: `아직 생성된 ${label} 사진이 없습니다. (베리씨드에서 먼저 생성하세요)` };
+        }
+        const buf = fs.readFileSync(p);
+        return { success: true, path: p, name: file, dataUrl: 'data:image/jpeg;base64,' + buf.toString('base64') };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
 // ESM 이미지 호스팅 폴더 경로 (국가별). KOREA=조견표, 그 외(USA 등)=Compatibility Chart
 function esmBasePath(country, category) {
     // 한글(자동차) + 영어(Car) 둘 다 자동차로 인식 (USA는 카테고리명이 영어)
@@ -1312,6 +1328,7 @@ ipcMain.handle('generate-ai-image', async (event, data) => {
         }
         const outputPath = path.join(outputDir, 'latest_generated.jpg');
         fs.writeFileSync(outputPath, finalBuffer);
+        try { fs.writeFileSync(path.join(outputDir, 'latest_korea.jpg'), finalBuffer); } catch {}
 
         return { success: true, base64: finalBuffer.toString('base64'), outputPath };
 
@@ -1473,5 +1490,6 @@ async function generateIntlImage({ brand, carClass, no, gen, year, code, include
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
     const outputPath = path.join(outputDir, 'latest_generated.jpg');
     fs.writeFileSync(outputPath, finalBuffer);
+    try { fs.writeFileSync(path.join(outputDir, 'latest_global.jpg'), finalBuffer); } catch {}
     return { success: true, base64: finalBuffer.toString('base64'), outputPath };
 }
