@@ -1288,10 +1288,18 @@
             }
         }
 
-        // URL 해시로 특정 탭 바로 열기 (베리업 iframe 임베드용). 예: index.html#imwebTab
+        // URL 해시로 특정 탭 바로 열기 (베리업 iframe 임베드용). 예: index.html#imwebTab&embed
         window.addEventListener('DOMContentLoaded', () => {
-            const tabId = (location.hash || '').replace('#', '').split('&')[0];
+            const parts = (location.hash || '').replace('#', '').split('&');
+            const tabId = parts[0];
             if (tabId && document.getElementById(tabId)) switchTab(tabId);
+            // 임베드(베리업 iframe)에선 AI 이미지 생성 / ESM 호스팅 탭 버튼 숨김
+            if (parts.includes('embed')) {
+                document.querySelectorAll('.tab-btn').forEach(btn => {
+                    const oc = btn.getAttribute('onclick') || '';
+                    if (oc.includes('aiGenTab') || oc.includes('esmTab')) btn.style.display = 'none';
+                });
+            }
         });
 
         // ── ESM Category Toggle ──

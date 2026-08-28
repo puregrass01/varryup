@@ -1267,7 +1267,7 @@ $('btn-confirm-platform').addEventListener('click', () => {
   const tab = TYPE_TO_TAB[found.type];
   if (!tab) { addLog(`이 칸(${found.type})은 아직 등록 폼 연결이 없습니다.`, 'warn'); return; }
   const frame = $('form-frame');
-  frame.src = `index.html#${tab}`;
+  frame.src = `index.html#${tab}&embed`;
   frame.style.display = 'block';
   const empty = $('empty-state'); if (empty) empty.style.display = 'none';
   addLog(`${found.country} · ${found.type} 등록 폼을 열었습니다.`, 'ok');
