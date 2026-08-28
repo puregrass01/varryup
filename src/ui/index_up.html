@@ -380,6 +380,9 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      flex-shrink: 0;
     }
 
     .log-entry {
@@ -697,7 +700,7 @@
         <div id="log-window"></div>
         <!-- 선택 플랫폼 등록 폼 (iframe으로 index.html의 해당 탭 로드) -->
         <iframe id="form-frame" title="등록 폼"
-          style="display:none;width:100%;height:520px;border:1px solid var(--border);border-radius:8px;background:#0b1220;margin-top:10px;"></iframe>
+          style="display:none;width:100%;flex:1;min-height:420px;border:1px solid var(--border);border-radius:8px;background:#0b1220;margin-top:10px;"></iframe>
         <div id="card-area" style="display:none; flex-direction:column; gap:12px;"></div>
         <div id="empty-state" class="empty-state">
           <div class="empty-icon">📋</div>
@@ -930,10 +933,9 @@ function addLog(msg, level = 'info') {
   `;
   logWindow.appendChild(el);
 
-  // 스크롤 최하단 이동
+  // 로그창 스크롤 최하단 이동 (로그창이 자체 스크롤)
   requestAnimationFrame(() => {
-    const body = $('section8-body');
-    body.scrollTop = body.scrollHeight;
+    logWindow.scrollTop = logWindow.scrollHeight;
   });
 
   updateEmptyState();
