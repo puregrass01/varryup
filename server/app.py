@@ -17,6 +17,8 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 import db
 import crypto
+import proxy
+import ebay_notify
 
 # 세션·API 토큰 서명에 쓰는 안정적인 비밀키 (재시작해도 동일)
 APP_SECRET = os.environ.get("ADMIN_SECRET") or crypto.app_secret()
@@ -43,6 +45,14 @@ app = FastAPI(title="VERY UP 관리자")
 app.add_middleware(SessionMiddleware, secret_key=APP_SECRET)
 
 db.init_db()
+
+# 고정 IP 프록시 라우트 (POST /coupang, /naver, /amazon, /ebay + GET /proxy/health).
+# 앱이 서명한 요청을 서버가 대신 전달해, 마켓플레이스에는 서버 IP 하나만 보이게 한다.
+app.include_router(proxy.router)
+
+# eBay 마켓플레이스 계정 삭제 알림 엔드포인트 (GET 검증 + POST 수신).
+# eBay 가 인증 없이 직접 부르므로 프록시와 경로를 분리해 둔다.
+app.include_router(ebay_notify.router)
 
 
 # ── 로그인 상태 헬퍼 ──────────────────────────────────────────
@@ -148,6 +158,10 @@ PLATFORM_HINTS = {
     "naver": '{\n  "session": ""\n}',
     "esm": '{\n  "session": ""\n}',
     "imweb": '{\n  "clientId": "",\n  "clientSecret": ""\n}',
+    # 이베이(Sell API): 앱은 clientSecret·refreshToken 을 OS 암호화 저장소에 다시 넣어 보관한다.
+    "ebay": '{\n  "environment": "production",\n  "clientId": "",\n  "clientSecret": "",\n  "ruName": "",\n  "refreshToken": "",\n  "merchantLocationKey": "",\n  "fulfillmentPolicyId": "",\n  "paymentPolicyId": "",\n  "returnPolicyId": ""\n}',
+    # 아마존(SP-API): sellerId·clientId·clientSecret·refreshToken 이 필수값.
+    "amazon": '{\n  "sellerId": "",\n  "clientId": "",\n  "clientSecret": "",\n  "refreshToken": "",\n  "endpoint": "https://sellingpartnerapi-na.amazon.com",\n  "marketplaceId": "ATVPDKIKX0DER"\n}',
 }
 
 

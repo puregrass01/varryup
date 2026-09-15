@@ -3,7 +3,7 @@
 {% block nav_keys %}active{% endblock %}
 {% block body %}
 <h1>인증키 중앙 관리</h1>
-<p class="sub">쿠팡·네이버·ESM·아임웹 인증키를 <b>암호화</b>해서 서버에 보관합니다. 열람·수정·삭제는 모두 기록됩니다.</p>
+<p class="sub">쿠팡·네이버·ESM·아임웹·이베이·아마존 인증키를 <b>암호화</b>해서 서버에 보관합니다. 열람·수정·삭제는 모두 기록됩니다.</p>
 
 {% if msg %}<div class="msg">{{ msg }}</div>{% endif %}
 
@@ -50,6 +50,8 @@
           <option value="naver">네이버 (naver)</option>
           <option value="esm">ESM (esm)</option>
           <option value="imweb">아임웹 (imweb)</option>
+          <option value="ebay">이베이 (ebay)</option>
+          <option value="amazon">아마존 (amazon)</option>
         </select>
       </div>
       <div><label>별칭 (구분용 이름)</label><input name="label" placeholder="예: 네이버-본사 로그인" required></div>
@@ -89,12 +91,7 @@
 
 <script>
   const LOGIN = '{\n  "loginId": "",\n  "password": ""\n}';
-  const API = {
-    coupang: '{\n  "vendorId": "",\n  "accessKey": "",\n  "secretKey": ""\n}',
-    naver:   '{\n  "session": ""\n}',
-    esm:     '{\n  "session": ""\n}',
-    imweb:   '{\n  "clientId": "",\n  "clientSecret": ""\n}'
-  };
+  const API = {{ hints | tojson }};
   function fillHint(){
     const kind = document.getElementById('kind').value;
     const p = document.getElementById('platform').value;
