@@ -19,6 +19,7 @@ import db
 import crypto
 import proxy
 import ebay_notify
+import public
 
 # 세션·API 토큰 서명에 쓰는 안정적인 비밀키 (재시작해도 동일)
 APP_SECRET = os.environ.get("ADMIN_SECRET") or crypto.app_secret()
@@ -53,6 +54,10 @@ app.include_router(proxy.router)
 # eBay 마켓플레이스 계정 삭제 알림 엔드포인트 (GET 검증 + POST 수신).
 # eBay 가 인증 없이 직접 부르므로 프록시와 경로를 분리해 둔다.
 app.include_router(ebay_notify.router)
+
+# 로그인 없이 열리는 공개 경로 (GET /privacy, GET /updates/{파일}).
+# eBay 심사와 electron-updater 가 인증 없이 호출하므로 인증을 걸 수 없다.
+app.include_router(public.router)
 
 
 # ── 로그인 상태 헬퍼 ──────────────────────────────────────────

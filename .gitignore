@@ -7,6 +7,8 @@ dist/
 # API 키 / 시크릿 (절대 올리면 안 됨)
 data/imweb_openapi_config.json
 data/coupang_config.json
+data/amazon_config.json
+data/papago.json
 
 # 세션 / 로그인 정보
 data/esm_session.json
@@ -35,3 +37,13 @@ server/admin.db
 *.db
 __pycache__/
 server/secret.key
+
+# eBay per-user encrypted credentials and publishing journal
+ebay_config.json
+ebay_config.json.tmp
+ebay_jobs.json
+ebay_jobs.json.tmp
+
+# eBay 계정 삭제 알림 수신 기록 (eBay userId 포함 — 커밋 금지)
+server/ebay_deletions.jsonl
+server/updates/

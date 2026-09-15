@@ -7,7 +7,18 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:ebay": "node --test tests/ebay.test.mjs tests/ebay-proxy.test.mjs",
+    "test:proxy": "python -m unittest discover -s tests -p test_proxy.py -v",
+    "test:amazon-settings": "node --test tests/amazon-settings.test.mjs",
+    "test:server-credentials": "node --test tests/server-credentials.test.mjs",
+    "test:admin-credentials": "python -m unittest discover -s tests -p test_credentials.py -v",
+    "test:amazon-update": "node --test tests/amazon-update.test.mjs",
+    "test:marketplace-search": "node --test tests/marketplace-search.test.mjs",
+    "test:marketplace-search-ui": "node tests/marketplace-search-ui.mjs",
+    "test:section8": "node tests/section8-mode.mjs",
+    "test:form-injection": "node tests/form-injection.mjs",
+    "test:ebay-ui": "node tests/ebay-ui.mjs"
   },
   "build": {
     "appId": "com.veryup.ver2",
@@ -26,9 +37,14 @@
       "!data/session_naver.json",
       "!data/esm_session.json",
       "!data/coupang_config.json",
+      "!data/amazon_config.json",
       "!data/test_cache.json",
-      "!data/defaults/session_*.json",
+      "!data/defaults/**",
       "!data/imweb_openapi_config.json",
+      "!data/imweb_config.json",
+      "!data/papago.json",
+      "!**/ebay_config.json",
+      "!**/ebay_jobs.json",
       "!**/*.log"
     ],
     "win": {
@@ -37,7 +53,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://CHANGE-ME.example.com/updates/"
+        "url": "https://admin.veryup-domain.duckdns.org/updates/"
       }
     ],
     "nsis": {
