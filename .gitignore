@@ -9,6 +9,8 @@ data/imweb_openapi_config.json
 data/coupang_config.json
 data/amazon_config.json
 data/papago.json
+# PC별 설정 — UPDATE_TOKEN 이 들어 있다. 새 PC 는 veryup.env.example 을 복사해 쓴다.
+veryup.env
 
 # 세션 / 로그인 정보
 data/esm_session.json
