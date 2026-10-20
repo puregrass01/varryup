@@ -8,7 +8,22 @@
 /** 서버에 직원 로그인 → 토큰 반환 */
 export async function serverLogin(baseUrl, username, password) {
     const body = new URLSearchParams({ username, password });
-    const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/api/login`, { method: 'POST', body });
+    let res;
+    try {
+        res = await fetch(`${baseUrl.replace(/\/+$/, '')}/api/login`, { method: 'POST', body });
+    } catch (e) {
+        // 서버에 닿지도 못한 경우(DNS·연결 거부·타임아웃)와 아이디/비번이 틀린 경우는 다르다.
+        // 전자만 '로컬 모드로 계속' 선택지를 줘야 하므로 여기서 표시해 둔다.
+        const err = new Error(`서버에 연결할 수 없습니다 (${e.cause?.code || e.message})`);
+        err.offline = true;
+        throw err;
+    }
+    if (res.status >= 500) {
+        // 서버는 살아 있지만 고장난 상태 — 이것도 자격증명 문제는 아니다.
+        const err = new Error(`서버 오류 (HTTP ${res.status})`);
+        err.offline = true;
+        throw err;
+    }
     if (!res.ok) throw new Error(`서버 로그인 실패 (HTTP ${res.status})`);
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || '로그인 실패');
@@ -26,10 +41,4 @@ export async function fetchCredentials(baseUrl, token, platform = null) {
     if (!res.ok) throw new Error(`인증키 조회 실패 (HTTP ${res.status})`);
     const data = await res.json();
     return data.credentials || [];
-}
-
-/** 특정 플랫폼의 첫 번째 인증키 값만 간편 조회 (없으면 null) */
-export async function fetchOneCredential(baseUrl, token, platform) {
-    const list = await fetchCredentials(baseUrl, token, platform);
-    return list.length > 0 ? list[0].data : null;
 }

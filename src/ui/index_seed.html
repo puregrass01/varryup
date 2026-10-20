@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VERY UP VER2 - 베리씨드</title>
+    <title>VERY UP VER3 - 베리씨드</title>
+    <script src="theme.js"></script>
+    <link rel="stylesheet" href="theme.css">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
     <style>
@@ -28,8 +30,8 @@
             display: flex;
             align-items: center;
             gap: 6px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
+            background: var(--ovl-1);
+            border: 1px solid var(--ovl-2);
             color: var(--text-dim);
             padding: 6px 12px;
             border-radius: 8px;
@@ -38,21 +40,19 @@
             transition: all 0.2s;
             -webkit-app-region: no-drag;
         }
-        .back-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-main); }
+        .back-btn:hover { background: var(--ovl-2); color: var(--text-main); }
         .seed-title {
             font-family: 'Outfit', sans-serif;
             font-size: 1.2rem;
             font-weight: 700;
-            background: linear-gradient(135deg, #10b981, #34d399);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: var(--text-main);
         }
         /* ── 국가 탭 ── */
         .country-tabs {
             display: flex;
             gap: 4px;
             padding: 10px 20px 0;
-            background: rgba(15,23,42,0.5);
+            background: var(--sunk);
             border-bottom: 1px solid var(--panel-border);
             flex-shrink: 0;
             -webkit-app-region: no-drag;
@@ -73,7 +73,7 @@
             border-radius: 6px 6px 0 0;
             white-space: nowrap;
         }
-        .country-tab-btn:hover { color: var(--text-main); background: rgba(255,255,255,0.04); }
+        .country-tab-btn:hover { color: var(--text-main); background: var(--ovl-1); }
         .country-tab-btn.active {
             color: #10b981;
             border-bottom-color: #10b981;
@@ -90,7 +90,7 @@
             display: flex;
             gap: 4px;
             padding: 8px 16px;
-            background: rgba(15,23,42,0.3);
+            background: var(--sunk);
             border-bottom: 1px solid var(--panel-border);
             flex-shrink: 0;
         }
@@ -99,7 +99,7 @@
             align-items: center;
             gap: 6px;
             padding: 7px 16px;
-            background: rgba(255,255,255,0.04);
+            background: var(--ovl-1);
             border: 1px solid var(--panel-border);
             border-radius: 8px;
             color: var(--text-dim);
@@ -125,7 +125,13 @@
         .sub-pane.active { display: block; }
 
         /* ── AI 이미지 생성 ── */
-        .layout-flex { display: flex; gap: 20px; align-items: flex-start; }
+        /* style.css 의 .form-input 은 칸의 절반만 쓴다. 베리업 등록 폼에서는 그게 맞지만
+           여기는 이미 2단 격자라 칸마다 오른쪽 절반이 그대로 빈자리가 된다 → 칸을 채운다. */
+        .sub-pane .form-input,
+        .sub-pane select.form-input { width: 100%; max-width: 100%; }
+
+        /* 폼을 창 끝까지 늘려 봐야 입력칸만 길어지고 빈자리가 커진다. */
+        .layout-flex { display: flex; gap: 20px; align-items: flex-start; max-width: 980px; }
         .left-panel { flex: 1; }
         .right-panel { flex: 1; display: flex; flex-direction: column; }
         .section-title {
@@ -146,7 +152,7 @@
         .checkbox-label input[type="checkbox"] { accent-color: #3b82f6; width: 15px; height: 15px; }
         .result-container {
             margin-top: 14px; display: none;
-            background: rgba(0,0,0,0.2); padding: 14px;
+            background: var(--sunk); padding: 14px;
             border-radius: 8px; border: 1px solid var(--panel-border);
         }
         .result-container p { font-size: 0.82rem; color: var(--text-dim); margin-top: 0; margin-bottom: 8px; }
@@ -210,7 +216,7 @@
         .image-preview { max-width: 100%; border-radius: 4px; }
         .path-display {
             display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
-            background: rgba(0,0,0,0.2); padding: 8px 12px; border-radius: 6px;
+            background: var(--sunk); padding: 8px 12px; border-radius: 6px;
             font-size: 0.8rem;
         }
         .path-segment { color: #60a5fa; font-weight: 500; }
@@ -228,15 +234,15 @@
         .log-container { margin-top: 16px; }
         .log-header h3 { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 6px; }
         .log-window {
-            background: rgba(0,0,0,0.3); border-radius: 6px;
+            background: var(--sunk); border-radius: 6px;
             border: 1px solid var(--panel-border);
             padding: 8px; height: 120px; overflow-y: auto; font-size: 0.78rem;
         }
         .log-entry { padding: 2px 0; }
         .log-entry.system { color: var(--text-dim); }
-        .log-entry.success { color: #34d399; }
-        .log-entry.error { color: #f87171; }
-        .log-entry.process { color: #60a5fa; }
+        .log-entry.success { color: var(--log-success); }
+        .log-entry.error { color: var(--log-error); }
+        .log-entry.process { color: var(--log-process); }
 
         /* ── 국가 배지 ── */
         .country-badge {
@@ -244,6 +250,18 @@
             background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2);
             color: #34d399; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem;
         }
+
+        /* ── 라이트 테마 보정 ─────────────────────────────────────────
+           강조색이 전부 '어두운 바탕에 뜨는 밝은 색' 이라, 밝은 바탕에서는 배경과
+           붙어 버린다(밝기 차 90 미만). 같은 계열의 진한 색으로 바꾼다. */
+        :root[data-theme="light"] .country-tab-btn.active { color: #047857; border-bottom-color: #047857; }
+        :root[data-theme="light"] .sub-tab-btn.active     { color: #1d4ed8; }
+        :root[data-theme="light"] .sub-tab-btn.esm-active { color: #6d28d9; }
+        :root[data-theme="light"] .toggle-btn.active      { color: #6d28d9; border-color: #6d28d9; }
+        :root[data-theme="light"] .path-segment           { color: #1d4ed8; }
+        :root[data-theme="light"] .btn-copy               { color: #1d4ed8; }
+        :root[data-theme="light"] .country-badge          { color: #047857; }
+        :root[data-theme="light"] .loader-text            { color: #1d4ed8; }
 
         /* ── 드래그 가능 BSA 로고 ── */
         .ai-image-wrapper { position: relative; display: inline-block; width: 100%; border: 1px solid var(--panel-border); border-radius: 4px; overflow: hidden; }
@@ -261,16 +279,19 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                 런처로
             </button>
-            <span class="seed-title">✦ 베리씨드</span>
+            <span class="seed-title">베리씨드</span>
         </div>
         <span style="font-size:0.75rem; color:var(--text-dim);">AI 이미지 생성 &amp; ESM 이미지 호스팅</span>
         <div style="display:flex;gap:6px;-webkit-app-region:no-drag;">
+            <button data-theme-toggle title="밝게 / 어둡게"
+                style="width:28px;height:28px;border-radius:50%;border:none;background:var(--ovl-2);color:var(--text-dim);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;"
+                onmouseover="this.style.background='var(--ovl-3)'" onmouseout="this.style.background='var(--ovl-2)'">🌙</button>
             <button onclick="require('electron').ipcRenderer.send('minimize-win')" title="최소화"
-                style="width:28px;height:28px;border-radius:50%;border:none;background:rgba(255,255,255,0.08);color:#94a3b8;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;"
-                onmouseover="this.style.background='rgba(255,255,255,0.18)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">─</button>
+                style="width:28px;height:28px;border-radius:50%;border:none;background:var(--ovl-2);color:var(--text-dim);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;"
+                onmouseover="this.style.background='var(--ovl-3)'" onmouseout="this.style.background='var(--ovl-2)'">─</button>
             <button onclick="require('electron').ipcRenderer.send('close-win')" title="닫기"
-                style="width:28px;height:28px;border-radius:50%;border:none;background:rgba(255,255,255,0.08);color:#94a3b8;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;"
-                onmouseover="this.style.background='rgba(220,50,50,0.8)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,0.08)';this.style.color='#94a3b8'">✕</button>
+                style="width:28px;height:28px;border-radius:50%;border:none;background:var(--ovl-2);color:var(--text-dim);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;"
+                onmouseover="this.style.background='rgba(220,50,50,0.8)';this.style.color='#fff'" onmouseout="this.style.background='var(--ovl-2)';this.style.color='var(--text-dim)'">✕</button>
         </div>
     </div>
 
@@ -281,6 +302,9 @@
         </button>
         <button class="country-tab-btn" onclick="switchCountry('USA', this)">
             <span class="country-flag">🇺🇸</span> USA
+        </button>
+        <button class="country-tab-btn" onclick="switchCountry('GENERAL', this)">
+            <span class="country-flag">🌐</span> 범용
         </button>
     </div>
 
@@ -331,20 +355,50 @@
         </div>
     </div>
 
+    <!-- ============================================================ -->
+    <!-- 범용(GENERAL) 패널 -->
+    <!-- ============================================================ -->
+    <div class="country-panel" id="panel_GENERAL">
+        <div class="sub-tabs">
+            <button class="sub-tab-btn active" id="sub_ai_GENERAL" onclick="switchSub('GENERAL','ai',this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8l4 4-4 4"/></svg>
+                AI 이미지 생성
+            </button>
+            <button class="sub-tab-btn" id="sub_esm_GENERAL" onclick="switchSub('GENERAL','esm',this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                ESM 이미지 호스팅
+            </button>
+            <span class="country-badge" style="margin-left:auto;">🌐 범용</span>
+        </div>
+        <div class="sub-pane active" id="ai_GENERAL">
+            <div data-ai-panel="GENERAL"></div>
+        </div>
+        <div class="sub-pane" id="esm_GENERAL">
+            <div style="padding:48px 24px;text-align:center;">
+                <button type="button" class="btn-generate" style="max-width:320px;margin:0 auto;" onclick="alert('ESM 이미지 호스팅 (범용) — 준비 중입니다.')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    ESM 이미지 호스팅
+                </button>
+            </div>
+        </div>
+    </div>
+
 </div><!-- end flex container -->
 
 <script>
+VUTheme.init();   // 테마 값·버튼은 theme.js 소유
 const { ipcRenderer } = require('electron');
 
 // ── 국가별 템플릿 config (나중에 국가별로 다른 디자인 적용 예정) ──
 const COUNTRY_TEMPLATES = {
-    KOREA: { lang: 'ko', esmCats: ['자동차', '오토바이'] },
-    USA:   { lang: 'en', esmCats: ['Car', 'Motorcycle'] },
+    KOREA:   { lang: 'ko', esmCats: ['자동차', '오토바이'] },
+    USA:     { lang: 'en', esmCats: ['Car', 'Motorcycle'] },
+    GENERAL: { lang: 'ko', esmCats: ['자동차', '오토바이'] },
 };
 
 // ── 국가별 상태 관리 ──
 const state = {};
-['KOREA','USA'].forEach(c => {
+['KOREA','USA','GENERAL'].forEach(c => {
     state[c] = {
         esmImagePath: '',
         esmCategory: COUNTRY_TEMPLATES[c].esmCats[0],
@@ -483,6 +537,128 @@ function buildAiPanel(country) {
     </form>`;
 }
 
+// ── 범용 탭 패널: 나라별 표 + 거울 처리 ──
+function buildGeneralPanel() {
+    const rows = [
+        { key: 'korea', label: '1. korea' },
+        { key: 'usa',   label: '2. usa' },
+        { key: 'japan', label: '3. japan' },
+        { key: 'arab',  label: '4. arab' },
+    ];
+    const fields = ['brand','carClass','year','no','gen','code','remark'];
+    const rowsHtml = rows.map(r => `
+        <tr>
+            <td class="gen-country">${r.label}</td>
+            ${fields.map(f => `<td><input type="text" class="gen-cell" name="g_${r.key}_${f}"></td>`).join('')}
+        </tr>`).join('');
+    return `
+    <style>
+        /* 표가 창 폭을 다 쓰면 칸마다 빈자리만 늘어난다. 절반으로 묶어 둔다
+           (좁은 창에서는 wrap 이 가로 스크롤을 준다). */
+        .gen-table-wrap { overflow-x:auto; margin-top:4px; width:50%; min-width:560px; max-width:100%; }
+        .gen-table { width:100%; border-collapse:collapse; font-size:13px; }
+        .gen-table th, .gen-table td { border:1px solid var(--panel-border); padding:0; text-align:center; }
+        .gen-table th { background:var(--sunk); color:var(--text-dim); font-weight:600; padding:8px 6px; white-space:nowrap; }
+        .gen-table td.gen-country { background:var(--sunk); color:var(--text-main); padding:8px 12px; text-align:left; white-space:nowrap; font-weight:500; }
+        .gen-table input.gen-cell { width:100%; box-sizing:border-box; border:none; background:transparent; color:var(--text-main); padding:8px 6px; font-size:13px; text-align:center; outline:none; }
+        .gen-table input.gen-cell:focus { background:var(--ovl-2); }
+        .gen-results { display:flex; flex-direction:column; gap:16px; margin-top:12px; }
+        .gen-result-card { border:1px solid var(--panel-border); border-radius:8px; padding:12px; background:var(--sunk); }
+        .gen-result-head { font-weight:600; color:var(--text-main); margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+        .gen-result-head span { font-weight:400; color:var(--text-dim); font-size:13px; }
+        .btn-translate { background:var(--btn-face); color:var(--btn-text); border:none; border-radius:6px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; }
+        .btn-translate:hover { background:var(--btn-face-hover); }
+        .btn-translate:disabled { opacity:0.6; cursor:default; }
+    </style>
+    <form id="aiForm_GENERAL" onsubmit="submitGeneral(event)">
+        <div class="left-panel" style="width:100%;">
+            <h3 class="section-title">1. 텍스트 정보 입력 (나라별)</h3>
+            <div class="gen-table-wrap">
+                <table class="gen-table">
+                    <thead>
+                        <tr>
+                            <th>나라</th><th>브랜드</th><th>차종</th><th>연식</th>
+                            <th>상품번호</th><th>세대</th><th>코드</th><th>비고</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            </div>
+            <div style="margin-top:10px; width:50%; min-width:560px; max-width:100%; text-align:right;">
+                <button type="button" class="btn-translate" onclick="autoTranslateGeneral(this)">
+                    🌐 korea(한국어) 기준 자동번역 → 영어·일본어·아랍어
+                </button>
+            </div>
+        </div>
+
+        <div class="right-panel" style="margin-top:16px;">
+            <h3 class="section-title">2. 거울 업로드 및 처리</h3>
+            <div class="form-group">
+                <label class="form-label">거울 방향 선택</label>
+                <select name="mirrorSide" class="form-input" required>
+                    <option value="driver">운전석 1개만 업로드 (조수석 자동 반전 생성)</option>
+                    <option value="passenger">조수석 1개만 업로드 (운전석 자동 반전 생성)</option>
+                    <option value="both">양쪽 거울이 모두 포함된 1개 사진 업로드</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">거울 사진</label>
+                <input type="file" name="mirror" accept="image/*" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">처리 모드 선택</label>
+                <div class="radio-group-row">
+                    <label class="radio-label"><input type="radio" name="skipAI_GENERAL" value="off" checked> 일반 사진 (AI 누끼)</label>
+                    <label class="radio-label"><input type="radio" name="skipAI_GENERAL" value="on"> 클린 사진</label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">BSA 가능 여부</label>
+                <div class="radio-group-row">
+                    <label class="radio-label"><input type="radio" name="bsaType_GENERAL" value="none" checked> BSA 없음</label>
+                    <label class="radio-label"><input type="radio" name="bsaType_GENERAL" value="bsa"> BSA 가능</label>
+                    <label class="radio-label"><input type="radio" name="bsaType_GENERAL" value="bsaOption"> BSA 선택옵션</label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="includeLogo" checked>
+                    <span>OPTIC-GLASS 로고 포함하기 (가운데 워터마크)</span>
+                </label>
+            </div>
+
+            <button type="submit" class="btn-generate" id="aiSubmitBtn_GENERAL">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                ① 대표 이미지 생성 (로고 위치 잡기)
+            </button>
+
+            <div class="loader-text" id="aiLoader_GENERAL">⏳ AI가 배경을 제거하고 이미지를 합성 중입니다...</div>
+
+            <div class="result-container" id="aiResult_GENERAL">
+                <p>✨ <b>대표 이미지 생성 완료!</b></p>
+                <p class="bsa-instruction" id="bsaInstruction_GENERAL">
+                    🖐 로고를 끌어서 위치를 맞추고 슬라이더로 크기를 조절한 뒤, 아래 <b>전체 나라 이미지 생성</b>을 누르세요.
+                </p>
+                <div class="ai-image-wrapper" id="aiWrapper_GENERAL">
+                    <img id="aiResultImg_GENERAL" src="" alt="대표 이미지" style="width:100%;height:auto;display:block;">
+                    <img id="bsaLogo_GENERAL" src="" alt="BSA Logo" class="draggable-bsa" style="display:none;top:60%;left:15%;width:15%;">
+                </div>
+                <div class="bsa-size-control" id="bsaSize_GENERAL">
+                    <label style="font-weight:600;margin-right:8px;">🔍 로고 크기:</label>
+                    <input type="range" id="bsaSlider_GENERAL" min="5" max="40" value="15" style="width:140px;vertical-align:middle;">
+                    <span id="bsaSliderVal_GENERAL" style="margin-left:8px;font-weight:600;">15%</span>
+                </div>
+                <button type="button" class="btn-download" id="aiDownload_GENERAL" style="display:flex;" onclick="finalizeGeneral()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                    ② BSA 확정 &amp; 전체 나라 이미지 생성
+                </button>
+            </div>
+
+            <div id="genResults_GENERAL" class="gen-results"></div>
+        </div>
+    </form>`;
+}
+
 // ── ESM 패널 HTML 생성 ──
 function buildEsmPanel(country) {
     const cats = COUNTRY_TEMPLATES[country].esmCats;
@@ -576,12 +752,17 @@ function buildEsmPanel(country) {
 
 // ── 패널 동적 렌더링 ──
 function renderPanels() {
+    // AI 패널: KOREA/USA는 공통, 범용은 나라별 표 패널
+    ['KOREA','USA','GENERAL'].forEach(c => {
+        const html = (c === 'GENERAL') ? buildGeneralPanel() : buildAiPanel(c);
+        document.querySelector(`[data-ai-panel="${c}"]`).outerHTML = html;
+    });
+    // ESM 호스팅 패널은 KOREA/USA만 (범용은 버튼만 정적으로 존재)
     ['KOREA','USA'].forEach(c => {
-        document.querySelector(`[data-ai-panel="${c}"]`).outerHTML = buildAiPanel(c);
         document.querySelector(`[data-esm-panel="${c}"]`).outerHTML = buildEsmPanel(c);
     });
     // BSA 슬라이더 및 드래그 초기화
-    ['KOREA','USA'].forEach(c => initCountry(c));
+    ['KOREA','USA','GENERAL'].forEach(c => initCountry(c));
 }
 
 function initCountry(country) {
@@ -638,7 +819,201 @@ async function submitAi(e, country) {
     const mirrorFileInput = form.mirror;
     if (!mirrorFileInput.files.length) { alert('거울 사진을 업로드해주세요.'); return; }
     const mirrorPath = mirrorFileInput.files[0].path;
+    await generateImage(country, { brand, carClass, no, gen, year, code, includeLogo, mirrorSide, skipAIValue, bsaType, mirrorPath });
+}
 
+// 범용 2단계(전체 생성)에서 재사용할 컨텍스트
+let generalCtx = null;
+
+// ── 범용 ①단계: 표 입력 → 대표 이미지 1장 생성 (BSA 로고 위치/크기 잡기) ──
+async function submitGeneral(e) {
+    e.preventDefault();
+    const form = e.target;
+    const rowMeta = [
+        { key:'korea', label:'🇰🇷 KOREA' },
+        { key:'usa',   label:'🇺🇸 USA' },
+        { key:'japan', label:'🇯🇵 JAPAN' },
+        { key:'arab',  label:'🇸🇦 ARAB' },
+    ];
+    const fields = ['brand','carClass','year','no','gen','code','remark'];
+    const targets = [];
+    rowMeta.forEach(rm => {
+        const d = {};
+        fields.forEach(f => {
+            const el = form.querySelector(`[name="g_${rm.key}_${f}"]`);
+            d[f] = el ? el.value.trim() : '';
+        });
+        if (d.brand || d.carClass || d.no || d.code || d.year || d.gen || d.remark) {
+            targets.push({ ...rm, data: d });
+        }
+    });
+    if (targets.length === 0) { alert('최소 한 나라의 텍스트 정보를 입력해주세요.'); return; }
+
+    const includeLogo = form.includeLogo.checked;
+    const mirrorSide  = form.mirrorSide.value;
+    const skipAIValue = form.querySelector(`input[name="skipAI_GENERAL"]:checked`).value === 'on';
+    const bsaType     = form.querySelector(`input[name="bsaType_GENERAL"]:checked`).value;
+    const mirrorFileInput = form.mirror;
+    if (!mirrorFileInput.files.length) { alert('거울 사진을 업로드해주세요.'); return; }
+    const mirrorPath = mirrorFileInput.files[0].path;
+
+    // 2단계에서 쓸 컨텍스트 저장
+    generalCtx = { targets, includeLogo, mirrorSide, skipAIValue, bsaType, mirrorPath };
+
+    // 이전 전체 결과 초기화
+    document.getElementById('genResults_GENERAL').innerHTML = '';
+
+    // 대표 이미지 = 첫 번째로 입력된 나라 (국내 템플릿). ipcCountry:'KOREA'로 국내 레이아웃 강제
+    const rep = targets[0];
+    await generateImage('GENERAL', {
+        brand: rep.data.brand, carClass: rep.data.carClass, no: rep.data.no, gen: rep.data.gen, year: rep.data.year, code: rep.data.code,
+        includeLogo, mirrorSide, skipAIValue, bsaType, mirrorPath, ipcCountry: 'KOREA',
+        extra: { labelStyle: rep.key === 'korea' ? 'ko' : 'LR' }
+    });
+}
+
+// ── 범용 ②단계: BSA 확정 → 입력된 모든 나라 이미지 일괄 생성 ──
+async function finalizeGeneral() {
+    if (!generalCtx) { alert('먼저 ① 대표 이미지를 생성해주세요.'); return; }
+    const { targets, includeLogo, mirrorSide, skipAIValue, bsaType, mirrorPath } = generalCtx;
+    const btn = document.getElementById('aiDownload_GENERAL');
+    const results = document.getElementById('genResults_GENERAL');
+
+    // 대표 이미지에서 잡은 로고 위치/크기(상대값)를 그대로 모든 나라에 적용
+    let bsa = null;
+    if (bsaType === 'bsa' || bsaType === 'bsaOption') {
+        const logo = document.getElementById('bsaLogo_GENERAL');
+        bsa = {
+            type: bsaType,
+            left:  parseFloat(logo.style.left)  / 100,
+            top:   parseFloat(logo.style.top)   / 100,
+            width: parseFloat(logo.style.width) / 100,
+        };
+    }
+
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    results.innerHTML = '';
+    try {
+        for (let i = 0; i < targets.length; i++) {
+            const t = targets[i], d = t.data;
+            btn.textContent = `전체 생성 중... (${i + 1}/${targets.length})`;
+            const r = await ipcRenderer.invoke('generate-ai-image', {
+                brand: d.brand, carClass: d.carClass, no: d.no, gen: d.gen, year: d.year, code: d.code,
+                includeLogo, mirrorSide, skipAI: skipAIValue, bsaType, mirrorPath,
+                manualBsa: true, country: 'KOREA',
+                labelStyle: t.key === 'korea' ? 'ko' : 'LR'   // korea=운전석/조수석, 나머지=L/R
+            });
+            if (!r.success) throw new Error(`${t.label}: ${r.error || '알 수 없는 오류'}`);
+            let url = `data:image/jpeg;base64,${r.base64}`;
+            if (bsa) url = await compositeBsa(url, bsa);   // 확정된 로고 합성
+            appendGenResult(results, t, url);
+        }
+    } catch (err) {
+        alert('오류: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = orig;
+    }
+}
+
+// ── BSA 로고를 이미지에 상대좌표(대표에서 잡은 위치/크기)로 합성 ──
+function compositeBsa(imageUrl, bsa) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width; canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            const b = new Image();
+            b.onload = () => {
+                const tw = img.width * bsa.width;
+                const th = b.height * (tw / b.width);
+                ctx.drawImage(b, img.width * bsa.left, img.height * bsa.top, tw, th);
+                resolve(canvas.toDataURL('image/jpeg', 0.95));
+            };
+            b.onerror = () => resolve(imageUrl); // 로고 로드 실패 시 원본이라도 반환
+            b.src = bsa.type === 'bsaOption' ? '../../data/bsa_option_logo.png' : '../../data/bsa_logo.png';
+        };
+        img.onerror = () => reject(new Error('이미지 로드 실패'));
+        img.src = imageUrl;
+    });
+}
+
+// ── 범용 결과 카드 추가 (나라별) ──
+function appendGenResult(container, t, imageUrl) {
+    const d = t.data;
+    const caption = [d.brand, d.carClass].filter(Boolean).join(' ');
+    const card = document.createElement('div');
+    card.className = 'gen-result-card';
+    card.innerHTML = `
+        <div class="gen-result-head">${t.label} <span>${caption}</span></div>
+        <img src="${imageUrl}" alt="생성된 이미지" style="width:100%;height:auto;display:block;border-radius:6px;">
+        <button type="button" class="btn-download" style="display:flex;margin-top:8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            ${t.label} 이미지 저장
+        </button>`;
+    card.querySelector('button').onclick = () => {
+        const fileName = `OPTICGLASS_${t.key}_${d.brand || ''}_${d.carClass || '이미지'}.jpg`;
+        ipcRenderer.invoke('save-merged-image', { base64Data: imageUrl }).then(() => {
+            const a = document.createElement('a'); a.download = fileName; a.href = imageUrl; a.click();
+        });
+    };
+    container.appendChild(card);
+}
+
+// ── 범용: korea(한국어) 행 기준 자동번역 → usa(영)/japan(일)/arab(아랍) ──
+async function autoTranslateGeneral(btn) {
+    const form = document.getElementById('aiForm_GENERAL');
+    const cell = (row, f) => form.querySelector(`[name="g_${row}_${f}"]`);
+    const ko = {};
+    ['brand','carClass','year','no','gen','code','remark'].forEach(f => {
+        ko[f] = (cell('korea', f)?.value || '').trim();
+    });
+    if (!ko.brand && !ko.carClass && !ko.gen && !ko.remark) {
+        alert('korea 행에 번역할 한국어 정보(브랜드/차종/세대/비고)를 먼저 입력해주세요.');
+        return;
+    }
+    const targets = [
+        { row: 'usa',   lang: 'en' },
+        { row: 'japan', lang: 'ja' },
+        { row: 'arab',  lang: 'ar' },
+    ];
+    const transFields = ['brand','carClass','gen','remark']; // 번역 대상
+    const copyFields  = ['year','no','code'];                // 비번역: 비어있으면 korea 값 복사
+
+    btn.disabled = true;
+    const orig = btn.textContent;
+    let firstErr = null;
+    try {
+        for (const t of targets) {
+            copyFields.forEach(f => {
+                const el = cell(t.row, f);
+                if (el && !el.value.trim() && ko[f]) el.value = ko[f];
+            });
+            for (const f of transFields) {
+                const src = ko[f];
+                const el = cell(t.row, f);
+                if (!src || !el) continue;
+                btn.textContent = `번역 중... (${t.lang})`;
+                const r = await ipcRenderer.invoke('translate-text', { text: src, source: 'ko', target: t.lang });
+                if (r.success) el.value = r.text;
+                else if (!firstErr) firstErr = r.error;
+            }
+        }
+    } catch (e) {
+        firstErr = firstErr || e.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = orig;
+    }
+    if (firstErr) alert('일부 번역에 실패했습니다.\n' + firstErr);
+}
+
+// ── 이미지 생성 공통 로직 ──
+async function generateImage(country, data) {
+    const { brand, carClass, no, gen, year, code, includeLogo, mirrorSide, skipAIValue, bsaType, mirrorPath, extra, ipcCountry } = data;
     const submitBtn = document.getElementById(`aiSubmitBtn_${country}`);
     const loader    = document.getElementById(`aiLoader_${country}`);
     const resultBox = document.getElementById(`aiResult_${country}`);
@@ -654,7 +1029,7 @@ async function submitAi(e, country) {
         const result = await ipcRenderer.invoke('generate-ai-image', {
             brand, carClass, no, gen, year, code,
             includeLogo, mirrorSide, skipAI: skipAIValue, bsaType, mirrorPath,
-            manualBsa: true, country
+            manualBsa: true, country: ipcCountry || country, ...(extra || {})
         });
         if (!result.success) throw new Error(result.error || '알 수 없는 오류');
 
@@ -682,13 +1057,17 @@ async function submitAi(e, country) {
         if (esmNameInput) esmNameInput.value = `OPTICGLASS_${brand}_${mirrorSide === 'passenger' ? '조수석' : '운전석'}`;
 
         dlBtn.style.display = 'flex';
-        dlBtn.onclick = () => downloadAiImage(country, brand, carClass, bsaType, imageUrl);
+        if (country !== 'GENERAL') {
+            // 범용은 다운로드가 아니라 '전체 나라 생성'(finalizeGeneral) 버튼 — HTML onclick 유지
+            dlBtn.onclick = () => downloadAiImage(country, brand, carClass, bsaType, imageUrl);
+        }
 
     } catch (err) {
         alert('오류: ' + err.message);
     } finally {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg> 이미지 생성하기';
+        const svgUp = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>';
+        submitBtn.innerHTML = country === 'GENERAL' ? svgUp + ' ① 대표 이미지 생성 (로고 위치 잡기)' : svgUp + ' 이미지 생성하기';
         loader.style.display = 'none';
     }
 }

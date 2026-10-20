@@ -1,4 +1,5 @@
 import { BasePlatform } from './base_platform.js';
+import { inspectHostedImage } from '../utils/image_library.js';
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export class ESMPlusHosting extends BasePlatform {
@@ -384,7 +385,11 @@ export class ESMPlusHosting extends BasePlatform {
         let directUrl = `https://ai.esmplus.com/${pathParts.map(p => encodeURIComponent(p)).join('/')}`;
         
         console.log(`Constructed URL: ${directUrl}`);
-        return directUrl;
+        for (let attempt = 0; attempt < 4; attempt++) {
+          if (await inspectHostedImage(directUrl).catch(() => false)) return directUrl;
+          await sleep(1500);
+        }
+        throw new Error('ESM 이미지 URL을 확인하지 못했습니다. 업로드 상태와 호스팅 계정을 확인해주세요.');
     }
 
     return null;

@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}쇼핑몰 API 응답 · VERY UP 관리자{% endblock %}
+{% block nav_logs_api %}active{% endblock %}
+{% block body %}
+<h1>쇼핑몰 API 응답</h1>
+<p class="sub">
+  쿠팡·네이버·아마존·이베이에서 <b>받아온 값</b>을 받는 즉시 보여 줍니다.
+  줄을 누르면 응답 본문이 펼쳐집니다. 본문은 {{ body_chars }}자까지 담습니다.
+</p>
+
+<div class="card" style="margin-bottom:16px;border-left:3px solid var(--accent)">
+  <div style="font-size:13.5px;line-height:1.7">
+    <b>여기 보이는 것은 서버 릴레이를 지나간 호출뿐입니다.</b><br>
+    직원이 로그인한 상태에서 쿠팡·네이버·아마존은 이 서버를 거칩니다.
+    이베이는 <code>USE_EBAY_PROXY=1</code>일 때만 거칩니다.
+    <span style="color:var(--muted)">네이버 스마트스토어·ESM·아임웹의 <b>브라우저 자동 등록</b>은
+    각 PC 에서 직접 처리하므로 이 서버를 지나가지 않아 여기 보이지 않습니다.</span>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <span id="conn" class="pill off">연결 중…</span>
+    <input id="filter" placeholder="플랫폼·경로·상태·본문으로 거르기 (예: coupang, 401, SELLER)"
+           style="flex:1;min-width:240px;padding:8px 11px;border:1px solid var(--line);
+                  border-radius:8px;font-size:14px;font-family:inherit">
+    <label style="display:flex;gap:6px;align-items:center;font-size:13.5px;color:var(--muted);white-space:nowrap">
+      <input type="checkbox" id="onlyErr"> 오류만
+    </label>
+    <button id="pause" class="btn">일시정지</button>
+    <button id="clear" class="btn">지우기</button>
+    <span id="count" style="font-size:13px;color:var(--muted);white-space:nowrap"></span>
+  </div>
+</div>
+
+<div class="card scroll-y" style="padding:0">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:92px">시각</th>
+        <th style="width:86px">플랫폼</th>
+        <th style="width:58px">메서드</th>
+        <th>주소</th>
+        <th style="width:58px">상태</th>
+        <th style="width:74px;text-align:right">소요</th>
+        <th style="width:72px;text-align:right">크기</th>
+        <th style="width:96px">직원</th>
+      </tr>
+    </thead>
+    <tbody id="rows">
+      <tr id="empty"><td colspan="8" style="color:var(--muted)">
+        아직 받은 응답이 없습니다. 직원 PC 에서 상품 등록·조회를 실행하면 여기에 쌓입니다.
+      </td></tr>
+    </tbody>
+  </table>
+</div>
+
+<style>
+  .btn{padding:8px 14px;border:1px solid var(--line);background:#fff;border-radius:8px;
+       font-size:13.5px;cursor:pointer;font-family:inherit}
+  #rows td{font-variant-numeric:tabular-nums;vertical-align:top}
+  #rows tr.row{cursor:pointer}
+  #rows tr.row:hover{background:#fafbfc}
+  #rows .url{font-family:Consolas,"D2Coding",monospace;font-size:12.5px;word-break:break-all}
+  #rows .m{font-family:Consolas,monospace;font-size:12px;color:var(--muted)}
+  .plat{font-size:11.5px;padding:2px 8px;border-radius:20px;font-weight:700;display:inline-block;color:#fff}
+  .p-coupang{background:#b4282d} .p-naver{background:#1ec800} .p-amazon{background:#d97706}
+  .p-ebay{background:#2563eb} .p-other{background:#6b7280}
+  .s2{color:var(--ok);font-weight:600} .s3{color:var(--muted);font-weight:600}
+  .s4{color:#9a6700;font-weight:600} .s5{color:var(--danger);font-weight:700}
+  .slow{color:var(--danger);font-weight:600}
+  .bodycell{background:#0f1420;padding:0 !important}
+  .bodycell pre{margin:0;padding:14px 16px;color:#d6deeb;font-family:Consolas,"D2Coding",monospace;
+    font-size:12.5px;line-height:1.55;white-space:pre-wrap;word-break:break-all;max-height:420px;overflow:auto}
+  .errline{color:var(--danger);font-weight:600}
+  .new{animation:flash 1.1s ease-out}
+  @keyframes flash{from{background:var(--accent-soft)}to{background:transparent}}
+</style>
+
+<script>
+(function () {
+  var INITIAL = {{ history | tojson }};
+  var MAX = {{ max_history }};
+
+  var rows = document.getElementById('rows');
+  var empty = document.getElementById('empty');
+  var conn = document.getElementById('conn');
+  var filterEl = document.getElementById('filter');
+  var onlyErr = document.getElementById('onlyErr');
+  var pauseBtn = document.getElementById('pause');
+  var clearBtn = document.getElementById('clear');
+  var countEl = document.getElementById('count');
+
+  var paused = false, buffered = [], total = 0;
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function statusClass(s) {
+    if (s >= 500) return 's5'; if (s >= 400) return 's4';
+    if (s >= 300) return 's3'; return 's2';
+  }
+  function platClass(p) {
+    return ['coupang', 'naver', 'amazon', 'ebay'].indexOf(p) >= 0 ? 'p-' + p : 'p-other';
+  }
+  function timeText(iso) {
+    var d = new Date(iso);
+    return isNaN(d) ? iso : d.toLocaleTimeString('ko-KR', { hour12: false });
+  }
+  function sizeText(n) {
+    if (!n) return '—';
+    if (n < 1024) return n + ' B';
+    return (n / 1024).toFixed(1) + ' KB';
+  }
+  function shortUrl(u) {
+    try { var x = new URL(u); return x.pathname + (x.search || ''); }
+    catch (e) { return u; }
+  }
+  // 본문이 JSON 이면 보기 좋게 편다. 아니면(HTML 오류 페이지 등) 원문 그대로.
+  function pretty(text) {
+    if (!text) return '(본문 없음)';
+    var t = text.trim();
+    if (t.charAt(0) !== '{' && t.charAt(0) !== '[') return text;
+    try { return JSON.stringify(JSON.parse(t), null, 2); } catch (e) { return text; }
+  }
+  function hay(e) {
+    return [e.platform, e.method, e.url, String(e.status), e.user, e.error, e.body]
+      .join(' ').toLowerCase();
+  }
+
+  function build(e) {
+    var tr = document.createElement('tr');
+    tr.className = 'row';
+    tr.dataset.hay = hay(e);
+    tr.dataset.err = (e.status >= 400 || e.error) ? '1' : '';
+
+    tr.innerHTML =
+      '<td>' + esc(timeText(e.ts)) + '</td>' +
+      '<td><span class="plat ' + platClass(e.platform) + '">' + esc(e.platform) + '</span></td>' +
+      '<td class="m">' + esc(e.method) + '</td>' +
+      '<td><span class="url">' + esc(shortUrl(e.url)) + '</span>' +
+        (e.error ? '<br><span class="errline">' + esc(e.error) + '</span>' : '') + '</td>' +
+      '<td class="' + statusClass(e.status) + '">' + esc(e.status) + '</td>' +
+      '<td style="text-align:right" class="' + (e.ms >= 3000 ? 'slow' : '') + '">' + esc(e.ms) + ' ms</td>' +
+      '<td style="text-align:right">' + esc(sizeText(e.size)) + '</td>' +
+      '<td>' + (esc(e.user) || '<span style="color:var(--line)">—</span>') + '</td>';
+
+    // 본문 줄은 접어 두고, 행을 누를 때 만든다(500건을 미리 그리면 무겁다).
+    var body = document.createElement('tr');
+    body.style.display = 'none';
+    var td = document.createElement('td');
+    td.colSpan = 8;
+    td.className = 'bodycell';
+    var pre = document.createElement('pre');
+    pre.textContent = pretty(e.body) + (e.truncated ? '\n\n… (이후 잘림, 전체 ' + sizeText(e.size) + ')' : '');
+    td.appendChild(pre);
+    body.appendChild(td);
+
+    tr.addEventListener('click', function () {
+      body.style.display = (body.style.display === 'none') ? '' : 'none';
+    });
+    tr._body = body;
+    return tr;
+  }
+
+  function visible(tr) {
+    var q = filterEl.value.trim().toLowerCase();
+    if (onlyErr.checked && !tr.dataset.err) return false;
+    return !q || tr.dataset.hay.indexOf(q) !== -1;
+  }
+
+  function add(e, animate) {
+    total++;
+    if (empty) { empty.remove(); empty = null; }
+    var tr = build(e);
+    if (animate) tr.className += ' new';
+    rows.insertBefore(tr._body, rows.firstChild);
+    rows.insertBefore(tr, rows.firstChild);
+    if (!visible(tr)) { tr.style.display = 'none'; tr._body.style.display = 'none'; }
+    while (rows.children.length > MAX * 2) rows.removeChild(rows.lastChild);
+    recount();
+  }
+
+  function applyFilter() {
+    for (var i = 0; i < rows.children.length; i++) {
+      var tr = rows.children[i];
+      if (!tr.classList.contains('row')) continue;
+      var ok = visible(tr);
+      tr.style.display = ok ? '' : 'none';
+      if (!ok && tr._body) tr._body.style.display = 'none';
+    }
+    recount();
+  }
+  function recount() {
+    var shown = 0;
+    for (var i = 0; i < rows.children.length; i++) {
+      var tr = rows.children[i];
+      if (tr.classList.contains('row') && tr.style.display !== 'none') shown++;
+    }
+    countEl.textContent = shown + ' / ' + total + '건';
+  }
+  filterEl.addEventListener('input', applyFilter);
+  onlyErr.addEventListener('change', applyFilter);
+
+  pauseBtn.addEventListener('click', function () {
+    paused = !paused;
+    if (!paused) {
+      buffered.forEach(function (e) { add(e, false); });
+      buffered = [];
+      applyFilter();
+    }
+    pauseBtn.textContent = paused ? '재개 (' + buffered.length + ')' : '일시정지';
+  });
+  clearBtn.addEventListener('click', function () {
+    rows.innerHTML = ''; buffered = []; total = 0; recount();
+  });
+
+  INITIAL.forEach(function (e) { add(e, false); });
+  applyFilter();
+
+  function setConn(t, c) { conn.textContent = t; conn.className = 'pill ' + c; }
+  var es = new EventSource('/logs/api/stream');
+  es.onopen = function () { setConn('● 실시간 연결됨', 'ok'); };
+  es.onmessage = function (ev) {
+    var e; try { e = JSON.parse(ev.data); } catch (err) { return; }
+    if (paused) {
+      buffered.push(e);
+      if (buffered.length > MAX) buffered.shift();
+      total++;
+      pauseBtn.textContent = '재개 (' + buffered.length + ')';
+      return;
+    }
+    add(e, true);
+  };
+  es.onerror = function () {
+    setConn('연결 끊김 — 재시도 중 (계속되면 다시 로그인하세요)', 'off');
+  };
+  window.addEventListener('beforeunload', function () { es.close(); });
+})();
+</script>
+{% endblock %}

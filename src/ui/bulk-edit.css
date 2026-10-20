@@ -1,0 +1,143 @@
+body[data-workspace-view="bulk"] #main, body[data-workspace-view="bulk"] .detail-toggle-footer { display:none!important; }
+body[data-workspace-view="api"] #main > :not(#section8), body[data-workspace-view="api"] .detail-toggle-footer,
+body[data-workspace-view="api"] #section8-header, body[data-workspace-view="api"] #log-window,
+body[data-workspace-view="api"] #card-area, body[data-workspace-view="api"] #empty-state,
+body[data-workspace-view="api"] #image-library { display:none!important; }
+body[data-workspace-view="api"] #section8 { display:flex!important; width:100%!important; flex:1!important; max-width:none!important; }
+body[data-workspace-view="api"] #form-frame { display:block!important; }
+body[data-workspace-view] .mode-radio:checked + .mode-label { background:transparent; color:var(--text-secondary); }
+#mode-bar { flex-wrap:wrap; gap:6px; }
+#mode-bar button.mode-label { font:inherit; font-size:12px; cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--text-secondary); }
+#mode-bar button.mode-label:hover { background:var(--ovl-1); }
+#mode-bar button.is-active, #mode-bar button.is-active:hover { background:var(--accent); border-color:var(--accent); color:white; }
+#bulk-edit-workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px 18px;
+  color: var(--text-primary);
+  background: var(--bg-panel);
+  box-sizing: border-box;
+}
+#bulk-edit-workspace[hidden], #bulk-edit-workspace [hidden] { display: none !important; }
+.be-head, .be-platforms, .be-tools, .be-filters, .be-help, .be-actions, .be-state, .be-pager {
+  flex-shrink: 0;
+}
+.be-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:6px; }
+.be-head h2 { font-size:17px; margin:0; }
+.be-head span { font-size:12px; color:var(--text-secondary); }
+.be-help { font-size:12px; color:var(--text-secondary); margin:2px 0 4px; line-height:1.45; }
+.be-platforms,.be-tools,.be-filters,.be-pager { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:4px 0; }
+.be-platforms { gap:5px; margin-bottom:8px; }
+.be-filters { align-items:flex-end; gap:8px; }
+
+/* 입력칸·셀렉트·버튼을 같은 높이(32px)와 테마 색으로 맞춘다. */
+#bulk-edit-workspace select,
+#bulk-edit-workspace input:not([type="checkbox"]) {
+  box-sizing:border-box; height:32px; padding:0 10px; font:inherit; font-size:13px;
+  color:var(--text-primary); background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius);
+}
+#bulk-edit-workspace input::placeholder { color:var(--text-muted); }
+#bulk-edit-workspace input[type="checkbox"] { width:15px; height:15px; margin:0; accent-color:var(--accent); cursor:pointer; }
+#bulk-edit-workspace button {
+  box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  height:32px; padding:0 12px; font:inherit; font-size:13px; font-weight:500; white-space:nowrap;
+  color:var(--text-primary); background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius);
+  cursor:pointer; transition:background var(--transition), border-color var(--transition), color var(--transition);
+}
+#bulk-edit-workspace button:hover:not(:disabled) { background:var(--ovl-1); border-color:var(--text-secondary); }
+#bulk-edit-workspace button:focus-visible,
+#bulk-edit-workspace select:focus-visible,
+#bulk-edit-workspace input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+#bulk-edit-workspace button[aria-selected="true"],
+#bulk-edit-workspace .be-primary { color:#fff; background:var(--accent); border-color:var(--accent); }
+#bulk-edit-workspace button[aria-selected="true"]:hover:not(:disabled),
+#bulk-edit-workspace .be-primary:hover:not(:disabled) { background:var(--accent-hover); border-color:var(--accent-hover); }
+#bulk-edit-workspace .be-primary { font-weight:600; }
+#bulk-edit-workspace button:disabled,
+#bulk-edit-workspace input:disabled,
+#bulk-edit-workspace select:disabled { opacity:.5; cursor:default; }
+
+#bulk-edit-workspace .be-platforms button { height:34px; padding:0 10px; font-weight:600; }
+.be-platform-logo { width:18px; height:18px; object-fit:contain; background:#ffffff; border-radius:3px; padding:1px; box-sizing:border-box; flex-shrink:0; }
+.be-platform-logo-wide { width:auto; max-width:36px; }
+#be-api-query { flex:0 1 380px; min-width:220px; }
+.be-filters label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--text-secondary); }
+.be-filters select { min-width:130px; max-width:220px; }
+.be-filters input[type="search"] { width:200px; }
+
+/* 작업 버튼은 현재가 불러오기 → 이미지 → 저장 순서로 묶고, 저장은 오른쪽 끝에 둔다.
+   (선택은 표 머리의 전체선택, 판매가 입력은 '판매가 덮어쓰기' 열 머리에 있다.) */
+.be-actions {
+  display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px; margin:8px 0 4px; padding:8px 10px;
+  background:var(--sunk); border:1px solid var(--border); border-radius:8px;
+}
+.be-group { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.be-group-end { margin-left:auto; }
+.be-group-label { font-size:12px; font-weight:600; color:var(--text-secondary); margin-right:2px; }
+.be-unit { font-size:12px; font-weight:600; color:var(--text-secondary); min-width:28px; }
+/* 열 머리의 판매가 입력: 칸은 아래 행 입력칸(125px)과 같은 폭으로 맞추고, 버튼은 다음 줄로 접는다. */
+.be-table th .be-th-tools { display:flex; flex-wrap:wrap; align-items:center; gap:4px 6px; margin-top:6px; max-width:190px; white-space:normal; font-weight:400; }
+#bulk-edit-workspace .be-th-tools button { height:28px; padding:0 8px; font-size:12px; }
+#bulk-edit-workspace #be-value { width:125px; height:28px; }
+#be-image-value { width:260px; }
+.be-state { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:4px 16px; margin:2px 0 6px; }
+.be-state .be-help { margin:0; }
+.be-th-check-label { display:inline-flex; align-items:center; gap:5px; cursor:pointer; user-select:none; font-size:12px; font-weight:600; }
+.be-scroll {
+  flex: 1 1 0;
+  min-height: 90px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+@media (max-height: 520px) {
+  #bulk-edit-workspace { overflow-y: auto; }
+  .be-scroll { min-height: 200px; flex: none; }
+}
+.be-table { border-collapse:collapse; width:100%; min-width:1000px; font-size:13px; background:var(--bg-card); }
+.be-table th { position:sticky; top:0; background:var(--bg-panel); z-index:1; text-align:left; white-space:nowrap; font-size:12px; font-weight:600; color:var(--text-secondary); }
+.be-table th,.be-table td { padding:10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.be-table th.be-check-column,.be-table td.be-check-column { width:1%; text-align:center; }
+.be-table img { width:60px; height:52px; object-fit:contain; border-radius:5px; background:white; }
+.be-table .be-title { min-width:235px; max-width:430px; line-height:1.45; }
+.be-table small { display:block; color:var(--text-secondary); margin-top:4px; }
+.be-table input[type="number"] { width:125px; }
+.be-table tr.be-dirty { background:rgba(37,99,235,.07); }
+.be-table .be-price { white-space:nowrap; }
+/* 상품번호 / SKU: 표준 번호를 굵게, SKU·몰 ID 는 작게. 긴 SKU 목록은 칸 안에서 줄바꿈한다. */
+.be-table .be-identity { min-width:130px; max-width:220px; }
+.be-table .be-no { font-weight:600; white-space:nowrap; }
+.be-table .be-no.be-missing { font-weight:400; color:var(--text-muted); }
+.be-table .be-sku { font-family:Consolas, 'Courier New', monospace; font-size:11.5px; overflow-wrap:anywhere; }
+.be-table .be-own-id { font-size:11px; color:var(--text-muted); overflow-wrap:anywhere; }
+.be-table .be-result { max-width:250px; white-space:normal; font-size:12px; }
+#be-status { min-height:20px; font-size:13px; font-weight:500; }
+.be-pager { justify-content:flex-end; margin-top:8px; }
+.be-pager span { min-width:48px; text-align:center; font-size:13px; color:var(--text-secondary); }
+.be-photo-column { min-width:260px; width:300px; max-width:360px; }
+.be-table th.be-photo-column small { font-weight:400; margin-top:2px; }
+.be-photo-gallery { display:flex; flex-wrap:wrap; gap:6px; max-height:190px; overflow:auto; }
+.be-photo-gallery figure { margin:0; }
+.be-photo-gallery figcaption { max-width:70px; font-size:11px; color:var(--text-secondary); text-align:center; }
+.be-photo-urls { white-space:pre-wrap; overflow-wrap:anywhere; max-height:170px; overflow:auto; font:11px/1.5 monospace; user-select:text; }
+.be-table .be-image-pending { color:var(--accent); }
+
+body[data-workspace-view] .mode-radio:checked + .mode-label { border-color:var(--border); color:var(--text-muted); }
+body[data-workspace-view] .mode-radio:checked + .mode-label .dot { background:transparent; border-color:var(--text-muted); }
+
+#bulk-edit-workspace .be-image-open { display:block; height:auto; padding:0; border:0; border-radius:5px; background:transparent; cursor:zoom-in; }
+#bulk-edit-workspace .be-image-open:hover:not(:disabled) { background:transparent; }
+#bulk-edit-workspace .be-image-open:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
+.be-photo-urls a { color:inherit; text-decoration:underline; cursor:zoom-in; }
+.be-image-viewer { width:min(1100px, 92vw); height:90vh; padding:0; border:1px solid var(--border); border-radius:10px; color:var(--text-primary); background:var(--bg-panel); }
+.be-image-viewer[open] { display:flex; flex-direction:column; }
+.be-image-viewer::backdrop { background:rgba(0,0,0,.7); }
+.be-image-viewer-bar { display:flex; align-items:center; gap:10px; padding:12px; border-bottom:1px solid var(--border); }
+.be-image-viewer-bar strong { flex:1; overflow-wrap:anywhere; }
+.be-image-viewer-scroll { flex:1; min-height:0; overflow:auto; padding:12px; background:#fff; text-align:center; }
+.be-image-viewer-scroll img { width:auto; max-width:100%; height:auto; max-height:none; vertical-align:top; }
+.be-image-viewer-scroll.be-original-size { text-align:left; }
+.be-image-viewer-scroll.be-original-size img { max-width:none; }

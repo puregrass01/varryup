@@ -8,6 +8,30 @@
   <span class="pill admin">{{ cred["platform"] }}</span> {{ cred["label"] }}
 </p>
 
+{# 복호화 실패(주로 KEY_MASTER 교체)일 때는 수정 폼을 **아예 내리지 않는다**.
+   빈 textarea 를 그대로 저장하면 원래 암호문 위에 빈 값이 덮여 마지막 복구 기회까지 사라진다.
+   (예전에는 crypto.decrypt 를 try 없이 불러 이 화면이 통째로 500 이었고, 운영자는 원인을 알 수 없었다) #}
+{% if decrypt_error %}
+<div class="card" style="margin-bottom:16px;background:var(--danger-soft);border-color:var(--danger)">
+  <div style="font-size:13.5px;color:var(--danger)">
+    🔓 <b>복호화 실패</b> — {{ decrypt_error }}<br>
+    <span style="color:var(--muted)">암호문은 그대로 보존됩니다. 올바른 KEY_MASTER 로 다시 기동하면 복구될 수 있으므로,
+    이 화면에서는 수정 폼을 제공하지 않습니다.</span>
+  </div>
+</div>
+{# 삭제 버튼을 여기 두지 않는 이유: 이 화면은 '복구 가능성이 남아 있다'고 안내하는 자리다.
+   같은 화면에서 바로 지울 수 있으면, 원인이 KEY_MASTER 오타일 뿐인데 멀쩡한 인증키를
+   지우기가 너무 쉬워진다. 삭제는 목록 화면에서 한 번 더 의식적으로 하게 한다.
+   (운영자가 여기서 삭제 버튼을 찾다 헤매지 않도록 아래에 위치를 명시한다) #}
+<div class="card" style="margin-bottom:20px">
+  <div style="font-size:13px;color:var(--muted);margin-bottom:10px">
+    키 회전 중이라 이 행을 정리해야 한다면, <b>목록 화면의 해당 행에서 삭제</b>한 뒤 새 값으로 다시 등록하세요.
+    이 화면에는 삭제 버튼을 두지 않았습니다 — 원인이 KEY_MASTER 설정 오류일 수도 있어서,
+    지우기 전에 한 번 더 확인하게 하기 위함입니다.
+  </div>
+  <a class="btn ghost" href="/keys">← 인증키 목록으로</a>
+</div>
+{% else %}
 <div class="card" style="margin-bottom:16px;background:#fff8f0;border-color:#e5c9a0">
   <div style="font-size:13.5px;color:#8a5a1a">
     ⚠️ 지금 이 값을 <b>열람한 기록</b>이 접근 로그에 남았습니다. 복호화된 실제 값이니 취급에 주의하세요.
@@ -16,6 +40,7 @@
 
 <div class="card" style="margin-bottom:20px">
   <form method="post" action="/keys/{{ cred['id'] }}/update">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <label>인증키 값 (JSON) — 수정 후 저장하면 다시 암호화됩니다</label>
     <textarea name="payload" rows="8"
       style="width:100%;font-family:Consolas,monospace;font-size:13px;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fbfcfd">{{ plaintext }}</textarea>
@@ -25,6 +50,7 @@
     </div>
   </form>
 </div>
+{% endif %}
 
 <div class="card">
   <div style="font-size:13px;color:var(--muted)">

@@ -18,12 +18,17 @@
     직원 비활성화 시 즉시 막히고, 7일 후 만료되며, 누가 호출했는지 로그에 남는다.
   - 직원 토큰은 절대 상단(마켓플레이스)으로 전달하지 않는다. 상단 인증은 body.headers 안에 따로 들어온다.
 """
+import asyncio
 import ipaddress
 import json
 import logging
 import re
 import socket
+import time
+from datetime import datetime, timezone
 from urllib.parse import urlparse, urlsplit
+
+import request_log
 
 import httpx
 from fastapi import APIRouter, Header, Request, Response
@@ -65,6 +70,11 @@ TARGETS = {
     },
 }
 
+# 실패 응답 본문을 journald 에 남길 때의 길이 상한.
+# 마켓플레이스 오류 본문은 보통 수백 바이트다. 길게 잡으면 journald 가 한 줄로
+# 밀어내기 시작하므로, 원인 코드가 담기는 앞부분만 남긴다.
+ERROR_BODY_LOG_BYTES = 800
+
 ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
 # 앱이 보낸 헤더 중 상단으로 넘기지 않을 것들.
@@ -89,6 +99,70 @@ MAX_REQUEST_BYTES = 16 * 1024 * 1024
 def _err(status: int, message: str, **extra):
     """마켓플레이스가 아니라 이 프록시가 낸 오류임을 항상 표시한다."""
     return JSONResponse({"proxyError": True, "message": message, **extra}, status_code=status)
+
+
+# ── 공용 호출 간격 ───────────────────────────────────────────
+# 직원 PC 여럿이 같은 앱 키(네이버 client_id, 쿠팡 vendorId, 아마존 판매자)를 나눠 쓴다.
+# 각 PC 는 앱이 스스로 간격을 두지만(src/utils/rate_limiter.js), 여럿이 동시에 쓰면 합쳐서
+# 한도를 넘는다. 모든 호출이 지나는 이 프록시가 마지막 관문이므로 여기서 한 줄로 세운다.
+#   네이버 '내 스토어' 앱: API별 2RPS, 넘으면 처리하지 않고 429 (커머스API 공식 답변)
+#   쿠팡: vendorId 당 초당 5회, 넘으면 429 로 수 분~수십 분 차단 (쿠팡 공지)
+#   아마존 Listings Items: 연산별 초당 5회
+# eBay 는 일일 한도라 간격을 두지 않는다.
+#
+# 한계: 기록이 프로세스 메모리에 있다. uvicorn 워커를 여러 개 띄우면 워커마다 따로 센다.
+PACE_SECONDS = {"naver": 0.55, "coupang": 0.25, "amazon": 0.22}
+# 이보다 오래 기다려야 하면 줄 세우지 않고 429 로 돌려보낸다. 앱의 프록시 타임아웃(90초) 안에 끝나야 한다.
+PACE_MAX_WAIT = 20.0
+# 상단이 429 를 주면 이 시간 동안 같은 키로는 보내지 않는다. 쿠팡은 막힌 동안 계속 부르면 차단이 길어진다.
+RATE_LIMIT_COOLDOWN = {"coupang": 60.0, "naver": 2.0, "amazon": 2.0}
+
+
+def _api_template(path: str) -> str:
+    """경로의 번호·ID 부분을 지워 'API 하나'를 나타내는 모양으로 만든다(앱의 apiTemplate 과 같은 규칙)."""
+    segs = path.split("?")[0].split("/")
+    return "/".join("{id}" if re.fullmatch(r"\d+|[A-Z0-9]{10,}", s) else s for s in segs)
+
+
+def _pace_key(platform: str, target: str, headers: dict) -> str | None:
+    if platform not in PACE_SECONDS:
+        return None
+    template = _api_template(urlsplit(target).path)
+    if platform == "coupang":
+        # 쿠팡 한도는 API 가 아니라 판매자(vendorId) 단위다. 앱이 X-Requested-By 에 판매자 ID 를 넣는다.
+        vendor = next((v for k, v in headers.items() if k.lower() == "x-requested-by"), "")
+        return f"coupang:{vendor}"
+    if platform == "amazon":
+        return "amazon:" + "/".join(template.split("/")[:4])
+    return f"{platform}:{template}"
+
+
+class _Pacer:
+    """키마다 다음 호출 시각을 예약한다. 예약 계산에 await 가 없어 이벤트 루프 안에서는 원자적이다."""
+
+    def __init__(self):
+        self._next: dict[str, float] = {}
+        self._cool: dict[str, float] = {}
+
+    async def acquire(self, key: str, gap: float) -> str | None:
+        """차례가 오면 None, 기다릴 수 없으면 사유를 돌려준다."""
+        now = time.monotonic()
+        cool = self._cool.get(key, 0.0) - now
+        if cool > 0:
+            return f"상단 호출 한도 초과로 {int(cool) + 1}초 동안 요청을 보내지 않습니다. 잠시 후 다시 시도해주세요."
+        at = max(now, self._next.get(key, 0.0))
+        if at - now > PACE_MAX_WAIT:
+            return "요청이 몰려 서버 대기열이 가득 찼습니다. 잠시 후 다시 시도해주세요."
+        self._next[key] = at + gap
+        if at > now:
+            await asyncio.sleep(at - now)
+        return None
+
+    def cool_down(self, key: str, seconds: float) -> None:
+        self._cool[key] = max(self._cool.get(key, 0.0), time.monotonic() + seconds)
+
+
+_pacer = _Pacer()
 
 
 def _is_public_host(host: str) -> bool:
@@ -208,6 +282,27 @@ async def _relay(platform: str, request: Request, authorization: str | None):
     if not await run_in_threadpool(_is_public_host, host):
         return _err(502, f"대상 호스트를 확인할 수 없습니다: {host}")
 
+    # 여러 직원이 나눠 쓰는 한도를 넘지 않게 차례를 받는다. 못 받으면 상단에 보내지 않고 429 로 돌려보낸다.
+    pace_key = _pace_key(platform, target, up_headers)
+    if pace_key:
+        why = await _pacer.acquire(pace_key, PACE_SECONDS[platform])
+        if why:
+            log.warning("proxy %s %s %s -> 대기 거절 (%s) by %s", platform, method, urlparse(target).path, why, user["username"])
+            return _err(429, why)
+
+    # /logs/api 화면이 '언제·무엇을·얼마나 걸려' 받았는지 보여 줄 수 있게 여기서부터 잰다.
+    # 위쪽의 _err 들은 아직 상단에 나가기 전이라 상단 응답이 아니므로 기록하지 않는다.
+    t0 = time.perf_counter()
+
+    def _live(status, body, error=""):
+        """상단 응답 한 건을 실시간 버퍼에 남긴다. 실패해도 릴레이는 계속된다."""
+        request_log.record_upstream(
+            platform=platform, method=method, url=target, status=status,
+            duration_ms=(time.perf_counter() - t0) * 1000,
+            body=body, user=user["username"],
+            ts=datetime.now(timezone.utc).isoformat(), error=error,
+        )
+
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=False, trust_env=False) as client:
             req = client.build_request(method, target, headers=up_headers, content=content)
@@ -227,10 +322,13 @@ async def _relay(platform: str, request: Request, authorization: str | None):
             await upstream.aclose()
             payload_bytes = b"".join(chunks)
     except httpx.TimeoutException:
+        _live(504, b"", error="응답 시간 초과")
         return _err(504, f"{platform} 응답 시간 초과")
     except httpx.HTTPError as e:
+        _live(502, b"", error=f"연결 실패: {type(e).__name__}")
         return _err(502, f"{platform} 연결 실패: {type(e).__name__}")
     except (httpx.InvalidURL, ValueError, UnicodeError):
+        _live(400, b"", error="URL·헤더·본문 인코딩 오류")
         return _err(400, "요청 URL, 헤더 또는 본문 인코딩을 확인해주세요.")
 
     # 감사 로그 — 본문과 헤더는 남기지 않는다 (서명·키가 들어 있다).
@@ -239,6 +337,29 @@ async def _relay(platform: str, request: Request, authorization: str | None):
         platform, method, urlparse(target).path, upstream.status_code,
         len(payload_bytes), user["username"], _ip(request),
     )
+    if pace_key and upstream.status_code == 429:
+        _pacer.cool_down(pace_key, RATE_LIMIT_COOLDOWN.get(platform, 2.0))
+    # 실시간 화면(/logs/api)용. 위 감사 로그와 달리 **응답 본문을 담는다** — 그게 목적이다.
+    # 요청 헤더는 여기서도 담지 않는다(상단 인증 서명이 들어 있다).
+    _live(upstream.status_code, payload_bytes)
+
+    # 실패한 응답은 **본문까지** journald 에 남긴다.
+    #
+    # 왜 필요한가: /logs/api 버퍼는 메모리에만 있어 프로세스가 재시작되면 사라진다.
+    # 그런데 403 같은 오류는 며칠 뒤에야 "그때 왜 안 됐지" 하고 들여다보게 된다.
+    # 실제로 9/18 오전 네이버 403 이 31건 몰렸는데, 원인 코드가 아무 데도 남지 않아
+    # 상태코드만 보고 추측해야 했다. 마켓플레이스는 거절 사유를 본문에 담아 준다
+    # (네이버 GROUP_NOT_AUTHORIZED, 쿠팡 IP 미허용 안내, 아마존 InvalidInput 등).
+    #
+    # 성공 응답은 남기지 않는다 — 용량도 문제지만, 성공 본문에는 토큰이 들어오는
+    # 경로(예: /external/v1/oauth2/token)가 있어서 남기면 안 된다. 실패 본문에는 없다.
+    # WARNING 으로 찍는 이유: 핸들러 설정이 어떤 이유로 빠져도 lastResort 로 나간다.
+    if upstream.status_code >= 400:
+        log.warning(
+            "proxy %s %s %s -> %s 실패본문[%dB]: %s",
+            platform, method, urlparse(target).path, upstream.status_code, len(payload_bytes),
+            payload_bytes[:ERROR_BODY_LOG_BYTES].decode("utf-8", "replace").replace("\n", " "),
+        )
 
     connection_headers = {h.strip().lower() for h in upstream.headers.get("connection", "").split(",")}
     out_headers = {

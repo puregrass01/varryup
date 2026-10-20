@@ -1,7 +1,7 @@
 :root {
     --bg-color: #0f172a;
     --panel-bg: rgba(30, 41, 59, 0.7);
-    --panel-border: rgba(255, 255, 255, 0.1);
+    --panel-border: var(--ovl-2);
     --text-main: #f8fafc;
     --text-dim: #94a3b8;
     --primary: #3b82f6;
@@ -11,7 +11,7 @@
     --danger: #ef4444;
     --warning: #f59e0b;
     --input-bg: rgba(15, 23, 42, 0.6);
-    --input-border: rgba(255, 255, 255, 0.15);
+    --input-border: var(--ovl-3);
     
     --radius-sm: 6px;
     --radius-md: 12px;
@@ -21,6 +21,52 @@
     --space-sm: 0.5rem;
     --space-md: 1rem;
     --space-lg: 1.5rem;
+
+    /* 테마마다 갈리는 값. 어두운 배경에서는 '흰 반투명' 이 면을 밝혀 주지만
+       밝은 배경에서는 아무것도 안 보인다 → 라이트에서 검정 쪽으로 뒤집는다.
+       --panel-border / --input-border 도 이 값을 타므로 같이 따라온다. */
+    --ovl-1: rgba(255, 255, 255, 0.05);
+    --ovl-2: rgba(255, 255, 255, 0.10);
+    --ovl-3: rgba(255, 255, 255, 0.16);
+    --sunk:  rgba(0, 0, 0, 0.22);
+    --shadow-panel: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    /* 로그 글자 — 어두운 배경용 파스텔이라 밝은 화면에서는 안 보인다. */
+    --log-system:  #94a3b8;
+    --log-process: #60a5fa;
+    --log-success: #34d399;
+    --log-error:   #f87171;
+    --btn-face: #111827;          /* 버튼은 검정 */
+    --btn-face-hover: #000000;
+    --btn-text: #ffffff;
+}
+
+/* ── 라이트 테마 (기본) ───────────────────────────────────────── */
+:root[data-theme="light"] {
+    --bg-color: #eef2f7;
+    --panel-bg: rgba(255, 255, 255, 0.94);
+    --text-main: #0f172a;
+    --text-dim: #52627a;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --accent: #059669;
+    --accent-hover: #047857;
+    --input-bg: #ffffff;
+
+    --ovl-1: rgba(15, 23, 42, 0.04);
+    --ovl-2: rgba(15, 23, 42, 0.08);
+    --ovl-3: rgba(15, 23, 42, 0.16);
+    --sunk:  rgba(15, 23, 42, 0.05);
+    --shadow-panel: 0 4px 16px 0 rgba(15, 23, 42, 0.10);
+
+    --log-system:  #64748b;
+    --log-process: #1d4ed8;
+    --log-success: #15803d;
+    --log-error:   #b91c1c;
+}
+
+/* 밝은 배경 위의 파랑·초록 워시는 탁해 보이기만 한다. */
+:root[data-theme="light"] body {
+    background-image: none;
 }
 
 * {
@@ -87,10 +133,10 @@ body {
 /* Tabs Navigation */
 .app-tabs {
     display: flex;
-    gap: 8px;
+    gap: var(--space-sm);
     background: rgba(15, 23, 42, 0.5);
     padding: 6px;
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-md);
     margin-bottom: var(--space-lg);
     border: 1px solid var(--panel-border);
 }
@@ -101,27 +147,73 @@ body {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 12px 20px;
+    padding: 10px 16px;
     background: transparent;
     border: none;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-sm);
     color: var(--text-dim);
     font-size: 0.95rem;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
 }
 
 .tab-btn:hover {
     color: var(--text-main);
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--ovl-1);
 }
 
 .tab-btn.active {
     background: var(--primary);
     color: white;
     font-weight: 600;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+/* 탭 아이콘으로 쓰는 브랜드 로고 */
+.tab-logo {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    object-fit: contain;
+}
+
+/* eBay 워드마크처럼 가로로 긴 로고는 높이만 맞추고 폭은 비율대로 둔다. */
+.tab-logo-wide {
+    width: auto;
+}
+
+.tab-text-wrap {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    line-height: 1.1;
+}
+
+.tab-country {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+}
+
+.tab-btn.active .tab-country {
+    opacity: 0.95;
+    color: #e0e7ff;
+}
+
+.tab-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.tab-btn.active .tab-title {
+    color: white;
+    font-weight: 600;
 }
 
 .tab-content-area {
@@ -132,11 +224,11 @@ body {
 }
 
 .tab-pane {
-    animation: fadeIn 0.3s ease-out;
+    animation: fadeIn 0.2s ease-out;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(5px); }
+    from { opacity: 0; transform: translateY(3px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
@@ -148,7 +240,7 @@ body {
     border: 1px solid var(--panel-border);
     border-radius: var(--radius-lg);
     padding: var(--space-lg);
-    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-panel);
 }
 
 .panel-header h2 {
@@ -229,8 +321,15 @@ body {
 }
 
 .dual-input {
-    flex-direction: row !important;
+    width: 50%;
+    max-width: 50%;
     gap: var(--space-md);
+    flex-direction: row !important;
+}
+
+.dual-input:has(.file-upload-box) {
+    width: 100%;
+    max-width: 100%;
 }
 
 .input-col {
@@ -243,10 +342,12 @@ body {
     font-weight: 500;
     color: var(--text-dim);
     margin-bottom: 4px;
+    line-height: 1.2;
 }
 
 .form-input {
-    width: 100%;
+    width: 50%;
+    max-width: 50%;
     background: var(--input-bg);
     border: 1px solid var(--input-border);
     color: var(--text-main);
@@ -254,7 +355,25 @@ body {
     border-radius: var(--radius-sm);
     font-family: inherit;
     font-size: 0.9rem;
+    min-height: 40px;
+    box-sizing: border-box;
     transition: all 0.2s ease;
+}
+
+select.form-input {
+    width: 50%;
+    max-width: 50%;
+    height: auto;
+    min-height: 40px;
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+}
+
+.dual-input .input-col .form-input,
+.dual-input .input-col select.form-input {
+    width: 100%;
+    max-width: 100%;
 }
 
 .form-input:focus {
@@ -264,16 +383,21 @@ body {
 }
 
 .form-input[readonly] {
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--sunk);
     color: var(--text-dim);
     cursor: not-allowed;
 }
 
 textarea.form-input {
     resize: vertical;
-    min-height: 60px;
+    width: 50%;
+    max-width: 50%;
+    min-height: 70px;
+    height: auto;
     font-family: 'Courier New', Courier, monospace;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
+    padding: 10px 14px;
+    box-sizing: border-box;
 }
 
 /* Category Toggle */
@@ -284,6 +408,8 @@ textarea.form-input {
     border-radius: var(--radius-sm);
     border: 1px solid var(--input-border);
     overflow: hidden;
+    width: 50%;
+    max-width: 50%;
 }
 
 .toggle-btn {
@@ -304,7 +430,7 @@ textarea.form-input {
 }
 
 .toggle-btn:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--ovl-1);
     color: var(--text-main);
 }
 
@@ -408,7 +534,7 @@ textarea.form-input {
     padding: var(--space-lg);
     text-align: center;
     cursor: pointer;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--ovl-1);
     transition: all 0.2s ease;
     position: relative;
     overflow: hidden;
@@ -473,7 +599,7 @@ textarea.form-input {
     color: var(--text-dim);
     padding: 2px 6px;
     border-radius: 4px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--ovl-1);
 }
 
 .path-segment:last-child {
@@ -483,7 +609,7 @@ textarea.form-input {
 }
 
 .path-arrow {
-    color: rgba(255, 255, 255, 0.3);
+    color: var(--text-dim);
     font-size: 1rem;
 }
 
@@ -558,33 +684,27 @@ textarea.form-input {
 }
 
 .btn-outline:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--ovl-1);
     border-color: var(--text-dim);
 }
 
-.btn-primary {
-    background: var(--primary);
-    color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-    background: var(--primary-hover);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-}
-
+/* 주요 실행 버튼은 검정. 밝은 화면에서 파랑·초록 그라디언트보다 대비가 확실하고,
+   화면에 하나뿐인 '실행' 을 색이 아니라 무게로 구분한다. */
+.btn-primary,
 .btn-gradient {
-    background: linear-gradient(135deg, #3b82f6, #10b981);
-    color: white;
+    background: var(--btn-face);
+    color: var(--btn-text);
 }
 
+.btn-primary:hover:not(:disabled),
 .btn-gradient:hover:not(:disabled) {
-    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+    background: var(--btn-face-hover);
     transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
 }
 
 .btn-copy {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--ovl-2);
     color: var(--text-dim);
     border: 1px solid var(--input-border);
     font-size: 0.75rem;
@@ -592,7 +712,7 @@ textarea.form-input {
 }
 
 .btn-copy:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--ovl-3);
     color: var(--text-main);
 }
 
@@ -647,14 +767,14 @@ textarea.form-input {
 
 /* Log Window */
 .log-container {
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--sunk);
     border-radius: var(--radius-md);
     overflow: hidden;
     border: 1px solid var(--panel-border);
 }
 
 .log-header {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--ovl-1);
     padding: 8px 12px;
     border-bottom: 1px solid var(--panel-border);
 }
@@ -683,24 +803,24 @@ textarea.form-input {
     word-break: break-all;
 }
 
-.log-entry.system { color: #94a3b8; }
-.log-entry.process { color: #60a5fa; }
-.log-entry.success { color: #34d399; }
-.log-entry.error { color: #f87171; }
+.log-entry.system { color: var(--log-system); }
+.log-entry.process { color: var(--log-process); }
+.log-entry.success { color: var(--log-success); }
+.log-entry.error { color: var(--log-error); }
 
 /* Scrollbar */
 ::-webkit-scrollbar {
     width: 5px;
 }
 ::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.1);
+    background: var(--sunk);
 }
 ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--ovl-3);
     border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: var(--ovl-3);
 }
 
 /* Loader */
@@ -755,10 +875,13 @@ textarea.form-input {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    background: rgba(0, 0, 0, 0.15);
+    background: var(--sunk);
     border: 1px solid var(--input-border);
     border-radius: var(--radius-md);
     padding: 12px;
+    width: 50%;
+    max-width: 50%;
+    box-sizing: border-box;
 }
 
 .option-row {
@@ -782,6 +905,8 @@ textarea.form-input {
 
 .option-row .form-input {
     flex: 1;
+    width: 100%;
+    max-width: 100%;
     padding: 8px 12px;
     font-size: 0.85rem;
 }
@@ -793,7 +918,7 @@ textarea.form-input {
     gap: 6px;
     padding: 4px 12px;
     border-radius: 20px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--ovl-1);
     border: 1px solid var(--input-border);
     font-size: 0.78rem;
     font-weight: 500;
@@ -813,20 +938,140 @@ textarea.form-input {
     margin-top: 4px;
 }
 
-/* Collapsible Section */
+/* Collapsible Section & Accordion */
 .collapsible-section {
-    background: rgba(0, 0, 0, 0.12);
+    background: var(--sunk);
     border: 1px solid var(--input-border);
-    border-radius: var(--radius-md);
-    padding: 14px;
-    margin-bottom: var(--space-md);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    margin-bottom: 8px;
 }
 
 .collapsible-section .form-group {
-    margin-bottom: var(--space-sm);
+    margin-bottom: 4px;
 }
 
 .collapsible-section .form-group:last-of-type {
-    margin-bottom: var(--space-sm);
+    margin-bottom: 4px;
 }
 
+/* API Key Accordion */
+details.api-accordion {
+    background: var(--sunk);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 8px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+details.api-accordion[open] {
+    border-color: rgba(59, 130, 246, 0.4);
+    background: rgba(15, 23, 42, 0.6);
+}
+
+details.api-accordion summary.api-accordion-summary {
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: color 0.2s ease, background 0.2s ease;
+    list-style: none;
+}
+
+details.api-accordion summary.api-accordion-summary::-webkit-details-marker {
+    display: none;
+}
+
+details.api-accordion summary.api-accordion-summary::after {
+    content: '▾';
+    font-size: 12px;
+    color: var(--text-dim);
+    transition: transform 0.2s ease;
+}
+
+details.api-accordion[open] summary.api-accordion-summary::after {
+    transform: rotate(180deg);
+}
+
+details.api-accordion summary.api-accordion-summary:hover {
+    color: var(--text-main);
+    background: var(--ovl-1);
+}
+
+details.api-accordion .api-accordion-content {
+    padding: 8px 10px;
+    border-top: 1px solid var(--ovl-2);
+}
+
+/* Redundant / duplicate input field removal on listing/modifying tabs */
+.redundant-field {
+    display: none !important;
+}
+
+
+/* ── Checkbox / radio as a pressed tile ─────────────────────────
+   The square box is gone; the whole chip shows the state instead.
+   The real <input> stays in the DOM, just visually hidden: plenty of code
+   reads and writes .checked (registration payloads, and setChecked() from the
+   shell's fillIframe). Removing it would break those paths silently.       */
+.checkbox-btn,
+.radio-btn {
+    padding: 6px 12px;
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-sm);
+    background: var(--input-bg);
+    user-select: none;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.checkbox-btn input[type="checkbox"],
+.radio-btn input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    margin: 0;
+    pointer-events: none;
+}
+
+.checkbox-btn:has(input:checked),
+.radio-btn:has(input:checked) {
+    background: rgba(59, 130, 246, 0.18);
+    border-color: var(--primary);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+/* The input is invisible, so keyboard focus needs somewhere to show up. */
+.checkbox-btn:focus-within,
+.radio-btn:focus-within {
+    border-color: var(--primary);
+}
+
+.checkbox-btn .flag,
+.radio-btn .flag {
+    height: 14px;
+    width: auto;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.checkbox-btn:has(input:not(:checked)) .flag {
+    filter: grayscale(1);
+    opacity: 0.5;
+}
+
+/* The imweb category is really just a brand table, so the left panel's brand fills
+   it and the picker stays hidden. When that brand is not in the table (a bike brand,
+   say), imweb blocks the registration with "pick a manufacturer" - so the shell
+   un-hides the picker for that one case. Two classes beat .redundant-field alone. */
+.redundant-field.needs-pick {
+    display: flex !important;
+    outline: 1px dashed var(--warning);
+    outline-offset: 3px;
+}

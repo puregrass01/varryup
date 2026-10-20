@@ -1,0 +1,111 @@
+/**
+ * VERY UP VER3 - Unified Theme Stylesheet (theme.css)
+ * 공유 다크 / 라이트 테마 변수 정의.
+ * index_up.html(부모 셸), index.html(등록 폼 iframe), index_seed.html, launcher.html 공통 사용.
+ */
+
+:root {
+  /* ── 레이아웃 & 기본 배경 (다크 테마 기본) ── */
+  --bg-base:        #0f172a;
+  --bg-color:       #0f172a;               /* style.css 호환용 */
+  --bg-panel:       #1e293b;
+  --panel-bg:       rgba(30, 41, 59, 0.7); /* style.css 호환용 */
+  --bg-card:        #263045;
+  --bg-input:       #0f172a;
+  --input-bg:       rgba(15, 23, 42, 0.6); /* style.css 호환용 */
+  --border:         #334155;
+  --panel-border:   var(--ovl-2);          /* style.css 호환용 */
+  --input-border:   var(--ovl-3);          /* style.css 호환용 */
+
+  /* ── 브랜드 & 상태 색상 ── */
+  --accent:         #3b82f6;
+  --primary:        #3b82f6;               /* style.css 호환용 */
+  --accent-hover:   #2563eb;
+  --primary-hover:  #2563eb;               /* style.css 호환용 */
+  --accent-success: #22c55e;
+  --accent-warn:    #f59e0b;
+  --warning:        #f59e0b;               /* style.css 호환용 */
+  --accent-danger:  #ef4444;
+  --danger:         #ef4444;               /* style.css 호환용 */
+
+  /* ── 텍스트 색상 ── */
+  --text-primary:   #f1f5f9;
+  --text-main:      #f8fafc;               /* style.css 호환용 */
+  --text-secondary: #94a3b8;
+  --text-dim:       #94a3b8;               /* style.css 호환용 */
+  --text-muted:     #475569;
+  --inactive-bg:    #1e293b;
+  --inactive-text:  #334155;
+
+  /* ── 공통 크기 & 반경 ── */
+  --registration-width: 380px;
+  --radius:         6px;
+  --radius-sm:      6px;
+  --radius-md:      12px;
+  --radius-lg:      16px;
+  --transition:     0.15s ease;
+
+  /* ── 반투명 오버레이 & 그림자 ── */
+  --ovl-1:          rgba(255, 255, 255, 0.05);
+  --ovl-2:          rgba(255, 255, 255, 0.10);
+  --ovl-3:          rgba(255, 255, 255, 0.16);
+  --sunk:           rgba(0, 0, 0, 0.22);
+  --shadow-panel:   0 8px 32px 0 rgba(0, 0, 0, 0.37);
+
+  /* ── 버튼 & 로고 타일 ── */
+  --btn-face:       #111827;
+  --btn-face-hover: #000000;
+  --btn-text:       #ffffff;
+  --logo-tile:      #ffffff;
+
+  /* ── 로그 텍스트 색상 ── */
+  --log-ok:         #86efac;
+  --log-warn:       #fcd34d;
+  --log-err:        #fca5a5;
+  --log-system:     #94a3b8;
+  --log-process:    #60a5fa;
+  --log-success:    #34d399;
+  --log-error:      #f87171;
+}
+
+/* ── 라이트 테마 (기본 모드) ── */
+:root[data-theme="light"], [data-theme="light"] {
+  --bg-base:        #eef2f7;
+  --bg-color:       #eef2f7;
+  --bg-panel:       #ffffff;
+  --panel-bg:       rgba(255, 255, 255, 0.94);
+  --bg-card:        #ffffff;
+  --bg-input:       #ffffff;
+  --input-bg:       #ffffff;
+  --border:         #d5dbe5;
+  --panel-border:   var(--ovl-2);
+  --input-border:   var(--ovl-3);
+
+  --accent:         #2563eb;
+  --primary:        #2563eb;
+  --accent-hover:   #1d4ed8;
+  --primary-hover:  #1d4ed8;
+
+  --text-primary:   #0f172a;
+  --text-main:      #0f172a;
+  --text-secondary: #52627a;
+  --text-dim:       #52627a;
+  --text-muted:     #7c8aa0;
+  --inactive-bg:    #e7ecf3;
+  --inactive-text:  #c3ccda;
+
+  --ovl-1:          rgba(15, 23, 42, 0.04);
+  --ovl-2:          rgba(15, 23, 42, 0.08);
+  --ovl-3:          rgba(15, 23, 42, 0.16);
+  --sunk:           rgba(15, 23, 42, 0.05);
+  --shadow-panel:   0 4px 16px 0 rgba(15, 23, 42, 0.10);
+  --logo-tile:      #f1f4f8;
+
+  --log-ok:         #15803d;
+  --log-warn:       #a16207;
+  --log-err:        #b91c1c;
+  --log-system:     #64748b;
+  --log-process:    #1d4ed8;
+  --log-success:    #15803d;
+  --log-error:      #b91c1c;
+}

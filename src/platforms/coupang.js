@@ -1,4 +1,7 @@
 import { CoupangAPI } from './coupang_api.js';
+import { markPreSend } from '../utils/api_error.js';
+import { extractNaverDetailImages, replaceNaverDetailImages } from './naver_products.js';
+import { parseImageUrls } from '../utils/bulk_images.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -48,8 +51,8 @@ export async function findProductIdsFromSheet(brand, model) {
 
     const url = `https://docs.google.com/spreadsheets/d/${PRODUCT_SHEET_ID}/export?format=csv`;
     let res;
-    try { res = await fetch(url, { redirect: 'follow' }); }
-    catch (e) { throw new Error(`상품 시트를 불러오지 못했습니다: ${e.message}`); }
+    try { res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(30000) }); }
+    catch (e) { throw new Error(`상품 시트를 불러오지 못했습니다: ${e.name === 'TimeoutError' ? '응답 시간 초과(30초)' : e.message}`); }
     if (!res.ok) throw new Error(`상품 시트 응답 오류 (${res.status}). 시트 공유 설정(링크가 있는 모든 사용자 보기)을 확인해 주세요.`);
     const csv = await res.text();
     if (/^\s*<(!doctype|html)/i.test(csv)) throw new Error('상품 시트에 접근할 수 없습니다. 시트 공유를 "링크가 있는 모든 사용자"로 설정해 주세요.');
@@ -90,10 +93,46 @@ function getSafeUrl(urlStr) {
  * 쿠팡 상품 등록 모듈 (Open API 방식)
  */
 export class Coupang {
-  constructor(configPath) {
+  /**
+   * @param {string} configPath
+   * @param {import('./coupang_store.js').CoupangStore|null} [store] 옵션 판매가 로컬 캐시. 없으면 캐시를 쓰지 않는다
+   *   (테스트처럼 설정 파일만 넘기면 아무 파일도 더 쓰지 않는다 — amazon.js 의 AmazonStore 와 같은 방식).
+   */
+  constructor(configPath, store = null) {
     this.configPath = configPath;
     this.config = null;
     this.api = null;
+    this.store = store;
+  }
+
+  // 캐시는 보여 주기용이라 실패해도 쿠팡 작업은 그대로 간다.
+  _cache(work) {
+    if (!this.store || !this.config?.vendorId) return;
+    try { work(this.store, this.config.vendorId); }
+    catch (e) { console.warn('[쿠팡] 판매가 캐시 저장 실패(무시):', e.message); }
+  }
+
+  // API 가 판매가를 알게 될 때마다(가격 조회·가격 변경) 캐시에 적는다. API 를 새로 만들 때마다 다시 단다.
+  _watchPrices() {
+    if (this.api) this.api.onPrice = (vendorItemId, salePrice) => this._cache((store, vendorId) => store.updatePrice(vendorId, vendorItemId, salePrice));
+  }
+
+  /**
+   * 고정 IP 프록시 옵션. runtimeProxy(로그인 시 메모리에 주입되는 직원 토큰)가 우선이고,
+   * 없으면 설정 파일 값을 쓴다. 토큰이 디스크에 남지 않도록 이 순서를 지킨다.
+   *
+   * ⚠ 왜 헬퍼로 뺐나: 예전에는 loadConfig() 에서만 프록시를 넘기고 saveConfig() 에서는
+   *   CoupangAPI 를 **인자 4개**로 다시 만들어, 5번째인 proxy 가 조용히 빠졌다.
+   *   그래서 직원이 쿠팡 설정을 저장하는 순간부터 앱을 다시 켤 때까지 모든 호출이
+   *   PC 의 IP 로 직접 나갔다 — 쿠팡은 IP 허용목록을 쓰므로 전부 403 이 된다.
+   *   화면에는 쿠팡 원문("IP가 허용되지 않음")만 떠서 원인을 짚기 어려웠다.
+   *   두 곳이 같은 값을 쓰게 만들어 그 어긋남 자체를 없앤다.
+   */
+  _proxyOpts() {
+    return {
+      proxyUrl: this.runtimeProxy?.proxyUrl || this.config?.proxyUrl || '',
+      proxyToken: this.runtimeProxy?.proxyToken || this.config?.proxyToken || ''
+    };
   }
 
   loadConfig() {
@@ -101,18 +140,35 @@ export class Coupang {
       throw new Error('쿠팡 설정 파일이 없습니다. 먼저 API 설정을 완료해주세요.');
     }
     const raw = fs.readFileSync(this.configPath, 'utf-8');
-    this.config = JSON.parse(raw);
+    const newConfig = JSON.parse(raw);
 
-    if (!this.config.vendorId || !this.config.accessKey || !this.config.secretKey) {
+    if (!newConfig.vendorId || !newConfig.accessKey || !newConfig.secretKey) {
       throw new Error('쿠팡 API 키가 설정되지 않았습니다. 쿠팡 탭에서 API 설정을 완료해주세요.');
     }
 
-    this.api = new CoupangAPI(
-      this.config.vendorId,
-      this.config.accessKey,
-      this.config.secretKey,
-      this.config.vendorId
-    );
+    const oldConfig = this.config;
+    this.config = newConfig;
+    const proxy = this._proxyOpts();
+    const canReuse = this.api && oldConfig
+      && oldConfig.vendorId === newConfig.vendorId
+      && oldConfig.accessKey === newConfig.accessKey
+      && oldConfig.secretKey === newConfig.secretKey
+      && (oldConfig.vendorUserId || oldConfig.vendorId) === (newConfig.vendorUserId || newConfig.vendorId)
+      && this.api.proxyUrl === (proxy.proxyUrl || '')
+      && this.api.proxyToken === (proxy.proxyToken || '');
+
+    if (!canReuse) {
+      const oldCache = this.api?._productCache;
+      this.api = new CoupangAPI(
+        this.config.vendorId,
+        this.config.accessKey,
+        this.config.secretKey,
+        this.config.vendorUserId || this.config.vendorId,
+        proxy
+      );
+      if (oldCache) this.api._productCache = oldCache;
+    }
+    this._watchPrices();
 
     return this.config;
   }
@@ -130,12 +186,18 @@ export class Coupang {
     let nextToken = '', pages = 0;
     do {
       const r = await this.api.listProducts(nextToken, 100);
-      for (const d of (r.data || [])) {
+      // 오류 본문을 `r.data || []` 로 읽으면 '상품 0개'가 5분 동안 캐시되어 검색이 전부 비어 보인다.
+      // 거부 코드는 _request 가 던지고, 모양이 다른 응답도 여기서 멈춘다(캐시에 쓰기 전).
+      if (!Array.isArray(r?.data)) {
+        throw new Error(`쿠팡 상품 목록 응답이 예상과 다릅니다 (code=${r?.code ?? '없음'}). 목록을 캐시하지 않았습니다.`);
+      }
+      for (const d of r.data) {
         all.push({ id: String(d.sellerProductId), name: String(d.sellerProductName || '') });
       }
       nextToken = r.nextToken;
       pages++;
     } while (nextToken && pages < 50);
+    if (nextToken) throw new Error('쿠팡 목록이 50페이지를 넘었습니다. 전체 목록을 읽지 못했습니다.');
     this._allProducts = all;
     this._allProductsAt = now;
     console.log(`쿠팡 상품 목록 수집: ${all.length}개 (${pages}페이지)`);
@@ -158,6 +220,40 @@ export class Coupang {
     });
   }
 
+  /**
+   * 상품 일괄 수정 목록. 쿠팡 상품 목록 API 는 옵션ID·판매가를 주지 않는다(상품 목록 페이징 조회 — 공식 문서).
+   * 아마존·eBay 가 목록 캐시를 '(목록)' 판매가로 보여 주듯, 이 PC 에서 불러온 적 있는 상품은 그때의 옵션·판매가
+   * 행으로 펼친다(coupang_store.js). 처음 보는 상품은 예전처럼 상품 한 줄이다.
+   * 보여 주기만 한다 — 판매가를 고치려면 지금처럼 현재가를 다시 불러오고, 저장은 그 값과 비교한다.
+   * @returns {{ items: object[], cached: number }} cached: 옵션·판매가를 펼친 상품 수
+   */
+  async listForPriceEdit() {
+    const products = await this.fetchAllProducts(true);
+    const known = this.store && this.config?.vendorId ? this.store.products(this.config.vendorId) : {};
+    // 쿠팡 목록에 없는 상품(삭제됨)은 캐시에서 뺀다 — 목록은 전체를 다 읽었을 때만 돌아온다(fetchAllProducts).
+    this._cache((store, vendorId) => store.keepOnly(vendorId, products.map(p => p.id)));
+    const when = iso => {
+      const d = new Date(iso);
+      return Number.isFinite(d.getTime()) ? d.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    };
+    let cached = 0;
+    const items = products.flatMap(p => {
+      const options = known[p.id]?.options || [];
+      if (!options.length) return [p];
+      cached++;
+      return options.map(o => {
+        const at = o.price === '' ? '' : when(o.checkedAt);
+        return {
+          ...p, optionId: o.optionId, variant: o.itemName, price: o.price,
+          ...(o.readonly
+            ? { readonly: true, result: '승인완료 전 옵션이라 판매가를 바꿀 수 없습니다(쿠팡 승인 후 가능).' }
+            : { result: ['현재가 조회 전', at && `${at} 에 읽은 판매가`].filter(Boolean).join(' · ') }),
+        };
+      });
+    });
+    return { items, cached };
+  }
+
   saveConfig(newConfig) {
     if (this.config) {
       this.config = { ...this.config, ...newConfig };
@@ -168,12 +264,15 @@ export class Coupang {
     console.log('쿠팡 설정 저장 완료:', this.configPath);
 
     if (this.config.vendorId && this.config.accessKey && this.config.secretKey) {
+      // 5번째 인자(proxy)를 빠뜨리면 이 순간부터 쿠팡 호출이 PC IP 로 직접 나가 403 이 된다.
       this.api = new CoupangAPI(
         this.config.vendorId,
         this.config.accessKey,
         this.config.secretKey,
-        this.config.vendorId
+        this.config.vendorId,
+        this._proxyOpts()
       );
+      this._watchPrices();
     }
   }
 
@@ -190,29 +289,6 @@ export class Coupang {
   async getReturnCenters() {
     if (!this.api) this.loadConfig();
     return await this.api.getReturnCenters();
-  }
-
-  async getCategories() {
-    if (!this.api) this.loadConfig();
-    return await this.api.getCategories();
-  }
-
-  async getCategoryMeta(categoryCode) {
-    if (!this.api) this.loadConfig();
-    return await this.api.getCategoryMeta(categoryCode);
-  }
-
-  async registerProduct(data) {
-    if (!this.api) this.loadConfig();
-
-    console.log('쿠팡 상품 등록 시작:', data.title);
-    const payload = this._buildProductPayload(data);
-
-    console.log('쿠팡 API 요청 데이터 구성 완료');
-    const result = await this.api.registerProduct(payload);
-
-    console.log('✓ 쿠팡 상품 등록 완료!');
-    return result;
   }
 
   static TEMPLATE_CAR = '13670011949';
@@ -260,7 +336,12 @@ export class Coupang {
     console.log('COUPANG_PAYLOAD:', JSON.stringify(payload, null, 2));
 
     const result = await this.api.registerProduct(payload);
-    console.log('✓ 쿠팡 복사등록 완료!');
+    // 거부 본문(code:'ERROR')은 _request 가 던진다. 성공 코드인데 등록상품ID가 없으면 무엇이
+    // 만들어졌는지 알 수 없으므로 성공으로 보고하지 않는다(예전엔 "등록되었습니다 (ID: undefined)").
+    if (result?.data == null || result.data === '') {
+      throw new Error(`쿠팡 응답에 등록상품ID가 없습니다 (code=${result?.code ?? '없음'}, message=${result?.message || '없음'}). 쿠팡 판매자센터에서 등록 여부를 확인해주세요.`);
+    }
+    console.log(`✓ 쿠팡 복사등록 완료! (등록상품ID: ${result.data})`);
     return result;
   }
 
@@ -333,11 +414,6 @@ export class Coupang {
       });
   }
 
-  /** 아이템(옵션)에서 화면에 노출되는 옵션값 attribute를 찾는다 */
-  _exposedAttrIndex(item) {
-    return (item.attributes || []).findIndex(a => a.exposed === 'EXPOSED');
-  }
-
   /**
    * 구매옵션(EXPOSED) 속성 목록.
    * 한 상품에 노출 옵션이 여러 개일 수 있다. 예) 수량="1개" + 차종="B104 - 3세대(21.11~)"
@@ -405,27 +481,148 @@ export class Coupang {
 
     console.log(`  옵션 ${options.length}개 / 상세이미지 ${detailImages.length}장 불러옴`);
 
+    // 일괄 수정 목록이 옵션 행을 보여 주도록 옵션 구성을 적어 둔다. 판매가는 가격 조회 API 가 채운다(_watchPrices).
+    // 옵션ID 가 없는 옵션(승인 전)은 bulk_price_ipc 의 현재가 행처럼 'item-{sellerProductItemId}' 로 둔다.
+    this._cache((store, vendorId) => store.saveProduct(vendorId, existing.sellerProductId ?? productId, {
+      name: existing.sellerProductName || '', statusName: existing.statusName || '',
+      options: options.map(o => ({
+        optionId: o.vendorItemId ? String(o.vendorItemId) : 'item-' + (o.sellerProductItemId ?? o.index),
+        itemName: o.itemName, readonly: !o.vendorItemId, salePrice: o.salePrice,
+      })),
+    }));
+
     return {
       productId: existing.sellerProductId,
       title: existing.sellerProductName || '',
       statusName: existing.statusName || '',
       options,
       detailImages,
+      imageContents: items.map(x => [x.sellerProductItemId, x.contents]),
     };
+  }
+
+  /**
+   * 옵션 하나의 판매가를 바꾼다(일괄 수정용).
+   * 상품 수정(PUT seller-products)은 승인 전 상품만 판매가를 바꿀 수 있고 승인 요청까지 다시 보내므로
+   * (쿠팡 공식 문서), 승인완료 상품은 아이템별 가격 변경 API 로만 바꾼다.
+   * 여기서 쓰기 전에 던지는 오류는 stage=pre-send 로 표시해 화면이 '전송 안 됨'으로 구분하게 한다.
+   * @returns {{ unchanged: boolean, salePrice: number }}
+   */
+  async changeItemPrice({ vendorItemId, salePrice, expectedPrice }) {
+    if (!this.api) this.loadConfig();
+    const price = Number(salePrice);
+    if (!Number.isSafeInteger(price) || price <= 0 || price % 10 !== 0) {
+      throw markPreSend(new Error('쿠팡 판매가는 10원 단위 양의 정수여야 합니다.'));
+    }
+    if (!vendorItemId) throw markPreSend(new Error('승인완료 전 옵션(옵션ID 없음)은 판매가를 바꿀 수 없습니다.'));
+    let current;
+    try { current = await this.api.getItemInventory(vendorItemId); }
+    catch (e) { throw markPreSend(e); }
+    const now = Number(current.salePrice);
+    if (expectedPrice !== undefined && now !== Number(expectedPrice)) {
+      throw markPreSend(new Error(`쿠팡 현재 판매가(${now.toLocaleString('ko-KR')}원)가 조회 이후 변경됐습니다. 다시 불러온 뒤 수정하세요.`));
+    }
+    if (now === price) return { unchanged: true, salePrice: now };
+    // 쿠팡 기본 변경폭: 기존가 대비 최대 50% 인하·100% 인상. 넘으면 쿠팡이 거부하므로 보내기 전에 알린다.
+    if (now > 0 && (price < now * 0.5 || price > now * 2)) {
+      throw markPreSend(new Error(`쿠팡은 한 번에 기존가(${now.toLocaleString('ko-KR')}원)의 50% 인하·100% 인상까지만 바꿀 수 있습니다. 두 번에 나눠 바꾸거나 쿠팡 판매자센터에서 변경해주세요.`));
+    }
+    await this.api.updateItemPrice(vendorItemId, price);
+    return { unchanged: false, salePrice: price };
+  }
+
+  /**
+   * 가격 변경 API 로 바꾼 옵션들을 다시 읽어 확인한다. 다르면 1.5초 뒤 한 번 더 읽고, 그래도 다르면 던진다.
+   * 조회 자체가 실패하면 변경은 성공한 것이므로 던지지 않고 문구로만 남긴다.
+   */
+  async _verifyItemPrices(changes) {
+    return this._verifyItems(changes, { label: '판매가', want: c => c.price, read: inv => Number(inv.salePrice), unit: '원', strict: true });
+  }
+
+  // 재고는 다시 읽은 값(amountInStock)이 요청과 달라도 실패로 치지 않는다 — 수량 API 가 받은 것(code SUCCESS)은
+  // 이미 확인했고, amountInStock 이 주문 대기분을 뺀 값인지는 실계정으로 확인하지 못했다. 다르면 문구로 알린다.
+  async _verifyItemStocks(changes) {
+    return this._verifyItems(changes, { label: '재고', want: c => c.quantity, read: inv => Number(inv.amountInStock), unit: '개', strict: false });
+  }
+
+  async _verifyItems(changes, { label, want, read, unit, strict }) {
+    const fmt = n => `${n.toLocaleString('ko-KR')}${unit}`;
+    const differs = async () => {
+      const bad = [];
+      for (const c of changes) {
+        const now = read(await this.api.getItemInventory(c.vendorItemId));
+        if (now !== want(c)) bad.push(`"${c.name}" 현재 ${fmt(now)}(요청 ${fmt(want(c))})`);
+      }
+      return bad;
+    };
+    try {
+      let bad = await differs();
+      if (bad.length) { await sleep(1500); bad = await differs(); }
+      if (bad.length && !strict) return `${label} ${changes.length}개 옵션 변경 요청 성공(다시 읽은 값이 다름: ${bad.join(', ')} — 쿠팡에서 확인하세요)`;
+      if (bad.length) throw new Error(`쿠팡이 ${label} 변경을 받았지만 아직 반영되지 않았습니다: ${bad.join(', ')}. 잠시 후 다시 불러와 확인해주세요.`);
+      return `${label} ${changes.length}개 옵션 변경 확인`;
+    } catch (e) {
+      if (/반영되지 않았습니다/.test(e.message)) throw e;
+      return `${label} ${changes.length}개 옵션 변경 요청 성공(확인 조회 실패: ${e.message})`;
+    }
   }
 
   /**
    * 편집한 옵션/상세이미지를 반영해 저장한다.
    * data = { productId, options: [...], detailImages: [url...] }
    */
+  async updateBulkDetailImages({ productId, images, expectedContents }) {
+    let payload;
+    try {
+      if (!this.api) this.loadConfig();
+      const urls = parseImageUrls(images, 'coupang');
+      // 충돌 검사·PUT 본문은 30초 조회 캐시가 아니라 지금 원본으로 한다.
+      const existing = (await this.api.getProduct(productId, { force: true }))?.data;
+      if (!existing?.items?.length) throw new Error('상품 옵션을 불러올 수 없습니다.');
+      if (JSON.stringify(existing.items.map(x => [x.sellerProductItemId, x.contents])) !== JSON.stringify(expectedContents))
+        throw new Error('상세 이미지가 변경됐습니다. 다시 불러오세요.');
+      payload = JSON.parse(JSON.stringify(existing));
+      for (const item of payload.items) {
+        const slots = [];
+        for (const block of item.contents || []) for (const detail of block.contentDetails || []) {
+          const raw = String(detail.content || '');
+          const direct = String(detail.detailType).toUpperCase() === 'IMAGE' ||
+            (String(block.contentsType).toUpperCase().startsWith('IMAGE') && !/<img/i.test(raw));
+          const count = direct ? 1 : extractNaverDetailImages(raw).length;
+          if (count) slots.push({ block, detail, count, direct });
+        }
+        let cursor = 0;
+        slots.forEach((slot, index) => {
+          const next = urls.slice(cursor, index === slots.length - 1 ? undefined : cursor + slot.count);
+          cursor += next.length;
+          // Direct IMAGE fields cannot carry multiple URLs. Use HTML for their replacement.
+          if (slot.direct) {
+            slot.block.contentsType = 'HTML'; slot.detail.detailType = 'TEXT';
+            slot.detail.content = replaceNaverDetailImages('', next.map(url => ({ url, isNew: true })));
+          } else slot.detail.content = replaceNaverDetailImages(slot.detail.content, next.map(url => ({ url, isNew: true })));
+        });
+        if (!slots.length) {
+          item.contents ||= [];
+          item.contents.push(...this._buildDetailContents(urls.map(url => ({ url }))));
+        }
+      }
+      payload.requested = true;
+    } catch (e) { throw markPreSend(e); }
+    const result = await this.api.updateProduct(productId, payload);
+    if (!['SUCCESS', 'OK', '200'].includes(String(result?.code).toUpperCase()))
+      throw Object.assign(new Error(result?.message || '쿠팡 이미지 수정 응답을 확인할 수 없습니다.'), result?.code ? { rejected: true } : {});
+    return result;
+  }
+
   async updateExistingProduct(data) {
     if (!this.api) this.loadConfig();
 
     const productId = data.productId;
     if (!productId) throw new Error('수정할 상품 ID가 입력되지 않았습니다.');
 
-    // 항상 최신 원본을 다시 조회해서 그 위에 덮어쓴다(중간 변경 유실 방지).
-    const res = await this.api.getProduct(productId);
+    // 항상 최신 원본을 다시 조회해서 그 위에 덮어쓴다(중간 변경 유실 방지). 30초 조회 캐시를 쓰면 그 사이
+    // Wing·다른 PC 에서 바꾼 내용을 옛 본문으로 덮으므로 force 로 읽는다.
+    const res = await this.api.getProduct(productId, { force: true });
     const existing = res?.data;
     if (!existing) {
       throw new Error(`상품 조회 실패 (ID: ${productId}). 올바른 상품 ID인지 확인해주세요.`);
@@ -449,6 +646,9 @@ export class Coupang {
     }
 
     const sourceList = editedOptions || oldItems.map((it, i) => ({ index: i, isNew: false }));
+    const usedSources = new Set();
+    const priceChanges = [];   // 승인완료 옵션의 판매가 변경 — 아이템별 가격 변경 API 로 따로 보낸다
+    const stockChanges = [];   // 승인완료 옵션의 재고 변경 — 아이템별 수량 변경 API 로 따로 보낸다
 
     const newItems = sourceList.map(opt => {
       // 기존 옵션이면 원본 아이템을, 새 옵션이면 템플릿을 복제해서 식별자를 제거
@@ -459,8 +659,25 @@ export class Coupang {
         delete item.vendorItemId;
         delete item.itemId;
       } else {
-        const src = oldItems[opt.index] ?? oldItems.find(o => o.sellerProductItemId === opt.sellerProductItemId);
-        if (!src) throw new Error(`옵션 원본을 찾지 못했습니다 (index: ${opt.index}).`);
+        // 기존 옵션은 sellerProductItemId(쿠팡이 준 고정 ID)로 찾는다. index 는 '불러올 때의 순서'라
+        // 저장 뒤 옵션이 지워지면 어긋난다 — 예전엔 index 를 먼저 봐서, 옵션 하나를 지우고 한 번 더
+        // 저장하면 옛 index 가 다른 아이템을 가리켜 한 옵션은 사라지고 한 옵션은 두 번 들어갔다.
+        // ID 가 없을 때(ID 를 안 보내는 옛 화면)만 index 로 찾는다. ID 가 있는데 못 찾으면 index 로
+        // 대신하지 않고 멈춘다 — 그 index 는 이미 다른 옵션일 수 있다.
+        const hasId = opt.sellerProductItemId != null && opt.sellerProductItemId !== '';
+        const src = hasId
+          ? oldItems.find(o => o.sellerProductItemId != null && String(o.sellerProductItemId) === String(opt.sellerProductItemId))
+          : oldItems[opt.index];
+        if (!src) {
+          throw new Error(hasId
+            ? `옵션 원본을 찾지 못했습니다 (옵션ID: ${opt.sellerProductItemId}). 쿠팡에서 이미 삭제됐을 수 있습니다 — 상품을 다시 불러온 뒤 수정해주세요.`
+            : `옵션 원본을 찾지 못했습니다 (index: ${opt.index}).`);
+        }
+        // 같은 원본이 두 번 쓰이면 저장 결과에 같은 옵션이 둘 생긴다(쿠팡은 이걸 막지 않는다).
+        if (usedSources.has(src)) {
+          throw new Error(`같은 기존 옵션("${src.itemName || src.sellerProductItemId}")이 두 번 들어 있어 저장을 중단했습니다. 상품을 다시 불러온 뒤 수정해주세요.`);
+        }
+        usedSources.add(src);
         item = JSON.parse(JSON.stringify(src));
       }
 
@@ -481,11 +698,20 @@ export class Coupang {
       }
       if (opt.salePrice != null && opt.salePrice !== '') {
         const p = parseInt(opt.salePrice);
-        if (p > 0) { item.salePrice = p; item.originalPrice = p; }
+        // 승인완료 옵션(vendorItemId 있음)의 판매가는 상품 수정 PUT 으로 바뀌지 않는다(쿠팡 공식 문서).
+        // 여기서는 기록만 하고, 아래에서 가격 변경 API 로 먼저 바꾼다.
+        if (p > 0 && !opt.isNew && item.vendorItemId) {
+          if (p !== Number(item.salePrice)) priceChanges.push({ item, vendorItemId: item.vendorItemId, name: item.itemName, price: p });
+        } else if (p > 0) { item.salePrice = p; item.originalPrice = p; }
       }
       if (opt.stock != null && opt.stock !== '') {
         const s = parseInt(opt.stock);
-        if (s >= 0) item.maximumBuyCount = s;
+        // 재고도 판매가처럼 승인완료 옵션은 PUT 으로 바뀌지 않는다(쿠팡 공식 문서). 예전에는 PUT 본문에만 넣고 '성공'으로
+        // 알렸다. 화면에 보인 값(상품 문서의 maximumBuyCount)에서 바꾼 옵션만 수량 API 로 보낸다 — 안 바꾼 옵션을 실재고와
+        // 견줘 보내면 그 사이 팔린 수량이 되살아난다.
+        if (s >= 0 && !opt.isNew && item.vendorItemId) {
+          if (s !== Number(item.maximumBuyCount)) stockChanges.push({ vendorItemId: item.vendorItemId, name: item.itemName, quantity: s });
+        } else if (s >= 0) item.maximumBuyCount = s;
       }
 
       // 대표이미지: 사용자가 새 URL을 넣은 경우에만 교체한다.
@@ -513,17 +739,72 @@ export class Coupang {
 
     // 상품명 변경 (입력했을 때만). 쿠팡은 3개 필드를 함께 맞춰야 한다.
     const newTitle = String(data.title ?? '').trim();
-    if (newTitle && newTitle !== existing.sellerProductName) {
+    const titleChanged = !!newTitle && newTitle !== existing.sellerProductName;
+    if (titleChanged) {
       payload.sellerProductName = newTitle;
       payload.displayProductName = newTitle;
       payload.generalProductName = newTitle;
       console.log(`상품명 변경: "${existing.sellerProductName}" → "${newTitle}"`);
     }
 
+    // 판매가·재고만 바뀌었으면 상품 수정 PUT 을 보내지 않는다 — requested:true 라 승인 요청이 다시 나간다.
+    // (아무것도 안 바뀐 저장은 예전처럼 PUT 을 보낸다.)
+    const priceOnly = (priceChanges.length > 0 || stockChanges.length > 0) && !titleChanged && !newDetailContents
+      && JSON.stringify(newItems) === JSON.stringify(oldItems);
+
+    // 가격은 아무것도 보내기 전에 전부 검사한다(10원 단위, 기존가 대비 50% 인하·100% 인상).
+    for (const c of priceChanges) {
+      if (c.price % 10 !== 0) throw new Error(`"${c.name}" 판매가(${c.price}원)는 10원 단위여야 합니다. 아무것도 저장하지 않았습니다.`);
+      c.now = Number((await this.api.getItemInventory(c.vendorItemId)).salePrice);
+      if (c.now > 0 && (c.price < c.now * 0.5 || c.price > c.now * 2)) {
+        throw new Error(`"${c.name}" 판매가는 한 번에 기존가(${c.now.toLocaleString('ko-KR')}원)의 50% 인하·100% 인상까지만 바꿀 수 있습니다. 아무것도 저장하지 않았습니다.`);
+      }
+    }
+    const changed = [];
+    for (const c of priceChanges.filter(c => c.now !== c.price)) {
+      try {
+        await this.api.updateItemPrice(c.vendorItemId, c.price);
+      } catch (e) {
+        const done = changed.length ? ` 앞의 ${changed.length}개 옵션 판매가는 이미 바뀌었습니다.` : '';
+        throw new Error(`"${c.name}" 판매가 변경 실패: ${e.message}${done} 상품명·옵션·이미지 수정은 보내지 않았습니다.`, { cause: e });
+      }
+      changed.push(c);
+    }
+    // PUT 본문에도 새 가격을 넣어, 쿠팡이 본문 가격을 읽더라도 방금 바꾼 값으로 되돌리지 않게 한다.
+    for (const c of priceChanges) c.item.salePrice = c.price;
+    if (changed.length) console.log(`쿠팡 판매가 변경 (가격 변경 API): ${changed.map(c => `${c.name} ${c.now}→${c.price}`).join(', ')}`);
+
+    const stocked = [];
+    const sentNote = () => [changed.length && `판매가 ${changed.length}개`, stocked.length && `재고 ${stocked.length}개`].filter(Boolean).join('·');
+    for (const c of stockChanges) {
+      try {
+        await this.api.updateItemQuantity(c.vendorItemId, c.quantity);
+      } catch (e) {
+        const done = sentNote() ? ` 앞의 ${sentNote()} 옵션은 이미 바뀌었습니다.` : '';
+        throw new Error(`"${c.name}" 재고 변경 실패: ${e.message}${done} 상품명·옵션·이미지 수정은 보내지 않았습니다.`, { cause: e });
+      }
+      stocked.push(c);
+    }
+    if (stocked.length) console.log(`쿠팡 재고 변경 (수량 변경 API): ${stocked.map(c => `${c.name} → ${c.quantity}`).join(', ')}`);
+
+    if (priceOnly) {
+      const verified = [changed.length && await this._verifyItemPrices(changed), stocked.length && await this._verifyItemStocks(stocked)]
+        .filter(Boolean).join(', ') || '판매가가 이미 같습니다';
+      console.log(`✓ 쿠팡 판매가·재고 변경 완료 (${verified}) — 상품 수정 요청은 보내지 않았습니다.`);
+      return { code: 'SUCCESS', priceOnly: true, verified };
+    }
+    const priceNote = msg => (sentNote() ? `${sentNote()} 옵션은 이미 바뀌었습니다. 나머지 수정은 실패: ${msg}` : msg);
+
     const removed = oldItems.length - newItems.filter(i => i.sellerProductItemId).length;
     console.log(`쿠팡 상품수정 저장 (옵션 ${oldItems.length} → ${newItems.length}개${removed > 0 ? `, 삭제 ${removed}개` : ''})`);
 
-    const result = await this.api.updateProduct(productId, payload);
+    let result;
+    try {
+      result = await this.api.updateProduct(productId, payload);
+    } catch (e) {
+      e.message = priceNote(e.message);
+      throw e;
+    }
 
     // 쿠팡은 검증 실패도 HTTP 200 + {code:'ERROR', message:'...'} 로 돌려준다.
     // 본문 코드를 확인하지 않으면 실패를 성공으로 오보하게 된다.
@@ -531,7 +812,7 @@ export class Coupang {
     const apiMsg = result?.message || result?.data?.message || '';
     console.log(`[쿠팡 수정 응답] code=${code || '(없음)'} message=${apiMsg || '(없음)'}`);
     if (code && !['SUCCESS', 'OK', '200'].includes(code)) {
-      throw new Error(`쿠팡이 수정을 거부했습니다: ${apiMsg || code}`);
+      throw new Error(priceNote(`쿠팡이 수정을 거부했습니다: ${apiMsg || code}`));
     }
 
     // 실제 반영 검증: 다시 조회해서 옵션 수/이름과 상세 이미지 수를 대조한다.
@@ -550,7 +831,9 @@ export class Coupang {
 
       verify = `옵션 ${afterItems.length}개(요청 ${newItems.length}개), 상세이미지 ${afterImgs.length}장`
         + (newDetailContents ? `(요청 ${newDetailContents.length}장)` : '')
-        + (payload.sellerProductName ? `, 상품명 ${titleOk ? '변경됨' : '미반영'}` : '');
+        + (payload.sellerProductName ? `, 상품명 ${titleOk ? '변경됨' : '미반영'}` : '')
+        + (changed.length ? `, ${await this._verifyItemPrices(changed)}` : '')
+        + (stocked.length ? `, ${await this._verifyItemStocks(stocked)}` : '');
 
       if (!titleOk) {
         throw new Error(`상품명이 반영되지 않았습니다. 현재: "${after?.sellerProductName}"`);
@@ -611,6 +894,7 @@ export class Coupang {
         price,
         stock,
         newSpecHtml,
+        detailHtml: data.detailHtml ? [newSpecHtml, data.detailHtml].filter(Boolean).join('\n') : '',
         newImageUrl,
         mainImageUrl,
         quantity,
@@ -653,7 +937,7 @@ export class Coupang {
     };
   }
 
-  _cloneTemplateItem(templateItem, { itemName, carModel, price, stock, newSpecHtml, newImageUrl, mainImageUrl, quantity }) {
+  _cloneTemplateItem(templateItem, { itemName, carModel, price, stock, newSpecHtml, detailHtml, newImageUrl, mainImageUrl, quantity }) {
     const contents = [];
 
     // 1. 원본 템플릿의 상세설명 HTML 복제
@@ -665,7 +949,9 @@ export class Coupang {
 
     // 2. 신규 상세이미지(조견표) 주소를 <img> 태그로 구성하여 첫 번째 </p> 뒤에 삽입
     let mergedHtml = '';
-    if (newImageUrl) {
+    if (detailHtml) {
+      mergedHtml = detailHtml;
+    } else if (newImageUrl) {
       const safeUrl = getSafeUrl(newImageUrl);
       const newImageTag = `<p style="text-align: center;"><img style="display: block; margin-left: auto; margin-right: auto;" src="${safeUrl}" /></p>`;
       
@@ -769,174 +1055,5 @@ export class Coupang {
       offerCondition: 'NEW',
       offerDescription: '',
     };
-  }
-
-  _buildProductPayload(data) {
-    const config = this.config;
-    const now = new Date().toISOString().replace(/\.\d+Z$/, '');
-    const endDate = '2099-01-01T23:59:59';
-
-    let detailHtml = '';
-    if (data.esmHtml) {
-      detailHtml = data.esmHtml;
-      if (!detailHtml.toLowerCase().includes('<img') && !detailHtml.toLowerCase().includes('<div')) {
-        if (detailHtml.trim().startsWith('http')) {
-          detailHtml = `<img src="${detailHtml.trim()}" />`;
-        } else {
-          detailHtml = `<img src="${detailHtml}" />`;
-        }
-      }
-    }
-
-    let imageUrl = getSafeUrl(data.esmImageUrl || '');
-    if (!imageUrl && data.esmHtml) {
-      const htmlTrimmed = data.esmHtml.trim();
-      if (htmlTrimmed.startsWith('http') && (!htmlTrimmed.includes('<') || htmlTrimmed.match(/\.(jpg|jpeg|png|gif|webp)$/i))) {
-        imageUrl = getSafeUrl(htmlTrimmed);
-      } else {
-        const match = htmlTrimmed.match(/src=["']([^"']+)["']/i);
-        if (match) imageUrl = getSafeUrl(match[1]);
-      }
-    }
-
-    const items = this._buildItems(data, imageUrl, detailHtml, now, endDate);
-
-    return {
-      displayCategoryCode: config.displayCategoryCode,
-      sellerProductName: data.title,
-      displayProductName: data.title,
-      vendorId: config.vendorId,
-      saleStartedAt: now,
-      saleEndedAt: endDate,
-      brand: config.brand || '옵틱글래스',
-      generalProductName: data.title,
-      productGroup: '',
-      deliveryMethod: config.deliveryMethod || 'SEQUENCIAL',
-      deliveryCompanyCode: config.deliveryCompanyCode || 'CJGLS',
-      deliveryChargeType: config.deliveryChargeType || 'FREE',
-      deliveryCharge: config.deliveryCharge || 0,
-      freeShipOverAmount: 0,
-      deliveryNotice: '',
-      returnCenterCode: config.returnCenterCode ? String(config.returnCenterCode) : '',
-      returnChargeName: config.returnChargeName || '(주)퓨어그래스',
-      returnCharge: config.returnCharge !== undefined ? config.returnCharge : 3000,
-      deliveryChargeOnReturn: config.returnCharge !== undefined ? config.returnCharge : 3000,
-      returnZipCode: '16481',
-      returnAddress: '경기도 수원시 팔달구 경수대로507번길 5',
-      returnAddressDetail: '-',
-      companyContactNumber: '010-5931-9658',
-      afterServiceInformation: config.afterServiceInformation || '옵틱글래스 A/S 센터',
-      afterServiceContactNumber: config.afterServiceContactNumber || '',
-      outboundShippingPlaceCode: config.outboundShippingPlaceCode ? Number(config.outboundShippingPlaceCode) : 0,
-      vendorUserId: config.vendorUserId || 'puregrass001',
-      requested: true,
-      unionDeliveryType: 'UNION_DELIVERY',
-      remoteAreaDeliverable: 'N',
-      jejuDeliveryCharge: 0,
-      islandDeliveryCharge: 0,
-      items: items,
-    };
-  }
-
-  _buildItems(data, imageUrl, detailHtml, startDate, endDate) {
-    const items = [];
-    const basePrice = parseInt(data.price) || 115000;
-    const stock = parseInt(data.stock) || 999;
-
-    const models = (data.optionModel || '').split(',').map(s => s.trim()).filter(Boolean);
-    const quantity = data.optionProduct || '1개';
-
-    const images = [];
-    if (imageUrl) {
-      images.push({
-        imageOrder: 0,
-        imageType: 'REPRESENTATION',
-        vendorPath: getSafeUrl(imageUrl)
-      });
-    }
-
-    const notices = [
-      { noticeCategoryName: '자동차용품 (자동차부품/기타 자동차용품 등)', noticeCategoryDetailName: '품명 및 모델명', content: '상품 상세페이지 참조' },
-      { noticeCategoryName: '자동차용품 (자동차부품/기타 자동차용품 등)', noticeCategoryDetailName: '동일모델 출시년월', content: '상품 상세페이지 참조' },
-      { noticeCategoryName: '자동차용품 (자동차부품/기타 자동차용품 등)', noticeCategoryDetailName: 'KC 인증정보(자동차관리법에 따른 자기인증 대상 자동차부품에 한함)', content: '상품 상세페이지 참조' },
-      { noticeCategoryName: '자동차용품 (자동차부품/기타 자동차용품 등)', noticeCategoryDetailName: '제조자(수입자)', content: '상품 상세페이지 참조' },
-      { noticeCategoryName: '자동차용품 (자동차부품/기타 자동차용품 등)', noticeCategoryDetailName: '제조국', content: '상품 상세페이지 참조' },
-      { noticeCategoryName: '자동차용품 (자동차부품/기타 자동차용품 등)', noticeCategoryDetailName: '크기', content: '상품 상세페이지 참조' },
-      { noticeCategoryName: '자동차용품 (자동차부품/기타 자동차용품 등)', noticeCategoryDetailName: '적용차종', content: '상품 상세페이지 참조' },
-      { noticeCategoryName: '자동차용품 (자동차부품/기타 자동차용품 등)', noticeCategoryDetailName: '제품사용으로 인한 위험 및 유의사항(연료절감장치에 한함)', content: '상품 상세페이지 참조' },
-      { noticeCategoryName: '자동차용품 (자동차부품/기타 자동차용품 등)', noticeCategoryDetailName: '품질보증기준', content: '상품 상세페이지 참조' },
-      { noticeCategoryName: '자동차용품 (자동차부품/기타 자동차용품 등)', noticeCategoryDetailName: 'A/S 책임자와 전화번호', content: this.config.afterServiceContactNumber || '상품 상세페이지 참조' }
-    ];
-
-    for (const model of (models.length > 0 ? models : ['공용'])) {
-      items.push(this._createItem({
-        itemName: `${model} / ${quantity}`,
-        originalPrice: basePrice,
-        salePrice: basePrice,
-        stock,
-        images,
-        detailHtml,
-        notices,
-        startDate,
-        endDate,
-        attributes: [
-          { attributeTypeName: '차종', attributeValueName: model },
-          { attributeTypeName: '수량', attributeValueName: quantity }
-        ]
-      }));
-    }
-
-    return items;
-  }
-
-  _createItem({ itemName, originalPrice, salePrice, stock, images, detailHtml, notices, startDate, endDate, attributes }) {
-    const item = {
-      itemName: itemName,
-      originalPrice: originalPrice,
-      salePrice: salePrice,
-      maximumBuyCount: 0,
-      maximumBuyForPerson: 0,
-      maximumBuyForPersonPeriod: 1,
-      outboundShippingTimeDay: 2,
-      unitCount: 1,
-      adultOnly: 'EVERYONE',
-      taxType: 'TAX',
-      parallelImported: 'NOT_PARALLEL_IMPORTED',
-      overseasPurchased: 'NOT_OVERSEAS_PURCHASED',
-      pccNeeded: false,
-      bestPriceGuaranteed3P: false,
-      searchTags: ['옵틱글래스', '사이드미러', '광각미러', '와이드미러'],
-      images: images,
-      notices: notices,
-      attributes: attributes || [],
-      contents: [],
-      offerCondition: 'NEW',
-      offerDescription: '',
-      emptyBarcode: true,
-      emptyBarcodeReason: 'COUPANG',
-      certifications: [
-        {
-          certificationType: 'PRESENTED_IN_DETAIL_PAGE',
-          certificationCode: '',
-          certificationAttachments: []
-        }
-      ],
-    };
-
-    if (detailHtml) {
-      item.contents = [
-        {
-          contentsType: 'HTML',
-          contentDetails: [
-            {
-              content: detailHtml,
-              detailType: 'TEXT'
-            }
-          ]
-        }
-      ];
-    }
-
-    return item;
   }
 }

@@ -1,0 +1,119 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import vm from 'node:vm';
+import { ImageLibrary, imageDefaults, inspectHostedImage, imageHtml } from '../src/utils/image_library.js';
+import { DEFAULT_IMAGE_HTML, esmImagesFromHtml } from '../src/utils/image_defaults.js';
+import { Amazon } from '../src/platforms/amazon.js';
+import { Coupang } from '../src/platforms/coupang.js';
+import { buildContentFromTemplate } from '../src/platforms/openapi/build_payload.js';
+
+function fixture(t, options = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vu-images-test-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const output = path.join(dir, 'output'), folder = path.join(dir, 'photos');
+  fs.mkdirSync(output); fs.mkdirSync(folder);
+  fs.writeFileSync(path.join(output, 'latest_global.jpg'), 'main');
+  for (const name of ['10.jpg', '2.jpg', '1.jpg']) fs.writeFileSync(path.join(folder, name), name);
+  fs.writeFileSync(path.join(folder, 'ignore.txt'), 'text');
+  const uploads = [];
+  const lib = new ImageLibrary({ userData: dir, downloads: dir, output,
+    inspect: async (url, expected) => !expected && url.includes('/uploaded/'),
+    upload: async file => { uploads.push(file); return `https://ai.esmplus.com/uploaded/${path.basename(file)}`; }, ...options });
+  lib.configure('amazon', { folder });
+  return { dir, folder, output, lib, uploads };
+}
+
+test('default details use bundled ESM HTML and preserve representative choices', () => {
+  const d = imageDefaults('downloads', 'output');
+  assert.equal(d.amazon.folder, undefined); assert.equal(d.ebay.detailSource, 'esm');
+  assert.equal(esmImagesFromHtml(d.amazon.detailHtml).length, 6); assert.equal(esmImagesFromHtml(d.ebay.detailHtml).length, 7);
+  assert.equal(d.domestic.detailHtml, DEFAULT_IMAGE_HTML.domestic);
+  assert.ok(d.domestic.thumbnail.endsWith('썸네일.jpg')); assert.equal(d.ebay.seed, true);
+});
+test('scan uses natural order, representative first, no non-images or subfolders', t => {
+  const { lib, folder } = fixture(t); fs.mkdirSync(path.join(folder, 'sub')); fs.writeFileSync(path.join(folder, 'sub', 'nested.jpg'), 'nested');
+  assert.deepEqual(lib.scan('amazon').items.map(i => i.name), ['latest_global.jpg', '1.jpg', '2.jpg', '10.jpg']);
+});
+test('selected folder, excluded items and ordering survive restart', t => {
+  const { lib, folder, dir, output } = fixture(t);
+  lib.configure('amazon', { excluded: [path.join(folder, '2.jpg')], order: [path.join(folder, '10.jpg')] });
+  const loaded = new ImageLibrary({ userData: dir, downloads: dir, output });
+  assert.equal(loaded.scan('amazon').items[1].name, '10.jpg');
+  assert.equal(loaded.scan('amazon').items.find(i => i.name === '2.jpg').selected, false);
+});
+test('prepare uploads once, assigns main and extras separately, reuses verified hashes', async t => {
+  const { lib, uploads } = fixture(t);
+  const { bundle } = await lib.prepare('amazon');
+  assert.equal(uploads.length, 4); assert.equal(bundle.imageUrls[0], bundle.mainImageUrl);
+  assert.equal(bundle.subImages.length, 3); assert.ok(!bundle.detailHtml.includes(bundle.mainImageUrl));
+  await lib.prepare('amazon'); assert.equal(uploads.length, 4);
+});
+test('same filename with new VerySeed content gets a new URL without overwriting old uploads', async t => {
+  const { lib, uploads, output } = fixture(t);
+  const first = await lib.prepare('amazon');
+  fs.writeFileSync(path.join(output, 'latest_global.jpg'), 'new-main');
+  const second = await lib.prepare('amazon');
+  assert.notEqual(first.bundle.mainImageUrl, second.bundle.mainImageUrl); assert.equal(uploads.length, 5);
+  assert.equal(fs.readFileSync(uploads[0], 'utf8'), 'main');
+});
+test('existing matching hosted file is reused without upload', async t => {
+  const { lib, uploads } = fixture(t, { inspect: async () => true });
+  await lib.prepare('amazon'); assert.equal(uploads.length, 0);
+});
+test('404/non-image upload does not produce a ready bundle or success cache', async t => {
+  const { lib } = fixture(t, { inspect: async () => false });
+  await assert.rejects(lib.prepare('amazon'), /호스팅 이미지 응답/);
+  assert.equal(Object.keys(lib.state.hosted).length, 0); assert.equal(lib.busy, false);
+});
+test('missing thumbnail and too many Amazon images fail before any upload', async t => {
+  const { lib, output, folder, uploads } = fixture(t);
+  fs.unlinkSync(path.join(output, 'latest_global.jpg')); await assert.rejects(lib.prepare('amazon'), /대표 이미지가 없습니다/);
+  fs.writeFileSync(path.join(output, 'latest_global.jpg'), 'main');
+  for (let i = 20; i < 27; i++) fs.writeFileSync(path.join(folder, `${i}.jpg`), 'extra');
+  await assert.rejects(lib.prepare('amazon'), /최대 8장/); assert.equal(uploads.length, 0);
+});
+test('changing a folder resets selection but keeps explicit thumbnail', t => {
+  const { lib, folder } = fixture(t); const chosen = path.join(folder, '2.jpg');
+  lib.configure('amazon', { thumbnail: chosen, seed: false, excluded: [path.join(folder, '1.jpg')] });
+  const p = lib.configure('amazon', { folder });
+  assert.equal(p.items[0].path, chosen); assert.equal(p.items.filter(i => i.path === chosen).length, 1); assert.deepEqual(p.excluded, []);
+});
+test('host verifier checks HTTPS origin, response type, and matching bytes', async () => {
+  let calls = 0;
+  const fetcher = async () => { calls++; return new Response('picture', { headers: { 'content-type': 'image/jpeg' } }); };
+  assert.equal(await inspectHostedImage('https://localhost/a.jpg', null, fetcher), false); assert.equal(calls, 0);
+  const sha = createHash('sha256').update('picture').digest('hex');
+  assert.equal(await inspectHostedImage('https://ai.esmplus.com/a.jpg', sha, fetcher), true);
+  assert.equal(await inspectHostedImage('https://ai.esmplus.com/a.jpg', 'wrong', fetcher), false);
+  assert.equal(await inspectHostedImage('https://ai.esmplus.com/a.jpg', null, async () => new Response('not image')), false);
+});
+test('Amazon payload has main locator and each additional image, with no HTML as an image URL', () => {
+  const amazon = Object.create(Amazon.prototype); amazon.config = {};
+  const p = amazon._buildProductPayload({ titleEn: 'Mirror', price: '10', mainImageUrl: 'https://img.example/main.jpg', subImages: ['https://img.example/1.jpg', 'https://img.example/2.jpg'] });
+  assert.equal(p.attributes.main_product_image_locator[0].media_location, 'https://img.example/main.jpg');
+  assert.equal(p.attributes.other_product_image_locator_2[0].media_location, 'https://img.example/2.jpg');
+});
+test('Coupang and Imweb full image list replaces template detail images', () => {
+  const html = imageHtml(['https://img.example/1.jpg', 'https://img.example/2.jpg']);
+  const cp = Object.create(Coupang.prototype);
+  const item = cp._cloneTemplateItem({ attributes: [], contents: [{ contentsType: 'HTML', contentDetails: [{ content: '<img src="old.jpg">' }] }] }, { itemName: 'Mirror', carModel: 'Car', price: 100, stock: 1, detailHtml: html, mainImageUrl: 'https://img.example/main.jpg' });
+  assert.equal(item.contents[0].contentDetails[0].content, html); assert.equal(item.images[0].vendorPath, 'https://img.example/main.jpg');
+  const iw = buildContentFromTemplate('<img src="old.jpg">', { detailHtml: html, specImageUrl: 'https://img.example/chart.jpg' });
+  assert.ok(iw.includes('chart.jpg')); assert.ok(iw.includes('2.jpg')); assert.ok(!iw.includes('old.jpg'));
+});
+test('image IPC integration enriches new registrations and leaves edit payloads untouched', async () => {
+  const calls = [], input = { title: 'Mirror' }; let ensures = 0;
+  const bundle = { mainImageUrl: 'https://img.example/main.jpg', subImages: ['https://img.example/1.jpg'], imageUrls: ['https://img.example/main.jpg','https://img.example/1.jpg'], detailHtml: '<img src="detail">' };
+  const mode = { checked: true };
+  const win = { parent: { document: { getElementById: () => mode }, VUImages: { ensure: async () => { ensures++; return bundle; } } } };
+  const context = vm.createContext({ window: win, document: { getElementById: () => null } });
+  vm.runInContext(fs.readFileSync(new URL('../src/ui/image-payload.js', import.meta.url), 'utf8'), context);
+  const ipc = { invoke: async (channel, data) => { calls.push({ channel, data }); return { success: true }; } };
+  await win.invokeWithImages(ipc, 'amazon-register', input); assert.equal(calls[0].data.subImages.length, 1);
+  await win.invokeWithImages(ipc, 'amazon-update', input); assert.equal(calls[1].data, input);
+  mode.checked = false; await win.invokeWithImages(ipc, 'ebay-save-draft', input); assert.equal(calls[2].data, input); assert.equal(ensures, 1);
+});

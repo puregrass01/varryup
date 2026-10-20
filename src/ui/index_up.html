@@ -3,8 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VERY UP VER2</title>
+  <title>VERY UP VER3</title>
+  <script src="theme.js"></script>
+  <link rel="stylesheet" href="theme.css" />
   <link rel="stylesheet" href="style.css" />
+  <script src="vu-suggest.js"></script>
+  <link rel="stylesheet" href="product-table.css" />
+  <script src="product-table.js"></script>
+  <script src="currency-rates.js"></script>
   <style>
     /* ── 기본 리셋 & 다크 테마 ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -25,8 +31,51 @@
       --text-muted:    #475569;
       --inactive-bg:   #1e293b;
       --inactive-text: #334155;
+      --registration-width: 380px;
       --radius:        6px;
       --transition:    0.15s ease;
+
+      /* 테마마다 갈리는 값 — style.css 와 같은 이름·같은 뜻으로 맞춰 둔다. */
+      --ovl-1: rgba(255,255,255,0.05);
+      --ovl-2: rgba(255,255,255,0.10);
+      --ovl-3: rgba(255,255,255,0.16);
+      --sunk:  rgba(0,0,0,0.22);
+      --shadow-panel: 0 8px 32px 0 rgba(0,0,0,0.37);
+      --btn-face:       #111827;      /* 버튼은 검정 */
+      --btn-face-hover: #000000;
+      --btn-text:       #ffffff;
+      --logo-tile:      #ffffff;
+      /* 로그 글자. 어두운 배경용 파스텔이라 밝은 화면에서는 안 보인다 → 라이트에서 진하게. */
+      --log-ok:   #86efac;
+      --log-warn: #fcd34d;
+      --log-err:  #fca5a5;
+    }
+
+    /* ── 라이트 테마 (기본) ── */
+    :root[data-theme="light"] {
+      --bg-base:        #eef2f7;
+      --bg-panel:       #ffffff;
+      --bg-card:        #ffffff;
+      --bg-input:       #ffffff;
+      --border:         #d5dbe5;
+      --accent:         #2563eb;
+      --accent-hover:   #1d4ed8;
+      --text-primary:   #0f172a;
+      --text-secondary: #52627a;
+      --text-muted:     #7c8aa0;
+      --inactive-bg:    #e7ecf3;
+      --inactive-text:  #c3ccda;
+
+      --ovl-1: rgba(15,23,42,0.04);
+      --ovl-2: rgba(15,23,42,0.08);
+      --ovl-3: rgba(15,23,42,0.16);
+      --sunk:  rgba(15,23,42,0.05);
+      --shadow-panel: 0 4px 16px 0 rgba(15,23,42,0.10);
+      /* 밝은 배경에서는 흰 타일이 로고 경계를 지운다 → 아주 옅은 회색으로. */
+      --logo-tile: #f1f4f8;
+      --log-ok:   #15803d;
+      --log-warn: #a16207;
+      --log-err:  #b91c1c;
     }
 
     html, body {
@@ -82,7 +131,7 @@
       font-size: 15px;
       font-weight: 700;
       letter-spacing: 0.08em;
-      color: var(--accent);
+      color: var(--text-primary);
       flex: 1;
     }
 
@@ -90,7 +139,7 @@
     #mode-bar {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       padding: 8px 16px;
       background: var(--bg-base);
       border-bottom: 1px solid var(--border);
@@ -102,10 +151,10 @@
     .mode-label {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
       cursor: pointer;
       padding: 4px 12px;
-      border-radius: 20px;
+      border-radius: 14px;
       border: 1px solid var(--border);
       color: var(--text-secondary);
       font-size: 12px;
@@ -132,25 +181,37 @@
     #main {
       display: flex;
       flex: 1;
+      min-height: 0;
       overflow: hidden;
     }
 
     /* ── SECTION 7 (좌측) ── */
     #section7 {
-      width: 380px;
+      width: var(--registration-width);
+      min-height: 0;
       flex-shrink: 0;
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
       overflow-y: auto;
-      padding: 14px;
+      scrollbar-gutter: stable;
+      padding: 14px 16px;
       gap: 12px;
     }
+    #section7 > * { flex-shrink: 0; }
+    #section7::-webkit-scrollbar { width: 10px; }
+    #section7::-webkit-scrollbar-track { background: var(--bg-panel); }
+    #section7::-webkit-scrollbar-thumb {
+      background: var(--text-muted);
+      border: 2px solid var(--bg-panel);
+      border-radius: 5px;
+    }
+    #section7::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
     .section-title {
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 600;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.1em;
       color: var(--text-muted);
       text-transform: uppercase;
       padding-bottom: 4px;
@@ -158,17 +219,28 @@
     }
 
     /* 입력 폼 */
-    .field-group { display: flex; flex-direction: column; gap: 8px; }
+    /* 2단 그리드. 입력칸을 50% 로 줄이면 칸 오른쪽 절반이 빈 공간으로 남으므로,
+       폭을 줄이는 대신 짧은 입력을 두 개씩 한 줄에 둔다. */
+    .field-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 10px;
+      align-items: start;
+    }
 
     .field {
       display: flex;
       flex-direction: column;
       gap: 4px;
+      min-width: 0;
     }
+    /* 선택지가 길거나 여러 줄인 항목은 한 줄을 다 쓴다. */
+    .field.wide { grid-column: 1 / -1; }
     .field label {
       font-size: 11px;
       color: var(--text-secondary);
       font-weight: 500;
+      line-height: 1.2;
     }
     .field input, .field textarea {
       background: var(--bg-input);
@@ -177,9 +249,11 @@
       border-radius: var(--radius);
       padding: 6px 9px;
       font-size: 13px;
+      box-sizing: border-box;
       outline: none;
       transition: border-color var(--transition);
       width: 100%;
+      max-width: 100%;
     }
     .field input:focus, .field textarea:focus {
       border-color: var(--accent);
@@ -187,7 +261,71 @@
     .field textarea {
       resize: vertical;
       min-height: 60px;
+      height: auto;
       font-family: inherit;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    /* 언어별 표기 칸. 체크된 나라가 하나뿐이면 한 칸, 셋이면 세 칸이 된다. */
+    .lang-row { display: flex; gap: 6px; }
+    .lang-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .lang-col[hidden] { display: none; }
+    .lang-tag {
+      font-size: 9px;
+      color: var(--text-muted);
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+    /* 칸이 하나뿐일 땐 언어 꼬리표가 군더더기다. */
+    .lang-row.single .lang-tag { display: none; }
+
+    /* 쇼핑몰별 칸. 현황판에서 그 몰을 켰을 때만 보인다(updateMallFields). 꼬리표는 이 칸을 쓰는
+       몰 가운데 지금 켜진 것이다. [hidden] 이 .field 의 display:flex 에 지지 않게 못 박는다. */
+    .mall-field[hidden] { display: none !important; }
+    .mall-tags {
+      font-size: 9px;
+      color: var(--text-muted);
+      font-weight: 400;
+      margin-left: 4px;
+      white-space: nowrap;
+    }
+    /* 꼬리표가 길면 라벨이 두 줄이 된다('변경 판매가 (USD) · 아마존 미국 · 이베이'). 같은 줄 옆 칸과 입력칸
+       높이가 어긋나지 않게 칸을 줄 높이로 늘리고 입력칸을 아래에 붙인다. */
+    .field-group > .mall-field { align-self: stretch; justify-content: space-between; }
+
+    /* 라디오·체크박스 */
+    .field input[type="radio"],
+    .field input[type="checkbox"] {
+      width: auto;
+      max-width: none;
+      height: auto;
+      flex: none;
+      margin: 0;
+      padding: 0;
+      background: none;
+      border: none;
+      border-radius: 0;
+      accent-color: var(--accent);
+    }
+
+    /* BSA 여부 · 차량 종류 — 선택지를 한 줄에 나란히 둔다. */
+    .bsa-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 14px;
+      padding: 2px 0;
+    }
+    .field .bsa-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text-primary);
+      white-space: nowrap;
+      cursor: pointer;
     }
 
     /* 최근 사진 버튼 */
@@ -200,7 +338,7 @@
       border: 1px dashed var(--border);
       color: var(--text-secondary);
       border-radius: var(--radius);
-      padding: 8px;
+      padding: 7px 10px;
       cursor: pointer;
       font-size: 12px;
       width: 100%;
@@ -221,7 +359,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 11px;
+      font-size: 12px;
       color: var(--text-secondary);
       font-weight: 600;
     }
@@ -230,15 +368,41 @@
       flex: 1;
       height: 1px;
       background: var(--border);
+      order: 1;                  /* 구분선을 빠른 선택 칩 앞으로 — 칩이 줄 오른쪽 끝에 붙는다 */
+    }
+    /* 현황판 빠른 선택. 누르면 그 조합으로 '바꾼다'(더하지 않는다). 지금 선택과 같은 칩이 켜진다. */
+    .board-presets {
+      order: 2;
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .board-preset {
+      padding: 1px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.6;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .board-preset:hover { border-color: var(--accent); color: var(--text-primary); }
+    .board-preset[aria-pressed="true"] {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
     }
 
     #status-board {
       width: 100%;
       border-collapse: collapse;
-      font-size: 11px;
+      font-size: 12px;
     }
     #status-board thead th {
-      padding: 5px 4px;
+      padding: 5px 2px;
       color: var(--text-muted);
       font-weight: 500;
       text-align: center;
@@ -250,13 +414,13 @@
       border-top: 1px solid var(--border);
       transition: background var(--transition);
     }
-    #status-board tbody tr:hover { background: rgba(255,255,255,0.02); }
+    #status-board tbody tr:hover { background: var(--ovl-1); }
     #status-board tbody tr.row-checked {
       border-left: 3px solid var(--accent);
     }
 
     #status-board td {
-      padding: 5px 4px;
+      padding: 4px 2px;
       text-align: center;
       vertical-align: middle;
     }
@@ -265,7 +429,20 @@
       font-weight: 600;
       font-size: 11px;
       color: var(--text-secondary);
-      padding-left: 4px;
+      padding-left: 2px;
+      white-space: nowrap;
+    }
+    #status-board .country-cell-inner {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    #status-board .country-flag {
+      height: 15px;
+      width: auto;
+      border-radius: 1px;
+      box-shadow: 0 0 1px rgba(0, 0, 0, 0.5);
+      flex-shrink: 0;
     }
 
     /* 활성 셀 */
@@ -278,24 +455,53 @@
       flex-direction: column;
       align-items: center;
       gap: 2px;
-      padding: 4px 3px;
-      border-radius: 4px;
-      transition: background var(--transition);
+      padding: 4px 2px;
+      border-radius: 5px;
+      border: 1px solid transparent;
+      outline: none;
+      transition: background var(--transition), border-color var(--transition);
     }
     .platform-cell:hover .cell-inner { background: rgba(59,130,246,0.1); }
-    .platform-cell .cell-inner.checked { background: rgba(59,130,246,0.15); }
-
-    .platform-cell input[type="checkbox"] {
-      width: 13px; height: 13px;
-      accent-color: var(--accent);
-      cursor: pointer;
+    /* 선택 = 눌린 타일. 체크박스를 없앤 자리를 색·테두리·안쪽 그림자가 대신한다. */
+    .platform-cell .cell-inner.checked {
+      background: rgba(59,130,246,0.18);
+      border-color: var(--accent);
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.45);
     }
+    .platform-cell .cell-inner:focus-visible { border-color: var(--accent); }
+    /* 쇼핑몰은 이름 대신 로고로 보여준다. 로고 파일이 아직 없는 몰만 이름으로 남는다.
+       ⚠ 밝은 타일을 꼭 깔아야 한다 — 아임웹 로고는 평균 밝기 15/255 의 사실상 검정이라
+       어두운 배경에 그냥 올리면 아무것도 안 보인다. 브랜드 색은 건드리지 않는 방법이다. */
+    .platform-cell .plat-logo {
+      height: 22px;
+      width: auto;
+      max-width: 100%;
+      object-fit: contain;
+      background: var(--logo-tile);
+      border-radius: 4px;
+      padding: 1px;
+      box-sizing: border-box;
+      /* 안 고른 몰은 흑백. 고른 몰만 브랜드 색이 살아나 한눈에 갈린다. */
+      filter: grayscale(1);
+      opacity: 0.45;
+      transition: opacity var(--transition), filter var(--transition);
+    }
+    .platform-cell:hover .plat-logo { opacity: 0.75; }
+    .platform-cell .cell-inner.checked .plat-logo { filter: none; opacity: 1; }
+
     .platform-cell .plat-name {
       font-size: 9px;
       color: var(--text-muted);
       white-space: nowrap;
     }
     .platform-cell .cell-inner.checked .plat-name { color: var(--accent); }
+    /* 지금 오른쪽 폼에 열린 몰. 가운데 쇼핑몰 탭의 '활성' 표시를 현황판 칸으로 합쳤다(markViewingCells).
+       켜진 칸에만 보인다 — 꺼진 칸은 폼이 없다. */
+    .platform-cell.viewing .cell-inner.checked {
+      background: var(--accent);
+      box-shadow: 0 2px 6px rgba(59, 130, 246, 0.35);
+    }
+    .platform-cell.viewing .cell-inner.checked .plat-name { color: #fff; }
 
     /* 비활성 셀 */
     .inactive-cell {
@@ -304,12 +510,40 @@
       cursor: not-allowed;
     }
 
+    /* ── 판매자 콘솔 아이콘 버튼 ── */
+    .console-btn {
+      width: 30px; height: 30px; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 8px;
+      border: 1px solid var(--ovl-3);
+      background: var(--ovl-1);
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+    .console-btn:hover { background: var(--ovl-3); }
+    .console-btn img {
+      width: 20px; height: 20px;
+      object-fit: contain;
+      background: var(--logo-tile);
+      border-radius: 4px;
+      padding: 1px;
+      box-sizing: border-box;
+    }
+    /* 로고 PNG 가 없는 몰(ESM)은 글자 타일로 대신한다. */
+    .console-btn .console-txt {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 20px; height: 20px;
+      background: var(--logo-tile); color: #111;
+      border-radius: 4px;
+      font-size: 8px; font-weight: 700; letter-spacing: -0.02em;
+    }
+
     /* ── 실행 버튼 ── */
     #btn-run {
       width: 100%;
-      padding: 10px;
-      background: var(--accent);
-      color: #fff;
+      padding: 9px;
+      background: var(--btn-face);
+      color: var(--btn-text);
       border: none;
       border-radius: var(--radius);
       font-size: 13px;
@@ -326,53 +560,109 @@
       transform: none;
     }
 
-    /* ── SECTION 8 (우측) ── */
+    /* ── 일괄 등록 · 일괄 수정 버튼 ── */
+    #btn-bulk-register, #btn-bulk-edit {
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all var(--transition);
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    #btn-bulk-register:hover {
+      background: linear-gradient(135deg, #1d4ed8, #6d28d9);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.45);
+      transform: translateY(-1px);
+    }
+    #btn-bulk-register:active, #btn-bulk-edit:active { transform: translateY(0); }
+    #btn-bulk-register:disabled, #btn-bulk-edit:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+    /* 수정은 등록과 색을 달리한다 — 모드가 바뀌어도 같은 자리라 눌러 놓고 헷갈리지 않게. */
+    #btn-bulk-edit {
+      background: linear-gradient(135deg, #059669, #0d9488);
+      box-shadow: 0 2px 6px rgba(5, 150, 105, 0.35);
+    }
+    #btn-bulk-edit:hover {
+      background: linear-gradient(135deg, #047857, #0f766e);
+      box-shadow: 0 4px 12px rgba(5, 150, 105, 0.45);
+    }
+
+    /* Keep the toggle outside the animated/reordered sidebar in both states. */
+    .detail-toggle-footer {
+      flex: 0 0 auto;
+      padding: 8px 0;
+      background: var(--bg-card);
+      border-top: 1px solid var(--border);
+    }
+    .detail-toggle-footer .detail-toggle-btn {
+      width: 120px;
+      margin-left: 8px;          /* 펼침·접힘 모두 왼쪽 끝 — 누르는 자리가 안 움직인다 */
+    }
+    .detail-toggle-btn {
+      width: 100%;
+      padding: 7px 4px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--ovl-1);
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: all var(--transition);
+    }
+    .detail-toggle-btn:hover {
+      background: var(--ovl-2);
+      color: var(--text-primary);
+      border-color: var(--accent);
+    }
+
+    /* ── SECTION 8 (우측 — 자세히 보기) ── */
     #section8 {
       flex: 1;
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      min-width: 380px;
     }
-
-    #section8-header {
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-shrink: 0;
-    }
-    #section8-header .sec-label {
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      color: var(--text-muted);
-      text-transform: uppercase;
-    }
-    #section8-header .sec-desc {
-      font-size: 11px;
-      color: var(--text-secondary);
-    }
-
-    #btn-clear-log {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text-muted);
-      border-radius: var(--radius);
-      padding: 3px 8px;
-      font-size: 11px;
-      cursor: pointer;
-      transition: all var(--transition);
-    }
-    #btn-clear-log:hover { border-color: var(--accent-danger); color: var(--accent-danger); }
+    /* 접힘 — 기본 화면. 현황판(왼쪽 입력판)만 남기고 쇼핑몰 탭·신규등록 패널을 숨긴다.
+       '열기' 를 눌러야 둘이 보인다(setPanels). 창 폭도 같이 줄여 빈 자리를 남기지 않는다.
+       inert 는 걸지 않는다 — 숨은 폼(iframe)에서 일괄 등록이 돈다. display:none 만으로도
+       포커스·스크린리더에서 빠진다. */
+    #app.panels-collapsed #section8 { display: none !important; }
 
     #section8-body {
       flex: 1;
+      min-height: 0;
+      padding: 14px 16px;
+      display: flex;
+      gap: 12px;
+    }
+    /* 왼쪽 = 로그·폼·카드, 오른쪽 = 이미지 목록(신규 등록에서만). 스크롤은 칸마다 따로 한다. */
+    #section8-main {
+      flex: 1;
+      min-width: 0;
       overflow-y: auto;
-      padding: 12px 14px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 12px;
     }
 
     /* ── 로그 윈도우 ── */
@@ -407,9 +697,9 @@
     .log-entry .log-msg { flex: 1; line-height: 1.5; }
 
     .log-entry.info  { background: rgba(59,130,246,0.06); color: var(--text-primary); }
-    .log-entry.ok    { background: rgba(34,197,94,0.07);  color: #86efac; }
-    .log-entry.warn  { background: rgba(245,158,11,0.07); color: #fcd34d; }
-    .log-entry.error { background: rgba(239,68,68,0.08);  color: #fca5a5; }
+    .log-entry.ok    { background: rgba(34,197,94,0.07);  color: var(--log-ok); }
+    .log-entry.warn  { background: rgba(245,158,11,0.07); color: var(--log-warn); }
+    .log-entry.error { background: rgba(239,68,68,0.08);  color: var(--log-err); }
 
     /* ── 상품 수정 카드 ── */
     .product-card {
@@ -547,6 +837,14 @@
       padding: 14px 0;
     }
 
+    /* 일괄 수정 결과 카드 — 수정 모드에서는 로그창이 숨어 있어 결과를 여기에 적는다. */
+    .bulk-edit-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+    .bulk-edit-rows li { font-size: 12px; line-height: 1.5; padding: 4px 8px; border-radius: 4px; overflow-wrap: anywhere; }
+    .bulk-edit-rows li.info  { background: rgba(59,130,246,0.06); color: var(--text-primary); }
+    .bulk-edit-rows li.ok    { background: rgba(34,197,94,0.07);  color: var(--log-ok); }
+    .bulk-edit-rows li.warn  { background: rgba(245,158,11,0.07); color: var(--log-warn); }
+    .bulk-edit-rows li.error { background: rgba(239,68,68,0.08);  color: var(--log-err); }
+
     /* ── 스크롤바 ── */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -567,6 +865,10 @@
     }
     .empty-state .empty-icon { font-size: 36px; }
   </style>
+  <link rel="stylesheet" href="image-library.css" />
+  <link rel="stylesheet" href="bulk-edit.css" />
+  <link rel="stylesheet" href="image-gallery.css" />
+  <link rel="stylesheet" href="fx-auto-price.css" />
 </head>
 <body>
 <div id="app">
@@ -574,14 +876,17 @@
   <!-- ══ 헤더 ══ -->
   <div id="header">
     <button id="btn-back" title="런처로 돌아가기">← 런처로</button>
-    <div id="app-title">✦ VERY UP VER2</div>
+    <div id="app-title">VERY UP VER3</div>
     <div style="display:flex;gap:6px;margin-left:auto;-webkit-app-region:no-drag;">
+      <button id="btn-theme" type="button" data-theme-toggle title="밝게 / 어둡게"
+        style="width:28px;height:28px;border-radius:50%;border:none;background:var(--ovl-2);color:var(--text-secondary);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;"
+        onmouseover="this.style.background='var(--ovl-3)'" onmouseout="this.style.background='var(--ovl-2)'">🌙</button>
       <button onclick="require('electron').ipcRenderer.send('minimize-win')" title="최소화"
-        style="width:28px;height:28px;border-radius:50%;border:none;background:rgba(255,255,255,0.08);color:#94a3b8;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;"
-        onmouseover="this.style.background='rgba(255,255,255,0.18)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">─</button>
+        style="width:28px;height:28px;border-radius:50%;border:none;background:var(--ovl-2);color:#94a3b8;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;"
+        onmouseover="this.style.background='var(--ovl-3)'" onmouseout="this.style.background='var(--ovl-2)'">─</button>
       <button onclick="require('electron').ipcRenderer.send('close-win')" title="닫기"
-        style="width:28px;height:28px;border-radius:50%;border:none;background:rgba(255,255,255,0.08);color:#94a3b8;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;"
-        onmouseover="this.style.background='rgba(220,50,50,0.8)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,0.08)';this.style.color='#94a3b8'">✕</button>
+        style="width:28px;height:28px;border-radius:50%;border:none;background:var(--ovl-2);color:#94a3b8;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;"
+        onmouseover="this.style.background='rgba(220,50,50,0.8)';this.style.color='#fff'" onmouseout="this.style.background='var(--ovl-2)';this.style.color='#94a3b8'">✕</button>
     </div>
   </div>
 
@@ -596,23 +901,34 @@
 
     <input type="radio" name="mode" id="mode-edit" class="mode-radio" value="edit" />
     <label for="mode-edit" class="mode-label">
-      <span class="dot"></span> 상품수정
+      <span class="dot"></span> 단일 상품 수정
     </label>
   </div>
+
+  <section id="bulk-edit-workspace" hidden aria-label="상품 일괄 수정"></section>
 
   <!-- ══ 메인 ══ -->
   <div id="main">
 
     <!-- ── SECTION 7 (좌측) ── -->
     <div id="section7">
-      <!-- 플랫폼 로그인 버튼 (맨 위) -->
-      <div id="login-buttons" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px;">
-        <button type="button" onclick="platformLogin('naver')"
-          style="padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#e6e9ee;font-size:13px;cursor:pointer;font-family:inherit;">🟢 네이버 로그인</button>
-        <button type="button" onclick="platformLogin('esm')"
-          style="padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#e6e9ee;font-size:13px;cursor:pointer;font-family:inherit;">🔵 ESM 로그인</button>
-        <button type="button" onclick="platformLogin('imweb')"
-          style="padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#e6e9ee;font-size:13px;cursor:pointer;font-family:inherit;">🟣 아임웹 로그인</button>
+      <!-- 판매자 콘솔 — 로그인 버튼과 합쳤다. 예전에는 '네이버 로그인'(자동화 세션 준비)과
+           '네이버 …'(콘솔 열기)가 따로 있었는데, 콘솔도 같은 계정으로 자동 로그인하게 된
+           뒤로는 둘이 같은 일을 한다. 누르면 로그인하고 그 몰의 상품 목록까지 열어준다. -->
+      <div id="login-buttons" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 12px;">
+        <span style="font-size:11px;color:var(--text-muted);margin-right:2px;">판매자 콘솔</span>
+        <button type="button" class="console-btn" onclick="openSellerSite('naver')"
+          title="네이버 스마트스토어 — 로그인 후 상품목록"><img src="logos/naver.png" alt="네이버" /></button>
+        <button type="button" class="console-btn" onclick="openSellerSite('esm')"
+          title="ESM Plus — 로그인 후 이미지 호스팅"><span class="console-txt">ESM</span></button>
+        <button type="button" class="console-btn" onclick="openSellerSite('imweb')"
+          title="아임웹 B2B몰 — 로그인 후 상품목록"><img src="logos/b2b.png" alt="B2B몰" /></button>
+        <button type="button" class="console-btn" onclick="openSellerSite('coupang')"
+          title="쿠팡 윙"><img src="logos/coupang.png" alt="쿠팡" /></button>
+        <button type="button" class="console-btn" onclick="openSellerSite('amazon')"
+          title="아마존 셀러센트럴 재고목록"><img src="logos/amazon.png" alt="아마존" /></button>
+        <button type="button" class="console-btn" onclick="openSellerSite('ebay')"
+          title="이베이 셀러허브 판매중 목록"><img src="logos/ebay.png" alt="이베이" /></button>
       </div>
 
       <!-- 최근 사진 불러오기 (KOREA / GLOBAL) -->
@@ -622,12 +938,21 @@
       </div>
       <!-- 사진 미리보기 -->
       <div id="photo-preview" style="display:none;margin-bottom:12px;text-align:center;">
-        <img id="photo-preview-img" alt="미리보기" />
+        <img id="photo-preview-img" alt="미리보기" title="오른쪽 [img] 이미지 목록에 끌어다 놓으면 대표 이미지가 됩니다" />
         <div id="photo-preview-name" style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>
       </div>
 
       <!-- 현황판 -->
-      <div class="board-title">현황판</div>
+      <div class="board-title">현황판
+        <!-- 빠른 선택 — 그 조합으로 바꾼다(더하지 않는다). 선택은 앱을 다시 켜도 남는다(saveBoardSelection). -->
+        <span class="board-presets" role="group" aria-label="현황판 빠른 선택">
+          <button type="button" class="board-preset" data-preset="all" aria-pressed="false" title="모든 몰 선택">전체</button>
+          <button type="button" class="board-preset" data-preset="korea" aria-pressed="false" title="국내 몰만 선택 — 나머지는 끕니다">국내</button>
+          <button type="button" class="board-preset" data-preset="usa" aria-pressed="false" title="미국 몰만 선택 — 나머지는 끕니다">미국</button>
+          <button type="button" class="board-preset" data-preset="japan" aria-pressed="false" title="일본 몰만 선택 — 나머지는 끕니다">일본</button>
+          <button type="button" class="board-preset" data-preset="none" title="모두 끄기">해제</button>
+        </span>
+      </div>
       <table id="status-board" style="margin-top:8px;">
         <thead>
           <tr>
@@ -643,83 +968,190 @@
         </tbody>
       </table>
 
-      <!-- 선택한 플랫폼의 등록 폼을 오른쪽에 여는 확인 버튼 -->
-      <button id="btn-confirm-platform"
-        style="margin-top:10px;width:100%;padding:9px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">
-        ✅ 확인 — 선택한 플랫폼 등록 폼 열기
-      </button>
-
       <!-- 상품 정보 (현황판 아래로 이동) -->
-      <div class="section-title" style="margin-top:16px;">상품 정보</div>
+      <div class="section-title" id="product-info-title" style="margin-top:16px;">상품 정보</div>
       <div class="field-group">
-        <div class="field">
+        <!-- 브랜드·차종명·세대는 나라마다 표기가 다르다. 현황판에서 체크한 나라의
+             언어 칸만 나타난다(updateLangFields). 한국어 칸의 id 는 예전 그대로라
+             자동완성·등록 경로는 손댈 필요가 없다. -->
+        <div class="field wide lang-field">
           <label for="inp-brand">브랜드</label>
-          <input type="text" id="inp-brand" placeholder="예: 벤츠" />
+          <div class="lang-row">
+            <div class="lang-col" data-lang="ko">
+              <span class="lang-tag">한국어</span>
+              <input type="text" id="inp-brand" placeholder="예: 벤츠" />
+            </div>
+            <div class="lang-col" data-lang="en">
+              <span class="lang-tag">English</span>
+              <input type="text" id="inp-brand-en" placeholder="예: BENZ" />
+            </div>
+            <div class="lang-col" data-lang="ja">
+              <span class="lang-tag">日本語</span>
+              <input type="text" id="inp-brand-ja" placeholder="예: ベンツ" />
+            </div>
+          </div>
         </div>
-        <div class="field">
+        <div class="field wide lang-field">
           <label for="inp-carmodel">차종명</label>
-          <input type="text" id="inp-carmodel" placeholder="예: E클래스" />
+          <div class="lang-row">
+            <div class="lang-col" data-lang="ko">
+              <span class="lang-tag">한국어</span>
+              <input type="text" id="inp-carmodel" placeholder="예: E클래스" />
+            </div>
+            <div class="lang-col" data-lang="en">
+              <span class="lang-tag">English</span>
+              <input type="text" id="inp-carmodel-en" placeholder="예: E-Class" />
+            </div>
+            <div class="lang-col" data-lang="ja">
+              <span class="lang-tag">日本語</span>
+              <input type="text" id="inp-carmodel-ja" placeholder="예: Eクラス" />
+            </div>
+          </div>
         </div>
-        <div class="field">
+        <div class="field wide lang-field new-only">
           <label for="inp-gen">세대</label>
-          <input type="text" id="inp-gen" placeholder="예: 1세대 전기형" />
+          <div class="lang-row">
+            <div class="lang-col" data-lang="ko">
+              <span class="lang-tag">한국어</span>
+              <input type="text" id="inp-gen" placeholder="예: 1세대 전기형" />
+            </div>
+            <div class="lang-col" data-lang="en">
+              <span class="lang-tag">English</span>
+              <input type="text" id="inp-gen-en" placeholder="예: 1st gen" />
+            </div>
+            <div class="lang-col" data-lang="ja">
+              <span class="lang-tag">日本語</span>
+              <input type="text" id="inp-gen-ja" placeholder="예: 1代目" />
+            </div>
+          </div>
         </div>
-        <div class="field">
+        <div class="field new-only">
           <label for="inp-year">연식</label>
           <input type="text" id="inp-year" placeholder="예: 2020~2023" />
         </div>
         <div class="field">
-          <label for="inp-code">상품코드</label>
+          <label for="inp-code">차량코드</label>
           <input type="text" id="inp-code" placeholder="예: VU-2024-001" />
         </div>
         <div class="field">
           <label for="inp-no">상품번호</label>
           <input type="text" id="inp-no" placeholder="예: 612" />
         </div>
-        <div class="field">
-          <label for="inp-price">판매가</label>
-          <input type="number" id="inp-price" placeholder="예: 50000" />
+        <!-- ── 쇼핑몰별 필수 칸 ──
+             위 언어 칸(English/日本語)처럼 현황판에서 그 몰을 켰을 때만 나타난다(updateMallFields).
+             data-malls 는 이 칸을 쓰는 몰이다. 몰 탭 안에 따로 있던 칸(이베이 SKU, 아마존 Product
+             Type)은 여기로 옮겼고, 탭에는 여기서 바로 들어간다(fillFrame). -->
+        <!-- 이베이·아마존 SKU 와 판매가(USD). 연식·차량코드·상품번호 목록에서 차를 고르면 채워진다 — 이베이는
+             이베이 상품등록 표, 아마존은 아마존에 실제로 있는 SKU(아마존 상품등록 표 + API 실측값). 같은 차라도 두 몰의
+             SKU 가 다를 수 있어(3시리즈 6세대: 이베이 OBM0305N101 · 아마존 OBM0304N101) 칸을 나눴다. 확실히 이어진 것이
+             없으면 비워 두고 목록에서 고른다. 수정 모드에서도 보인다 — 아마존 '불러오기' 와 이베이 SKU 조회의 열쇠다. -->
+        <div class="field mall-field" data-malls="ebay imweb-us">
+          <label for="inp-sku">이베이 SKU<span class="mall-tags"></span></label>
+          <input type="text" id="inp-sku" placeholder="예: OBM0103N101" />
         </div>
-        <div class="field" style="flex-direction:row;align-items:center;gap:8px;">
-          <input type="checkbox" id="inp-bsa" style="width:auto;flex:none;" />
-          <label for="inp-bsa" style="margin:0;">BSA 적용</label>
+        <div class="field mall-field" data-malls="amazon">
+          <label for="inp-amz-sku">아마존 SKU<span class="mall-tags"></span></label>
+          <input type="text" id="inp-amz-sku" placeholder="예: OBM0103N101" />
         </div>
-        <div class="field">
+        <div class="field mall-field new-only" data-malls="amazon-us ebay imweb-us">
+          <label for="inp-usd">판매가 (USD)<span class="mall-tags"></span></label>
+          <input type="text" id="inp-usd" inputmode="decimal" placeholder="예: 109.32" />
+        </div>
+        <!-- 아마존 상품 유형. 기본값은 아마존 설정에 저장된 값이다(loadAmazonProductType). -->
+        <div class="field mall-field" data-malls="amazon">
+          <label for="inp-amz-ptype">Product Type<span class="mall-tags"></span></label>
+          <input type="text" id="inp-amz-ptype" value="AUTO_PART" placeholder="AUTO_PART 또는 VEHICLE_MIRROR" />
+        </div>
+        <!-- 쿠팡엔 SKU 가 없고 상품(등록상품ID)이 차종 하나다. 차를 고르면 그 차가 들어 있는 쿠팡
+             상품이 채워진다(쿠팡 상품 등록 표). 수정 모드에선 이 상품을 쿠팡 탭에 넘기고,
+             신규 등록 때는 이미 있는 차라고 경고한다. -->
+        <div class="field mall-field" data-malls="coupang">
+          <label for="inp-cpid">쿠팡 상품ID<span class="mall-tags"></span></label>
+          <input type="text" id="inp-cpid" inputmode="numeric" placeholder="이미 올라간 상품" />
+        </div>
+        <!-- 변경 판매가 (단일 상품 수정 모드에서만). 일괄 수정이 몰 탭에 불러온 상품의 판매가로 넣고 저장한다 —
+             네이버는 기본 판매가(옵션가 차액 유지), 쿠팡은 상품번호의 옵션, 아마존·이베이는 판매가. 비우면 그대로.
+             목록은 국내 기준가 등급과 그 환율가, 이베이 표 판매가(vu-suggest). 차를 바꾸면 비운다. -->
+        <div class="field mall-field edit-only" data-malls="naver coupang">
+          <label for="inp-edit-krw">변경 판매가 (원)<span class="mall-tags"></span></label>
+          <input type="text" id="inp-edit-krw" inputmode="numeric" placeholder="비우면 지금 가격 그대로" />
+        </div>
+        <div class="field mall-field edit-only" data-malls="amazon-us ebay">
+          <label for="inp-edit-usd">변경 판매가 (USD)<span class="mall-tags"></span></label>
+          <input type="text" id="inp-edit-usd" inputmode="decimal" placeholder="비우면 지금 가격 그대로" />
+        </div>
+        <div class="field mall-field edit-only" data-malls="amazon-jp">
+          <label for="inp-edit-jpy">변경 판매가 (엔)<span class="mall-tags"></span></label>
+          <input type="text" id="inp-edit-jpy" inputmode="numeric" placeholder="비우면 지금 가격 그대로" />
+        </div>
+        <div class="field new-only wide">
+          <label>BSA 여부</label>
+          <div class="bsa-group">
+            <label class="bsa-label"><input type="radio" name="bsa" value="o" checked /> BSA O (측후방 센서 있음)</label>
+            <label class="bsa-label"><input type="radio" name="bsa" value="x" /> BSA X (측후방 센서 없음)</label>
+          </div>
+        </div>
+        <div class="field new-only wide">
+          <label>차량 종류</label>
+          <div class="bsa-group">
+            <label class="bsa-label"><input type="radio" name="vkind" id="inp-kind-car" value="car" checked /> 자동차</label>
+            <label class="bsa-label"><input type="radio" name="vkind" id="inp-kind-bike" value="bike" /> 오토바이</label>
+          </div>
+        </div>
+        <div class="field new-only wide">
           <label for="inp-chart-html">상세페이지 조견표 HTML</label>
           <textarea id="inp-chart-html" placeholder="사진 불러오기 버튼을 누르면 링크가 자동 입력됩니다" style="min-height:70px;"></textarea>
         </div>
       </div>
 
-      <!-- 실행 버튼 (신규등록 모드에서만 표시) -->
-      <button id="btn-run" style="margin-top:12px;">🚀 신규 등록 실행</button>
+      <!-- 입력 확인 (신규등록 모드에서만 표시). 좌측 값은 칸을 바꿀 때마다 오른쪽 폼에 바로
+           들어가므로 이 버튼은 넣는 버튼이 아니다 — 빠졌거나 어긋난 것을 로그로 보여 준다. -->
+      <button id="btn-run" style="margin-top:12px;">✔ 입력 확인</button>
+      <button id="btn-bulk-register" class="btn-bulk" style="margin-top:8px;">🚀 일괄 등록</button>
+      <!-- 일괄 수정 (단일 상품 수정 모드에서만 표시). 현황판에서 켠 몰마다 탭에 불러온 상품을 저장한다. -->
+      <button id="btn-bulk-edit" class="btn-bulk" style="margin-top:12px;display:none;">🛠 일괄 수정</button>
     </div><!-- /section7 -->
 
-    <!-- ── SECTION 8 (우측) ── -->
+    <!-- ── SECTION 8 (우측 — 자세히 보기) ── -->
     <div id="section8">
-      <div id="section8-header">
-        <div>
-          <div class="sec-label">Section 8</div>
-          <div class="sec-desc" id="sec8-desc">신규등록 — 실행 로그</div>
+      <div id="section8-header" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg-card);flex-shrink:0;">
+        <span id="sec8-desc" style="font-size:12px;font-weight:600;color:var(--text-secondary);">신규등록 — 실행 로그</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button id="btn-clear-log" title="로그 지우기" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:11px;cursor:pointer;">비우기</button>
         </div>
-        <button id="btn-clear-log" title="로그 지우기">초기화</button>
       </div>
       <div id="section8-body">
-        <!-- 로그 or 카드 -->
-        <div id="log-window"></div>
-        <!-- 선택 플랫폼 등록 폼 (iframe으로 index.html의 해당 탭 로드) -->
-        <iframe id="form-frame" title="등록 폼"
-          style="display:none;width:100%;flex:1;min-height:420px;border:1px solid var(--border);border-radius:8px;background:#0b1220;margin-top:10px;"></iframe>
-        <div id="card-area" style="display:none; flex-direction:column; gap:12px;"></div>
-        <div id="empty-state" class="empty-state">
-          <div class="empty-icon">📋</div>
-          <div>실행하거나 체크박스를 선택하면 여기에 결과가 표시됩니다.</div>
+        <div id="section8-main">
+          <!-- 로그 or 카드 -->
+          <div id="log-window"></div>
+          <!-- 선택 플랫폼 등록 폼 (iframe으로 index.html의 해당 탭 로드) -->
+          <iframe id="form-frame" title="등록 폼"
+            style="display:none;width:100%;flex:1;min-height:420px;border:1px solid var(--border);border-radius:8px;background:#0b1220;margin-top:0;"></iframe>
+          <div id="card-area" style="display:none; flex-direction:column; gap:12px;"></div>
+          <div id="empty-state" class="empty-state">
+            <div class="empty-icon">📋</div>
+            <div id="empty-state-text">현황판에서 플랫폼을 클릭하면 등록 폼이 열립니다.</div>
+          </div>
         </div>
+        <!-- 이미지 목록. 가운데 쇼핑몰 탭에 있던 것을 신규등록 폼 오른쪽으로 옮겼다(수정 모드에선 숨는다 — section8-mode.js). -->
+        <details id="image-library" class="vu-images" open></details>
       </div>
     </div><!-- /section8 -->
 
   </div><!-- /main -->
+
+      <div class="detail-toggle-footer">
+        <button type="button" id="btn-toggle-detail" class="detail-toggle-btn"
+          aria-controls="section8" aria-expanded="true"
+          title="신규등록 패널 접기 / 열기 — 접으면 현황판만 남습니다">
+          <span id="detail-toggle-icon" aria-hidden="true">◀</span>
+          <span id="detail-toggle-label">접기</span>
+        </button>
+      </div>
 </div><!-- /app -->
 
+<script src="image-library.js"></script>
+<script src="section8-mode.js"></script>
 <script>
 /* ══════════════════════════════════════════════
    플랫폼 데이터
@@ -751,12 +1183,44 @@ const PLATFORMS = {
   ],
 };
 
+// 쇼핑몰 로고 매핑. 파일이 없으면 renderBoard 가 알아서 이름 표시로 되돌리므로,
+// 새 로고는 이 경로에 PNG 만 넣으면 그대로 붙는다.
+const PLATFORM_LOGOS = {
+  '아임웹':   'logos/imweb.png',
+  '네이버':   'logos/naver.png',
+  '쿠팡':     'logos/coupang.png',
+  '아마존':   'logos/amazon.png',
+  '이베이':   'logos/ebay.png',
+  'B2B몰':    'logos/b2b.png',
+  '라쿠텐':   'logos/rakuten.png',
+  '쇼피파이': 'logos/shopify.png',
+};
+
+// 나라별 국기 이미지 매핑
+const COUNTRY_FLAGS = {
+  KOREA: 'flags/korea.png',
+  USA:   'flags/usa.png',
+  JAPAN: 'flags/japan.png',
+  ARAB:  'flags/arab.png',
+};
+
 const TYPE_ORDER = ['own', 'b2b', 'open1', 'open2'];
+
+// 플랫폼명 → index.html 탭 ID 매핑
+const NAME_TO_TAB = {
+  '아임웹': 'imwebBoardTab',
+  'B2B몰': 'imwebTab',
+  '네이버': 'naverTab',
+  '쿠팡': 'coupangTab',
+  '이베이': 'ebayTab',
+  '아마존': 'amazonTab'
+};
 
 /* ══════════════════════════════════════════════
    상태
 ══════════════════════════════════════════════ */
 let currentMode = 'new'; // 'new' | 'edit'
+let modeRevision = 0;
 
 // checked[country][type] = boolean
 const checked = {};
@@ -794,6 +1258,77 @@ const ipc = (() => {
 })();
 
 /* ══════════════════════════════════════════════
+   차량 카탈로그 (브랜드 → 국적 역인덱스)
+
+   iframe 등록 폼의 브랜드/차종 select는 국산차·수입차 트리로 나뉘어 있는데
+   좌측 상품정보 폼에는 국적 입력이 없다. 두 트리의 브랜드 키는 교집합이
+   없으므로 브랜드명만으로 국적을 되찾을 수 있다.
+══════════════════════════════════════════════ */
+let vuCategories = null;
+let vuNationalityOf = () => null;
+
+// 이륜차 브랜드 판정은 vu-suggest.js 가 소유한다(모듈이 없으면 전부 false).
+const isBikeBrand = b => !!(window.VUSuggest && window.VUSuggest.isBikeBrand(b));
+
+async function loadVuCategories() {
+  try {
+    const res = await ipc.invoke('imweb-load-categories');
+    if (!res || !res.success || !res.categories) return;
+    vuCategories = res.categories;
+    const idx = {};
+    Object.keys(vuCategories).forEach(nat => {
+      Object.keys(vuCategories[nat] || {}).forEach(b => { idx[b] = nat; });
+    });
+    vuNationalityOf = b => idx[String(b || '').trim()] || null;
+    // 같은 데이터를 자동완성 모듈에 넘겨 브랜드·차종 목록을 만든다.
+    if (window.VUSuggest) {
+      window.VUSuggest.setCatalog(vuCategories);
+      window.VUSuggest.bindShell(document);   // 이미 바인딩됐으면 목록만 갱신된다
+    }
+  } catch (e) {
+    // 오프라인·테스트 스텁 환경에서는 조용히 넘어간다(자동 주입만 생략됨).
+  }
+}
+// 차량 명칭 한↔영↔일 사전. 일본몰·아마존 JP 폼에 일본어를 채우는 데 쓴다.
+async function loadVuNames() {
+  try {
+    const res = await ipc.invoke('vehicle-load-i18n');
+    if (!res || !res.success || !res.names) return;
+    if (window.VUSuggest) window.VUSuggest.setNames(res.names);
+    autoFillLang();   // 사전이 늦게 와도 이미 적어둔 한국어가 번역되도록
+    scheduleFrameSync();
+  } catch (e) {
+    // 오프라인·테스트 스텁 환경에서는 조용히 넘어간다(자동 주입만 생략됨).
+  }
+}
+
+// 차량 카탈로그(엑셀 코드표·이베이 표에서 구운 것). 연식·차량코드·상품번호·SKU·판매가 목록.
+async function loadVuVehicleCatalog() {
+  try {
+    const res = await ipc.invoke('vehicle-load-catalog');
+    if (!res || !res.success || !res.catalog || !window.VUSuggest) return;
+    window.VUSuggest.setVehicleCatalog(res.catalog);
+    window.VUSuggest.refreshShell(document);
+    autoFillLang();
+  } catch (e) {
+    // 오프라인·테스트 스텁 환경에서는 조용히 넘어간다(목록만 비어 있다).
+  }
+}
+
+// 사전 조회 얇은 래퍼. 모듈이 없거나 사전이 아직 안 왔으면 null → 호출부가 경고를 띄운다.
+// model* 만 인자가 2개(브랜드, 차종)라 가변인자로 받는다.
+const vuJa = (kind, ...a) =>
+  (window.VUSuggest && window.VUSuggest[kind + 'Ja'] ? window.VUSuggest[kind + 'Ja'](...a) : null);
+const vuEn = (kind, ...a) =>
+  (window.VUSuggest && window.VUSuggest[kind + 'En'] ? window.VUSuggest[kind + 'En'](...a) : null);
+
+// 카탈로그가 없어도 세대 프리셋은 쓸 수 있으므로 먼저 붙이고, 도착하면 목록을 채운다.
+if (window.VUSuggest) window.VUSuggest.bindShell(document);
+loadVuCategories();
+loadVuNames();
+loadVuVehicleCatalog();
+
+/* ══════════════════════════════════════════════
    DOM refs
 ══════════════════════════════════════════════ */
 const $ = id => document.getElementById(id);
@@ -817,7 +1352,31 @@ function renderBoard() {
     // 나라 셀
     const tdCountry = document.createElement('td');
     tdCountry.className = 'country-cell';
-    tdCountry.textContent = country;
+    tdCountry.dataset.country = country;
+
+    const innerCountry = document.createElement('div');
+    innerCountry.className = 'country-cell-inner';
+
+    const flagSrc = COUNTRY_FLAGS[country];
+    if (flagSrc) {
+      const flagImg = document.createElement('img');
+      flagImg.className = 'country-flag';
+      flagImg.src = flagSrc;
+      flagImg.alt = '';
+      innerCountry.appendChild(flagImg);
+    }
+
+    // 국기가 나라를 대신한다. 이름은 툴팁·스크린리더용으로만 남긴다.
+    if (!flagSrc) {
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'country-name';
+      nameSpan.textContent = country;
+      innerCountry.appendChild(nameSpan);
+    }
+    tdCountry.title = country;
+
+    tdCountry.appendChild(innerCountry);
+    tr.dataset.country = country;
     tr.appendChild(tdCountry);
 
     // 플랫폼 셀
@@ -834,32 +1393,79 @@ function renderBoard() {
       td.className = 'platform-cell';
       td.dataset.country = country;
       td.dataset.type = type;
+      td.dataset.tabId = NAME_TO_TAB[plat.name] || '';
 
       const inner = document.createElement('div');
       inner.className = 'cell-inner';
       inner.id = `cell-${country}-${type}`;
 
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.id = `cb-${country}-${type}`;
-      cb.checked = checked[country][type];
+      // 체크박스는 없앴다. 로고 타일 자체가 눌린 상태(색 + 테두리)로 선택을 보여준다.
+      // 눈으로는 사라졌지만 보조기술에는 여전히 체크박스여야 하므로 role/aria 로 남긴다.
+      inner.setAttribute('role', 'checkbox');
+      inner.setAttribute('aria-checked', String(checked[country][type]));
+      inner.setAttribute('aria-label', `${country} ${plat.name}`);
+      inner.tabIndex = 0;
 
+      // 로고가 있으면 로고, 없거나 파일이 깨졌으면 이름으로 되돌린다.
       const nameEl = document.createElement('div');
       nameEl.className = 'plat-name';
       nameEl.textContent = plat.name;
 
-      inner.appendChild(cb);
-      inner.appendChild(nameEl);
+      const logoSrc = PLATFORM_LOGOS[plat.name];
+      if (logoSrc) {
+        const logo = document.createElement('img');
+        logo.className = 'plat-logo';
+        logo.src = logoSrc;
+        logo.alt = plat.name;
+        logo.addEventListener('error', () => logo.replaceWith(nameEl), { once: true });
+        inner.appendChild(logo);
+      } else {
+        inner.appendChild(nameEl);
+      }
+      td.title = `${country} ${plat.name}`;
       td.appendChild(inner);
       tr.appendChild(td);
 
-      // 클릭 이벤트
-      td.addEventListener('click', e => {
-        if (e.target === cb) return; // 체크박스 자체 클릭은 change에서 처리
-        cb.checked = !cb.checked;
-        handleCheck(country, type, cb.checked);
+      // 켜고 끄기. 키보드 Space 는 이쪽만 쓴다 — role="checkbox" 는 Space 에 토글을 약속한다.
+      const setCell = on => handleCheck(country, type, on, plat ? NAME_TO_TAB[plat.name] : null);
+
+      // 클릭은 하나 더 한다: 이미 켜져 있는데 그 탭을 안 보고 있으면 끄는 대신 그 탭으로 간다.
+      // 키보드는 Enter 가 이쪽이다 — 가운데 쇼핑몰 탭(켜진 몰 폼 열기)을 없앤 뒤로 그 길이 여기뿐이다.
+      const clickCell = () => {
+        openDetailSidebar();
+        const targetTab = plat ? NAME_TO_TAB[plat.name] : null;
+        const currentlyChecked = checked[country][type];
+
+        if (currentlyChecked && targetTab) {
+          const frame = $('form-frame');
+          const isFrameOpen = frame && frame.style.display === 'block';
+          const activeBtn = frame?.contentWindow?.document?.querySelector('.tab-btn.active');
+          const activeOc = activeBtn?.getAttribute('onclick') || '';
+          // 아마존 탭은 미국·일본이 같이 쓴다. 둘 다 켜져 있으면 탭이 보여도 '다른 나라 마켓' 일 수
+          // 있다 — 그때 누른 것은 끄기가 아니라 그 나라 마켓으로 바꾸기다.
+          const bothAmazon = !!(checked.USA?.open1 && checked.JAPAN?.open1);
+          const sameMarket = targetTab !== 'amazonTab' || !bothAmazon || lastAmazonCountry === country;
+          const isTabActive = activeOc.includes(`'${targetTab}'`) && sameMarket;
+
+          if (!isFrameOpen || !isTabActive) {
+            // 이미 체크되어 있지만 다른 탭을 보고 있거나 폼이 닫혀있는 경우 → 해당 탭으로 바로 전환
+            openPlatformTab(targetTab, country);
+            scheduleFrameSync();   // 아마존이면 마켓이 바뀌었을 수 있다
+            return;
+          }
+        }
+
+        setCell(!checked[country][type]);
+      };
+
+      td.addEventListener('click', clickCell);
+      inner.addEventListener('keydown', e => {
+        if (e.key !== ' ' && e.key !== 'Enter') return;
+        e.preventDefault();
+        if (e.key === 'Enter') return clickCell();
+        openDetailSidebar();
+        setCell(!checked[country][type]);
       });
-      cb.addEventListener('change', () => handleCheck(country, type, cb.checked));
     });
 
     boardBody.appendChild(tr);
@@ -868,12 +1474,12 @@ function renderBoard() {
 }
 
 function updateRowHighlight(country, trEl) {
-  let tr = trEl;
+  let tr = trEl || boardBody.querySelector(`tr[data-country="${country}"]`);
   if (!tr) {
     // 행 직접 탐색
     Array.from(boardBody.rows).forEach(row => {
       const cc = row.querySelector('.country-cell');
-      if (cc && cc.textContent === country) tr = row;
+      if (cc && (cc.dataset.country === country || cc.textContent.trim() === country)) tr = row;
     });
   }
   if (!tr) return;
@@ -884,43 +1490,388 @@ function updateRowHighlight(country, trEl) {
 function syncCellUI(country, type) {
   const inner = document.getElementById(`cell-${country}-${type}`);
   if (!inner) return;
-  const cb = inner.querySelector('input[type="checkbox"]');
-  if (cb) cb.checked = checked[country][type];
+  inner.setAttribute('aria-checked', String(checked[country][type]));
   inner.classList.toggle('checked', checked[country][type]);
+}
+
+// 지금 폼에 띄운 몰을 현황판 칸에 표시한다(.viewing). 폼의 탭을 바꾸는 곳은 applyFilter 의 showPane
+// 하나뿐이라 거기서 부른다. 아마존은 미국·일본이 탭 하나를 같이 써서, 그 탭이 지금 올리는 마켓 칸만 표시한다.
+function markViewingCells(tabId) {
+  document.querySelectorAll('#board-body .platform-cell').forEach(td => {
+    td.classList.toggle('viewing', td.dataset.tabId === tabId &&
+      (tabId !== 'amazonTab' || td.dataset.country === amazonTargetCountry()));
+  });
+}
+
+/* ══════════════════════════════════════════════
+   테마 (밝게 / 어둡게) — 값과 버튼은 theme.js 가 owns 한다.
+   여기서는 iframe 만 따로 챙긴다: 등록 폼은 문서가 달라서 <html data-theme> 가
+   자동으로 안 따라오고, 안 심으면 폼만 어두운 채로 남는다.
+══════════════════════════════════════════════ */
+function syncFrameTheme() {
+  const doc = document.getElementById('form-frame')?.contentWindow?.document;
+  if (doc) doc.documentElement.dataset.theme = document.documentElement.dataset.theme;
+}
+
+VUTheme.init({ onApply: syncFrameTheme });
+
+/* ══════════════════════════════════════════════
+   언어별 표기 칸
+   현황판에서 체크한 나라의 언어 칸만 보여준다. 한국어는 기준값이라 항상 보이고,
+   다른 언어 칸이 비어 있으면 등록할 때 한국어가 대신 들어간다(경고와 함께).
+══════════════════════════════════════════════ */
+const COUNTRY_LANG = { KOREA: 'ko', USA: 'en', JAPAN: 'ja', ARAB: 'en' };
+
+function activeLangs() {
+  const langs = new Set(['ko']);
+  Object.keys(PLATFORMS).forEach(country => {
+    const lang = COUNTRY_LANG[country];
+    if (!lang) return;
+    if (PLATFORMS[country].some(p => p.active && checked[country] && checked[country][p.type])) {
+      langs.add(lang);
+    }
+  });
+  return langs;
+}
+
+function updateLangFields() {
+  const langs = activeLangs();
+  window.VUSuggest?.setJapanMode(langs.has('ja'), document);
+  document.querySelectorAll('.lang-row').forEach(row => {
+    let shown = 0;
+    row.querySelectorAll('.lang-col').forEach(col => {
+      const on = langs.has(col.dataset.lang);
+      col.hidden = !on;
+      if (on) shown += 1;
+    });
+    row.classList.toggle('single', shown <= 1);
+  });
+  autoFillLang();
+}
+
+// 쇼핑몰별 칸(SKU · 판매가 USD · Product Type · 쿠팡 상품ID)도 언어 칸과 같다 — 그 칸을 쓰는
+// 몰이 현황판에서 하나라도 켜져 있을 때만 보인다. 라벨 옆 꼬리표는 지금 켜진 그 몰들이다.
+const MALL_ON = {
+  'imweb-us': () => !!checked.USA?.own,
+  amazon:      () => !!(checked.USA?.open1 || checked.JAPAN?.open1),
+  'amazon-us': () => !!checked.USA?.open1,   // 달러 판매가는 미국 아마존만(일본은 엔화를 탭에서)
+  'amazon-jp': () => !!checked.JAPAN?.open1, // 수정 모드의 엔화 변경 판매가
+  ebay:        () => !!checked.USA?.open2,
+  naver:       () => !!checked.KOREA?.open1,
+  coupang:     () => !!checked.KOREA?.open2,
+};
+const MALL_NAME = { 'imweb-us': '아임웹 영문', amazon: '아마존', 'amazon-us': '아마존 미국', 'amazon-jp': '아마존 일본',
+                    ebay: '이베이', naver: '네이버', coupang: '쿠팡' };
+
+function updateMallFields() {
+  document.querySelectorAll('.mall-field').forEach(f => {
+    const on = (f.dataset.malls || '').split(/\s+/).filter(m => MALL_ON[m] && MALL_ON[m]());
+    f.hidden = on.length === 0;
+    const tags = f.querySelector('.mall-tags');
+    if (tags) tags.textContent = on.length ? ' · ' + on.map(m => MALL_NAME[m]).join(' · ') : '';
+  });
+}
+
+// 아마존 Product Type 의 처음 값은 아마존 설정(amazon_config.json)에 저장된 값이다. 탭에서 좌측으로
+// 옮겨 오면서 처음 값도 여기서 읽는다. 사람이 이미 고쳤으면 덮지 않는다.
+async function loadAmazonProductType() {
+  try {
+    const res = await ipc.invoke('amazon-load-config');
+    const pt = res && res.success && res.config ? String(res.config.productType || '').trim() : '';
+    const el = $('inp-amz-ptype');
+    if (pt && el && el.value === el.defaultValue) { el.value = pt; scheduleFrameSync(); }
+  } catch (e) {
+    // 오프라인·테스트 스텁 환경에서는 기본값(AUTO_PART)을 쓴다.
+  }
+}
+
+// 변경 판매가(수정 모드) 목록의 국내 기준가 등급과 그 환율가. 등급표는 상품 일괄 수정 화면의 환율 자동 변경
+// 설정이라 거기서 고칠 수 있다 — 칸을 열 때 다시 읽는다(1분에 한 번까지). 못 읽으면 이베이 표 판매가만 보인다.
+let priceTiersAt = 0;
+async function loadPriceTiers({ force = false } = {}) {
+  if (!force && Date.now() - priceTiersAt < 60000) return;
+  priceTiersAt = Date.now();
+  try {
+    const res = await ipc.invoke('fx-auto-price-get');
+    if (res && res.success && res.data) window.VUSuggest?.setPriceTiers(document, res.data.tiers);
+  } catch (e) {
+    // 오프라인·테스트 스텁 환경에서는 등급 없이 둔다.
+  }
+}
+
+// 자동완성 칸(SKU·판매가·변경 판매가·쿠팡 상품)의 '지금 몰 값' — 앱이 API 로 받아 둔 아마존·eBay 목록과 쿠팡 판매가
+// (main 'vehicle-live-values'). 저장·동기화로 바뀌므로 칸을 열 때 다시 읽는다(1분에 한 번까지).
+let liveValuesAt = 0;
+async function loadLiveValues({ force = false } = {}) {
+  if (!force && Date.now() - liveValuesAt < 60000) return;
+  liveValuesAt = Date.now();
+  try {
+    const res = await ipc.invoke('vehicle-live-values');
+    if (res && res.success && res.live) window.VUSuggest?.setLiveValues(document, res.live);
+  } catch (e) {
+    // 오프라인·테스트 스텁 환경에서는 표 값만 보인다.
+  }
+}
+
+// 한국어를 넣으면 영문·일문 칸을 사전에서 찾아 바로 채운다.
+// 사람이 직접 고친 칸은 건드리지 않는다 — 우리가 쓴 값에만 vuAuto 표시를 남겨 두고,
+// 그 표시가 있는 값만 다시 덮는다.
+function autoFillLang() {
+  const ko = id => (document.getElementById(id)?.value || '').trim();
+  const brand = ko('inp-brand'), carModel = ko('inp-carmodel'), gen = ko('inp-gen');
+  const japan = window.VUSuggest?.japanSelection(document);
+  const rows = [
+    ['inp-brand',    enTitleCase(vuEn('brand', brand)),           vuJa('brand', brand)],
+    ['inp-carmodel', enTitleCase(vuEn('model', brand, carModel)), vuJa('model', brand, carModel)],
+    ['inp-gen',      genEn(gen, vuEn('gen', gen)),   japan ? japan.genJa : vuJa('gen', gen)],
+  ];
+  for (const [base, en, ja] of rows) {
+    for (const [lang, val] of [['en', en], ['ja', ja]]) {
+      const el = document.getElementById(`${base}-${lang}`);
+      if (!el) continue;
+      if (el.value.trim() && el.dataset.vuAuto !== '1') continue;   // 직접 적은 값은 그대로 둔다
+      if (!val) {
+        // 브랜드를 바꿔서 사전에 없는 차종이 됐다면, 전 차종의 번역이 남지 않게 지운다.
+        if (el.dataset.vuAuto === '1') { el.value = ''; delete el.dataset.vuAuto; }
+        continue;
+      }
+      el.value = val;
+      el.dataset.vuAuto = '1';
+    }
+  }
+}
+
+function bindLangAutoFill() {
+  for (const base of ['inp-brand', 'inp-carmodel', 'inp-gen']) {
+    document.getElementById(base)?.addEventListener('input', autoFillLang);
+    for (const lang of ['en', 'ja']) {
+      const t = document.getElementById(`${base}-${lang}`);
+      // 사람이 손대는 순간 자동 채움 대상에서 뺀다. (프로그램이 .value 를 넣을 때는
+      // input 이 안 뜨므로 이 리스너는 사람 입력에만 반응한다.)
+      t?.addEventListener('input', () => { delete t.dataset.vuAuto; });
+    }
+  }
+  // A source-row selection fills year and series after generation.
+  for (const id of ['inp-year', 'inp-code']) document.getElementById(id)?.addEventListener('input', autoFillLang);
+}
+
+// 영문 세대 표기를 실제 판매 상품명 형식으로 맞춘다.
+//   실제 상품명(아마존·이베이 예시 전부): '2nd gen', '6th gen', '10,11th gen'
+//   사전(vehicle_i18n.json): 944개 중 793개가 '2Gen', 60개가 '2nd Gen' 이고
+//                             '6세대'·'10세대' 는 아예 없다
+// 그대로 쓰면 제목에 '2Gen' 이나 한글 '6세대' 가 박힌다. 'N세대' · 'NGen' · 'Nth Gen' 을
+// 전부 'Nth gen' 으로 바꾸고, 뒤에 붙는 말(전기형·파생…)은 사전의 영문값과 같은 낱말로 옮긴다.
+// 그래도 한글이 남으면 번역을 지어내지 않고 빈 값으로 돌린다 — 호출부가 경고를 띄운다.
+const GEN_EN_TOKENS = [
+  // 긴 말을 먼저 — '페이스리프트' 를 '페리' 보다, '파생형' 을 '파생' 보다 먼저 바꿔야 한다.
+  ['페이스리프트', 'Facelift'], ['파생형', 'Derivative'], ['전기형', 'Early'], ['후기형', 'Late'],
+  ['중기형', 'Mid'], ['초기형', 'Initial'], ['페리', 'Facelift'], ['파생', 'Derivative'], ['현재', 'Present'],
+];
+
+function ordinalOf(n) {
+  const s = String(n);
+  if (s.includes('.')) return `${s}th`;                    // 9.5세대 → 9.5th
+  const last = parseInt(s.split(/[^0-9]+/).filter(Boolean).pop(), 10);   // 10,11 → 11
+  if (Number.isNaN(last)) return `${s}th`;
+  const t = last % 100;
+  const suf = (t >= 11 && t <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[last % 10] || 'th');
+  return `${s}${suf}`;
+}
+
+function genEn(ko, dictEn) {
+  let out = String(dictEn || ko || '').trim();
+  if (!out) return '';
+  out = out.replace(/(\d+(?:[.,]\d+)*)\s*(?:세대|(?:st|nd|rd|th)?\s*gen)/gi, (_, n) => `${ordinalOf(n)} gen`);
+  for (const [k, v] of GEN_EN_TOKENS) out = out.split(k).join(v);
+  return /[가-힣]/.test(out) ? '' : out.replace(/\s+/g, ' ').trim();
+}
+
+// 영문 브랜드·차종을 판매 상품명처럼 맞춘다. 사전 영문 차종은 1058건 중 927건이 전부
+// 대문자이고(BRONCO, CIVIC) 몇몇은 붙어 있다(1series). 실제 상품명은 'Bronco', '1 Series'.
+//   BRONCO → Bronco · GLE CLASS → GLE Class · ACCORD-C → Accord-C · 1series → 1 Series
+// 건드리지 않는 것:
+//   · 숫자가 섞인 낱말 — 차명·코드다 (GR86, EV3, X5, 3GT)
+//   · 세 글자 이하 대문자 — 약어다 (BMW, GLE, MKZ, ATS, BYD)
+//   · 이미 대소문자가 섞인 낱말 — 누가 일부러 그렇게 적은 것이다 (iX, Kia, McLaren)
+function enTitleCase(s) {
+  return String(s || '').trim()
+    .replace(/\b(\d+)([a-z]{3,})\b/g, (_, n, w) => `${n} ${w}`)   // 1series → 1 series
+    .split(/(\s+|-|\/)/)                                             // 구분자는 그대로 되살린다
+    .map(w => {
+      if (!/^[A-Za-z]+$/.test(w)) return w;
+      const upper = w === w.toUpperCase(), lower = w === w.toLowerCase();
+      if (!upper && !lower) return w;              // 섞여 있으면 손대지 않는다
+      if (upper && w.length <= 3) return w;        // 약어
+      return w[0].toUpperCase() + w.slice(1).toLowerCase();
+    })
+    .join('');
+}
+
+// 손으로 적어 넣은 언어별 표기. 없으면 빈 문자열 — 호출부가 사전·한글로 이어서 폴백한다.
+function manualLang(base, lang) {
+  const el = document.getElementById(`${base}-${lang}`);
+  return el ? el.value.trim() : '';
 }
 
 /* ══════════════════════════════════════════════
    체크 핸들러
 ══════════════════════════════════════════════ */
-function handleCheck(country, type, isChecked) {
+/* ══════════════════════════════════════════════
+   현황판 선택 — 저장 · 복원 · 빠른 선택
+   예전에는 앱을 켤 때마다 전부 꺼진 채로 떠서, 매일 같은 몰에 올리는데도 칸을 열 번씩 다시 눌렀다.
+   선택은 이 PC 의 localStorage 에 둔다(theme.js 의 테마와 같은 곳 — 서버·계정과는 무관하다).
+══════════════════════════════════════════════ */
+const BOARD_STORE_KEY = 'veryup.board.selection.v1';
+const BOARD_PRESETS = {           // 칩 → 켤 나라들. 그 나라의 켤 수 있는 칸은 전부 켜고 나머지는 끈다.
+  all:   ['KOREA', 'USA', 'JAPAN', 'ARAB'],
+  korea: ['KOREA'],
+  usa:   ['USA'],
+  japan: ['JAPAN'],
+  none:  [],
+};
+
+function saveBoardSelection() {
+  try { localStorage.setItem(BOARD_STORE_KEY, JSON.stringify(checked)); } catch (e) {}
+}
+
+// 깨진 값·옛 버전 값은 버린다. 모양은 setBoardSelection 이 칸 단위로 다시 거른다.
+function loadBoardSelection() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(BOARD_STORE_KEY) || 'null');
+    return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : null;
+  } catch (e) { return null; }
+}
+
+// 그 나라들의 켤 수 있는 칸을 전부 켠 선택. 비활성 칸(B2B 없는 나라 등)은 늘 꺼 둔다.
+function presetSelection(countries) {
+  const next = {};
+  for (const country of Object.keys(PLATFORMS)) {
+    next[country] = {};
+    for (const p of PLATFORMS[country]) next[country][p.type] = countries.includes(country) && p.active && !!p.name;
+  }
+  return next;
+}
+
+function isCurrentSelection(sel) {
+  return Object.keys(PLATFORMS).every(c => PLATFORMS[c].every(p => !!sel[c]?.[p.type] === !!checked[c]?.[p.type]));
+}
+
+// 지금 선택과 똑같은 칩을 켠다. '해제' 는 상태가 아니라 동작이라 aria-pressed 가 없다.
+function updateBoardPresets() {
+  document.querySelectorAll('.board-preset[aria-pressed]').forEach(btn => {
+    btn.setAttribute('aria-pressed', String(isCurrentSelection(presetSelection(BOARD_PRESETS[btn.dataset.preset] || []))));
+  });
+}
+
+function onBoardSelectionChanged() {
+  saveBoardSelection();
+  updateBoardPresets();
+}
+
+// 처음 켜진 '폼이 있는' 몰과 그 나라. 아마존은 나라에 따라 마켓이 갈려서 나라까지 같이 넘긴다.
+function firstSelectedTab() {
+  for (const country of Object.keys(checked)) {
+    for (const type of TYPE_ORDER) {
+      if (!checked[country]?.[type]) continue;
+      const plat = PLATFORMS[country].find(p => p.type === type);
+      const tab = plat && NAME_TO_TAB[plat.name];
+      if (tab) return { tab, country };
+    }
+  }
+  return null;
+}
+
+// 여러 칸을 한 번에 바꾼다(빠른 선택 칩 · 저장된 선택 복원). 칸마다 handleCheck 를 그냥 부르면 켤 때마다
+// 그 몰 폼으로 탭이 넘어가서, 열 칸이면 탭이 열 번 바뀐다. 바뀐 칸만 조용히 고치고 폼은 끝에 한 번 맞춘다.
+function setBoardSelection(next) {
+  let changed = false;
+  for (const country of Object.keys(PLATFORMS)) {
+    for (const p of PLATFORMS[country]) {
+      if (!p.active || !p.name) continue;
+      const want = !!next?.[country]?.[p.type];
+      if (checked[country][p.type] === want) continue;
+      handleCheck(country, p.type, want, null, { quiet: true });
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  const frame = $('form-frame');
+  if (!getSelectedTabs().length) {
+    if (frame) frame.style.display = 'none';
+  } else if (frame && frame.style.display === 'block') {
+    applyFilter();   // 보던 몰이 아직 켜져 있으면 그대로, 꺼졌으면 남은 첫 몰로
+  } else {
+    const first = firstSelectedTab();
+    if (first) openPlatformTab(first.tab, first.country);
+  }
+  updateEmptyState();
+}
+
+// quiet: 여러 칸을 한꺼번에 바꿀 때(setBoardSelection) 폼 탭을 칸마다 옮기지 않는다 — 부른 쪽이 끝에 한 번 맞춘다.
+function handleCheck(country, type, isChecked, targetTab, { quiet = false } = {}) {
   checked[country][type] = isChecked;
+  onBoardSelectionChanged();
   syncCellUI(country, type);
   updateRowHighlight(country);
+  updateLangFields();
+  updateMallFields();
+  scheduleFrameSync();   // 켠 몰은 채우고, 끈 몰은 경고에서 뺀다
 
-  if (currentMode === 'edit') {
+  const plat = PLATFORMS[country]?.find(p => p.type === type);
+  const resolvedTab = targetTab || (plat ? NAME_TO_TAB[plat.name] : null);
+
+  if (currentMode === 'edit' && !resolvedTab) {
     if (isChecked) {
       searchProduct(country, type);
     } else {
       removeCard(country, type);
     }
+    updateEmptyState();
+    return;
   }
+
+  if (quiet) return;
+
+  // 1-Click 테이블 클릭 시 바로 해당 플랫폼 탭 열기
+  if (isChecked) {
+    if (resolvedTab) {
+      openPlatformTab(resolvedTab, country);
+    } else if (plat) {
+      addLog(`${country} ${plat.name} 등록 폼은 준비 중입니다.`, 'info');
+    }
+  } else {
+    // 체크 해제 시 남은 탭 필터 갱신 또는 폼 닫기
+    const tabs = getSelectedTabs();
+    const frame = $('form-frame');
+    if (tabs.length === 0) {
+      if (frame) frame.style.display = 'none';
+      updateEmptyState();
+    } else if (frame && frame.style.display === 'block') {
+      applyFilter();
+    }
+  }
+
   updateEmptyState();
 }
 
-/* ══════════════════════════════════════════════
-   로그
-══════════════════════════════════════════════ */
-// 플랫폼 브라우저 로그인 (현황판 위 버튼) — 서버에 로그인정보가 있으면 자동입력됨
-async function platformLogin(platform) {
-  const names = { naver: '네이버', esm: 'ESM', imweb: '아임웹' };
-  const chan  = { naver: 'naver-login', esm: 'esm-login', imweb: 'imweb-login' };
-  addLog(`${names[platform]} 로그인 창을 엽니다...`, 'info');
+// 판매자 콘솔을 기본 브라우저로 연다. URL 은 메인 프로세스가 결정한다(임의 주소 실행 방지).
+// 아마존은 설정된 마켓플레이스에 맞는 콘솔로 간다 — US 주소로 일본 상품을 찾으면 빈 목록처럼 보인다.
+// 조회용 판매자 콘솔. 첫 실행에서 캡차·2단계 인증이 걸리면 사람이 그 창에서 마저 로그인하면 되고,
+// 그 세션은 저장되므로 다음부터는 바로 목록이 뜬다.
+async function openSellerSite(platform) {
+  const names = {
+    coupang: '쿠팡 윙', amazon: '아마존 셀러센트럴', ebay: '이베이 셀러허브',
+    naver: '네이버 스마트스토어', imweb: '아임웹 B2B몰',
+  };
+  const name = names[platform] || platform;
+  addLog(`${name} 을(를) 여는 중...`, 'info');
   try {
-    const res = await ipc.invoke(chan[platform]);
-    if (res && res.success) addLog(`${names[platform]} 로그인 성공!`, 'ok');
-    else addLog(`${names[platform]} 로그인 실패: ${(res && res.error) || '알 수 없는 오류'}`, 'error');
+    const res = await ipc.invoke('open-seller-site', platform);
+    if (res && res.ok && res.fallback) addLog(`${name} — 기본 브라우저로 열었습니다 (자동 로그인 없음).`, 'warn');
+    else if (res && res.ok) addLog(`${name} 을(를) 열었습니다. 로그인 화면이 남아 있으면 그 창에서 마저 진행해주세요.`, 'ok');
+    else addLog(`열지 못했습니다: ${(res && res.error) || '알 수 없는 오류'}`, 'error');
   } catch (e) {
-    addLog(`${names[platform]} 로그인 오류: ${e.message}`, 'error');
+    addLog(`브라우저 열기 오류: ${e.message}`, 'error');
   }
 }
 
@@ -950,13 +1901,17 @@ function addLog(msg, level = 'info') {
 }
 
 /* ══════════════════════════════════════════════
-   상품 검색 (수정 모드)
+   상품 검색 (수정 모드 — Section 8 카드 영역)
 ══════════════════════════════════════════════ */
 async function searchProduct(country, type) {
-  const plat = PLATFORMS[country].find(p => p.type === type);
+  const plat = PLATFORMS[country]?.find(p => p.type === type);
   if (!plat) return;
 
-  const searchText = $('inp-code').value.trim() || $('inp-carmodel').value.trim() || '';
+  const brand = $('inp-brand')?.value.trim() || '';
+  const carModel = $('inp-carmodel')?.value.trim() || '';
+  const code = $('inp-code')?.value.trim() || '';
+  const no = $('inp-no')?.value.trim() || '';
+  const searchText = code || no || `${brand} ${carModel}`.trim() || '';
   const cardId = `card-${country}-${type}`;
 
   // 기존 카드 제거 후 새로 생성
@@ -982,15 +1937,19 @@ async function searchProduct(country, type) {
   updateEmptyState();
 
   try {
+    addLog(`[${country} ${plat.name}] 상품 검색 시작... (${searchText || '전체'})`, 'info');
     const result = await ipc.invoke('veryup-search-product', {
-      country, platform: plat.name, searchText,
+      country, platform: plat.name, searchText, brand, model: carModel, code: code || no
     });
     renderSearchResult(cardId, country, type, plat, result);
+    const count = (result && result.items) ? result.items.length : 0;
+    addLog(`[${country} ${plat.name}] 검색 완료 (${count}건)`, count > 0 ? 'ok' : 'warn');
   } catch (err) {
     const body = document.getElementById(`${cardId}-body`);
     if (body) body.innerHTML = `<div class="no-results">❌ 검색 오류: ${escHtml(String(err.message || err))}</div>`;
     const status = document.getElementById(`${cardId}-status`);
     if (status) status.textContent = '오류';
+    addLog(`[${country} ${plat.name}] 검색 실패: ${err.message}`, 'error');
   }
 }
 
@@ -998,39 +1957,41 @@ function renderSearchResult(cardId, country, type, plat, result) {
   const body = document.getElementById(`${cardId}-body`);
   const status = document.getElementById(`${cardId}-status`);
   if (!body) return;
+  cardEdits.delete(cardId);   // 결과를 다시 그리면 고른 상품·수정 폼도 사라진다
 
   const items = (result && Array.isArray(result.items)) ? result.items : [];
 
   if (status) status.textContent = items.length > 0 ? `${items.length}개 검색됨` : '결과 없음';
 
   if (items.length === 0) {
-    body.innerHTML = '<div class="no-results">검색 결과가 없습니다.</div>';
+    // 플랫폼이 0건 사유를 알려주면(현재 eBay) 그대로 보여준다.
+    const reason = result?.stats?.reason;
+    body.innerHTML = `<div class="no-results">${escHtml(reason || '검색 결과가 없습니다.')}</div>`;
     return;
   }
 
   const resultsEl = document.createElement('div');
   resultsEl.className = 'search-results';
 
-  items.forEach(item => {
-    const div = document.createElement('div');
-    div.className = 'result-item';
-    div.innerHTML = `
-      <div class="result-thumb">🖼️</div>
-      <div class="result-info">
-        <div class="result-name">${escHtml(item.name || '상품명 없음')}</div>
-        <div class="result-id">ID: ${escHtml(String(item.id || ''))}</div>
-      </div>
-    `;
-    div.addEventListener('click', () => {
-      resultsEl.querySelectorAll('.result-item').forEach(el => el.classList.remove('selected'));
-      div.classList.add('selected');
-      showEditForm(body, resultsEl, cardId, country, type, plat, item);
-    });
-    resultsEl.appendChild(div);
+  const selection = VUProductTable.render(resultsEl, items, {
+    caption: `${plat.name} 상품 검색 결과`, currency: country === 'USA' ? 'USD' : (country === 'JAPAN' ? 'JPY' : 'KRW'),
+    onSelect: item => showEditForm(body, resultsEl, cardId, country, type, plat, item)
   });
+  resultsEl.clearSelection = selection.clearSelection;
 
   body.innerHTML = '';
   body.appendChild(resultsEl);
+}
+
+// 탭이 없는 몰(라쿠텐·쇼피파이) 카드에서 지금 고른 상품. cardId → { country, plat, item, updateData() }.
+// 카드의 '적용' 버튼과 일괄 수정이 같은 값을 같은 길(applyCardEdit)로 보낸다.
+const cardEdits = new Map();
+
+// 카드에서 고른 상품을 저장한다. 실패하면 던진다(메인 프로세스 핸들러가 던진다).
+function applyCardEdit({ country, plat, item, updateData }) {
+  return ipc.invoke('veryup-update-product', {
+    country, platform: plat.name, productId: item.id, updateData: updateData(),
+  });
 }
 
 function showEditForm(body, resultsEl, cardId, country, type, plat, item) {
@@ -1066,31 +2027,35 @@ function showEditForm(body, resultsEl, cardId, country, type, plat, item) {
     </div>
   `;
   body.appendChild(form);
-
-  // 취소
-  document.getElementById(`${cardId}-btn-cancel`).addEventListener('click', () => {
-    form.remove();
-    resultsEl.querySelectorAll('.result-item').forEach(el => el.classList.remove('selected'));
-  });
-
-  // 적용
-  document.getElementById(`${cardId}-btn-apply`).addEventListener('click', async () => {
-    const updateData = {
+  const edit = {
+    country, plat, item,
+    updateData: () => ({
       name:        document.getElementById(`${cardId}-edit-name`).value,
       price:       document.getElementById(`${cardId}-edit-price`).value,
       stock:       document.getElementById(`${cardId}-edit-stock`).value,
       description: document.getElementById(`${cardId}-edit-desc`).value,
-    };
+    }),
+  };
+  cardEdits.set(cardId, edit);
+
+  // 취소
+  document.getElementById(`${cardId}-btn-cancel`).addEventListener('click', () => {
+    form.remove();
+    if (cardEdits.get(cardId) === edit) cardEdits.delete(cardId);
+    resultsEl.clearSelection?.();
+  });
+
+  // 적용
+  document.getElementById(`${cardId}-btn-apply`).addEventListener('click', async () => {
     const applyBtn = document.getElementById(`${cardId}-btn-apply`);
     applyBtn.disabled = true;
     applyBtn.textContent = '적용 중...';
 
     try {
-      await ipc.invoke('veryup-update-product', {
-        country, platform: plat.name, productId: item.id, updateData,
-      });
+      const res = await applyCardEdit(edit);
       applyBtn.textContent = '✔ 완료';
       applyBtn.style.background = 'var(--accent-success)';
+      addLog(`[${country} ${plat.name}] ${(res && res.message) || '수정 완료'}`, 'ok');
       setTimeout(() => {
         applyBtn.textContent = '✔ 적용';
         applyBtn.style.background = '';
@@ -1099,6 +2064,7 @@ function showEditForm(body, resultsEl, cardId, country, type, plat, item) {
     } catch(err) {
       applyBtn.textContent = '❌ 실패';
       applyBtn.style.background = 'var(--accent-danger)';
+      addLog(`[${country} ${plat.name}] 수정 실패: ${err.message}`, 'error');
       setTimeout(() => {
         applyBtn.textContent = '✔ 적용';
         applyBtn.style.background = '';
@@ -1111,125 +2077,681 @@ function showEditForm(body, resultsEl, cardId, country, type, plat, item) {
 function removeCard(country, type) {
   const card = document.getElementById(`card-${country}-${type}`);
   if (card) card.remove();
+  cardEdits.delete(`card-${country}-${type}`);
 }
 
 /* ══════════════════════════════════════════════
-   신규 등록 실행
+   좌측 → 오른쪽 등록·수정 폼
+   좌측 칸이 바뀌면(치거나 목록에서 고르면) 곧장 오른쪽 폼에 넣는다. 예전에는 '신규 등록 실행'
+   을 눌러야 들어갔다. 넣기만 하고 제출하지는 않는다 — 등록·수정은 여전히 각 탭의 버튼이다.
+   현황판에서 꺼진 몰에는 넣지도, 경고하지도 않는다.
+
+   탭에서 사람이 직접 고친 칸은, 좌측이 그 칸에 넣으려는 값이 다시 바뀌기 전까지 덮지 않는다.
+   좌측 한 글자 칠 때마다 탭에서 고친 값이 되돌아가면 탭에서는 아무것도 고칠 수 없다.
+   좌측 값으로 되돌리려면 탭의 그 칸을 비우면 된다.
 ══════════════════════════════════════════════ */
+let frameSyncTimer = null;
+// 아마존 미국·일본은 탭 하나를 같이 쓴다. 둘 다 켜져 있으면 마지막으로 누른 쪽 마켓으로 채운다.
+let lastAmazonCountry = null;
+// 아마존 탭이 지금 올리는 마켓('USA' | 'JAPAN'). 채우기(fillFrame)와 일괄 등록이 같은 규칙을 써야 한다 —
+// 예전에 일괄 등록만 따로 '둘 다 켜면 미국' 으로 정해서, 채우기는 일본 값을 넣었는데 미국으로 올리거나
+// 경고가 말한 마켓과 다른 마켓으로 올렸다.
+function amazonTargetCountry() {
+  const us = !!checked.USA?.open1, jp = !!checked.JAPAN?.open1;
+  return jp && (!us || lastAmazonCountry === 'JAPAN') ? 'JAPAN' : 'USA';
+}
+
+function scheduleFrameSync() {
+  clearTimeout(frameSyncTimer);
+  frameSyncTimer = setTimeout(() => { frameSyncTimer = null; syncFrame(); }, 120);
+}
+
+// 좌측 상품번호의 번호 본체(No.K138번 → K138). fillFrame 의 bareNo 와 같은 규칙이다 — 그쪽은
+// tests/listing-titles.test.mjs 가 식을 그대로 잘라 평가하므로 함수로 빼지 않고 둔다.
+function bareNoOf(no) {
+  const m = String(no || '').trim().match(/^(?:No\.?\s*)?([A-Za-z]?\d+(?:-\d+)?)/i);
+  return m ? m[1].toUpperCase() : String(no || '').trim();
+}
+
+function syncFrame() {
+  // 일괄 등록·수정 중에는 좌측을 다시 넣지 않는다 — 시작할 때 채운 값으로 끝까지 간다. 예전에는 몇 분 도는 사이
+  // 좌측에 다음 차를 치면 남은 몰만 새 차(또는 반쯤 친 값)로 올라갔다. 끝나면 finally 에서 한 번 다시 채운다.
+  if (isBulkRunning) return { ok: false, filled: [], missed: [], kept: [] };
+  const r = fillFrame({ report: false });
+  updateRunButton(r);
+  return r;
+}
+
+// 버튼은 이제 '넣기' 가 아니라 '확인' 이다. 경고가 몇 건인지 늘 보여 준다.
+function updateRunButton(r) {
+  if (!btnRun) return;
+  const n = r && r.ok ? r.missed.length : 0;
+  btnRun.textContent = n ? `✔ 입력 확인 · 경고 ${n}건` : '✔ 입력 확인';
+}
+
+// 탭 칸을 사람이 직접 고쳤는지 표시해 둔다. 프로그램이 쏜 이벤트는 isTrusted 가 false 라
+// 셸이 넣은 값과 사람이 친 값이 섞이지 않는다.
+function watchFrameEdits(fdoc) {
+  if (!fdoc || !fdoc.body || fdoc.body.dataset.vuEditWatch === '1') return;
+  fdoc.body.dataset.vuEditWatch = '1';
+  const mark = e => {
+    const t = e.target;
+    if (e.isTrusted && t && t.dataset && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) t.dataset.vuManual = '1';
+  };
+  fdoc.addEventListener('input', mark, true);
+  fdoc.addEventListener('change', mark, true);
+}
+
+// '입력 확인' 버튼: 지금 값을 한 번 더 넣고, 빠졌거나 어긋난 것을 로그로 보여 준다.
 async function runRegister() {
+  const anyOn = Object.keys(PLATFORMS).some(c => PLATFORMS[c].some(p => p.active && checked[c][p.type]));
+  if (!anyOn) {
+    addLog('등록할 플랫폼을 하나 이상 선택하세요.', 'warn');
+    return;
+  }
+  clearTimeout(frameSyncTimer);
+  frameSyncTimer = null;
+  const r = fillFrame({ report: true });
+  updateRunButton(r);
+  if (!r.ok) {
+    addLog('현황판에서 등록할 플랫폼을 먼저 클릭하세요.', 'warn');
+    return;
+  }
+  if (r.filled.length) addLog(`자동 입력 완료: ${r.filled.join(', ')}`, 'ok');
+  else addLog('자동 입력할 폼이 없습니다. (현황판에서 플랫폼을 먼저 클릭하세요)', 'warn');
+  if (r.kept.length) {
+    addLog(`탭에서 직접 고친 칸은 그대로 뒀습니다: ${r.kept.join(', ')} — 좌측 값으로 되돌리려면 그 칸을 비우세요`, 'info');
+  }
+  // 주입 실패는 조용히 넘어가면 잘못된 값으로 등록된다. 반드시 드러낸다.
+  r.missed.forEach(msg => addLog(`⚠ ${msg}`, 'warn'));
+  if (r.missed.length) addLog(`⚠ 확인할 항목 ${r.missed.length}건 — 등록 전에 폼을 확인하세요.`, 'warn');
+}
+
+function fillFrame({ report = false } = {}) {
+  const filled = [], missed = [], kept = [];
+  const frame = $('form-frame');
+  let win = null, doc = null;
+  try { win = frame && frame.contentWindow; doc = win && win.document; } catch (e) { /* 로드 전 */ }
+  if (!doc || !doc.querySelector || !doc.querySelector('.tab-btn')) return { ok: false, filled, missed, kept };
+  watchFrameEdits(doc);
+
   const brand     = $('inp-brand').value.trim();
   const carModel  = $('inp-carmodel').value.trim();
   const gen       = $('inp-gen').value.trim();   // h (세대)
   const year      = $('inp-year').value.trim();
   const code      = $('inp-code').value.trim();
   const no        = $('inp-no').value.trim();    // i (상품번호)
-  const price     = $('inp-price').value.trim();
-  const bsa       = $('inp-bsa').checked;
+  const sku       = $('inp-sku')?.value.trim() ?? '';   // 이베이 SKU (이베이 상품등록 표)
+  const amzSku    = $('inp-amz-sku')?.value.trim() ?? '';   // 아마존 SKU — 같은 차라도 이베이와 다를 수 있다
+  const usdPrice  = $('inp-usd')?.value.trim() ?? '';   // 아마존(미국)·이베이 판매가
+  const cpid      = $('inp-cpid')?.value.trim() ?? '';  // 이 차가 이미 들어 있는 쿠팡 상품
+  const ptype     = $('inp-amz-ptype')?.value.trim() ?? '';  // 아마존 Product Type (탭에서 옮겨 옴)
+  // BSA는 radio[name="bsa"]로 렌더링된다. 과거에는 존재하지 않는 #inp-bsa를 읽어
+  // 항상 false가 되면서 전 플랫폼이 BSA X로 등록되고 B2B 가격까지 낮게 나갔다.
+  const bsa       = document.querySelector('input[name="bsa"]:checked')?.value === 'o';
+  // 차량 종류는 제목 접두어·ESM 폴더·네이버 템플릿/가격을 모두 가른다.
+  const isBike    = document.querySelector('input[name="vkind"]:checked')?.value === 'bike';
   const chartHtml = $('inp-chart-html').value.trim();
 
-  // 선택된 플랫폼 수집
-  const platforms = [];
-  Object.keys(PLATFORMS).forEach(country => {
-    PLATFORMS[country].forEach(p => {
-      if (p.active && checked[country][p.type]) {
-        platforms.push({ country, type: p.type, name: p.name });
-      }
-    });
-  });
+  // 현황판에서 켠 몰. 꺼진 몰의 탭은 보이지도 않으니 채우지도 경고하지도 않는다.
+  const on = {
+    b2b:     !!checked.KOREA?.b2b,
+    own:     !!(checked.KOREA?.own || checked.USA?.own || checked.JAPAN?.own),
+    naver:   !!checked.KOREA?.open1,
+    coupang: !!checked.KOREA?.open2,
+    ebay:    !!checked.USA?.open2,
+    amazon:  !!(checked.USA?.open1 || checked.JAPAN?.open1),
+  };
 
-  if (platforms.length === 0) {
-    addLog('등록할 플랫폼을 하나 이상 선택하세요.', 'warn');
-    return;
+  // 상품번호는 CSV DB 에 'No.101번' 형식으로 들어 있다(1058건 중 945건). 거기서 그대로
+  // 복사해 넣으면 아래 문형들이 'No.No.101번' 이 되고, 아마존 SKU 는 'OPT-No.101번' 이 된다.
+  // 앞의 No. 와 뒤의 번·(옵) 을 떼고 번호 본체(101, H131, H123-1)만 쓴다.
+  // 대문자로 맞춘다 — 카탈로그(vu-suggest bareNoOf·빌드 스크립트)가 대문자라서, 'h131' 을 치면
+  // SKU 번호(H131)와 달라 거짓 'SKU … 의 것이 아닙니다' 가 뜨고 쿠팡 중복 확인이 빗나갔다.
+  const bareNo = (() => {
+    const m = String(no || '').trim().match(/^(?:No\.?\s*)?([A-Za-z]?\d+(?:-\d+)?)/i);
+    return m ? m[1].toUpperCase() : String(no || '').trim();
+  })();
+  // 번호 모양이 아니면(예: '옵션', '#101') 위는 적힌 글을 그대로 돌려준다 — 그 글이 제목·옵션에
+  // 그대로 들어가고 SKU·쿠팡 중복 확인은 조용히 빠진다. 알려서 고치게 한다.
+  if (no && !/^(?:No\.?\s*)?[A-Za-z]?\d/i.test(no)) {
+    missed.push(`상품번호 "${no}" 를 읽지 못했습니다 — 예: 101, H131, No.101번. 이 글이 제목·옵션에 그대로 들어갑니다`);
   }
 
-  // 오른쪽 iframe 폼에 자동 입력 (매칭)
-  const frame = $('form-frame');
-  const doc = frame && frame.contentWindow && frame.contentWindow.document;
-  if (!doc || !doc.querySelector('.tab-btn')) {
-    addLog('먼저 [확인] 버튼으로 오른쪽에 등록 폼을 여세요.', 'warn');
-    return;
+  // 탭 칸의 이름표. '그대로 뒀다' 고 알릴 때 id 대신 사람이 보는 이름으로 말한다.
+  const labelFor = (el, id) => {
+    const lab = doc.querySelector(`label[for="${id}"]`) || el.closest('.input-col, .form-group')?.querySelector('label');
+    return (lab && lab.textContent.replace(/\s+/g, ' ').trim()) || id;
+  };
+
+  // iframe은 세션당 한 번만 로드되고 계속 재사용된다. 값을 넣지 않고 지나가면 직전
+  // 상품의 값이 그대로 남아 다음 상품으로 발행되므로 항상 대입한다.
+  // 또 .value 대입만으로는 oninput 파생 필드(titlePreview / cpTitlePreview)가 갱신되지
+  // 않아 네이버는 등록이 차단되고 쿠팡은 무제목으로 등록된다 → input·change 를 쏜다.
+  // 값이 이미 같으면 쏘지 않는다 — 좌측 한 글자마다 탭 스크립트가 다시 돌 이유가 없다.
+  //
+  // 쏘는 동안 vuChoosing 을 건다. 폼의 제목 칸 몇 개(이베이 제목·아임웹 제목)에는 자동완성이
+  // 붙어 있는데, 그 input 핸들러는 이 표시가 없으면 사람이 친 줄 알고 목록을 연다 — 좌측에
+  // 한 글자 칠 때마다 폼 안에 '일치하는 항목이 없습니다' 목록이 떠 있었다(vu-suggest bindCombo).
+  const fire = (el, types) => {
+    el.dataset.vuChoosing = '1';
+    try {
+      for (const t of types) el.dispatchEvent(new win.Event(t, { bubbles: true }));
+    } finally {
+      delete el.dataset.vuChoosing;
+    }
+  };
+  const setField = (id, val) => {
+    const el = doc.getElementById(id);
+    if (!el) return false;
+    const v = (val == null ? '' : String(val));
+    const prev = el.dataset.vuWant;
+    el.dataset.vuWant = v;
+    if (el.dataset.vuManual === '1') {
+      // 탭에서 고친 칸: 좌측이 넣으려는 값이 그대로면 사람 값을 둔다. 비웠으면 다시 채운다.
+      if (prev === v && el.value.trim() !== '') { kept.push(labelFor(el, id)); return true; }
+      delete el.dataset.vuManual;
+    }
+    if (el.value === v) return true;
+    el.value = v;
+    if (el.tagName === 'SELECT' && v && el.value !== v) {
+      el.value = '';                       // 목록에 없는 값은 조용히 무시되므로 드러낸다
+      missed.push(`${id}="${v}" (목록에 없음)`);
+      return false;
+    }
+    fire(el, ['input', 'change']);
+    return true;
+  };
+  const setVal = setField;                 // 기존 호출부 호환
+  const setChecked = (id, want) => {
+    const el = doc.getElementById(id);
+    if (!el) return false;
+    const v = want ? '1' : '0';
+    const prev = el.dataset.vuWant;
+    el.dataset.vuWant = v;
+    if (el.dataset.vuManual === '1') {
+      if (prev === v) { kept.push(labelFor(el, id)); return true; }
+      delete el.dataset.vuManual;
+    }
+    if (el.checked === !!want) return true;
+    el.checked = !!want;
+    fire(el, ['change']);
+    return true;
+  };
+  const setRadio = (name, value) => {
+    const el = doc.querySelector(`input[name="${name}"][value="${value}"]`);
+    if (!el) return false;
+    if (el.checked) return true;
+    el.checked = true;
+    fire(el, ['change']);
+    return true;
+  };
+
+  // ── 수정 모드의 '찾는 열쇠' 칸(SKU·상품ID·검색 코드) ──
+  // 좌측 값이 '바뀔 때만' 넣는다. 수정 탭에서는 사람이 검색 결과를 눌러 이 칸을 바꾸는데(아마존·
+  // 이베이 목록 선택, 쿠팡 'ID 찾기'), 그건 탭 스크립트가 넣은 값이라 사람 입력 표시가 안 붙는다.
+  // 매번 좌측 값을 다시 넣으면 좌측 아무 칸이나 칠 때 그 선택이 좌측 차로 되돌아갔다.
+  // 모드를 바꾸면 탭이 이 칸들을 스스로 고쳐 쓰므로 setSection8Mode 가 기억(vuKey)을 지운다.
+  // keepIfEmpty: 좌측이 비면 탭 칸을 비우지 않는다(탭에서 직접 찾은 상품일 수 있다). 그래도 '좌측이
+  // 바뀌었다' 는 기록은 남겨, 좌측에 같은 값이 다시 들어오면 그때 넣는다.
+  const pushKey = (id, val, { keepIfEmpty = false } = {}) => {
+    const el = doc.getElementById(id);
+    if (!el) return false;
+    const v = (val == null ? '' : String(val));
+    if (el.dataset.vuKey === v) return true;   // 좌측이 그대로다 — 탭의 값을 존중한다
+    el.dataset.vuKey = v;
+    if (!v && keepIfEmpty) return true;
+    if (el.value === v) return true;
+    el.value = v;
+    fire(el, ['input', 'change']);
+    return true;
+  };
+  // 목록에 있을 때만 고른다. 수정 모드의 검색 조건처럼 '없으면 사람이 고르는' 칸에 쓴다.
+  // 목록이 늦게 채워지면(카테고리 로드 전) 표시를 남기지 않아서, 다음 채우기 때 다시 시도한다.
+  const setOption = (id, value) => {
+    const el = doc.getElementById(id);
+    if (!el || !value || ![...el.options].some(o => o.value === value)) return false;
+    return pushKey(id, value);
+  };
+
+  // ── 수정 모드: 기존 상품을 찾는 열쇠만 넘긴다 ──
+  // 수정 폼의 나머지 칸(제목·가격·이미지)은 불러온 상품의 값이다. 좌측 값으로 덮으면
+  // 불러온 상품이 좌측 차로 바뀌어 저장된다 — 그래서 여기서 멈춘다.
+  // 열쇠 칸은 불러온 뒤에도 바뀔 수 있다(좌측에서 다른 차를 고르면). 그래서 저장은 각 탭이
+  // 입력칸이 아니라 '불러온 상품' 에 하고, 둘이 다르면 저장을 거부한다(saveCoupangEdit ·
+  // registerAmazon 수정 · 이베이 update 의 loaded.sku 확인).
+  if (currentMode === 'edit') {
+    if (on.amazon) {
+      pushKey('amzSku', amzSku);             // 'SKU 기준 불러오기' 가 이 칸을 읽는다
+      pushKey('amzProductType', ptype, { keepIfEmpty: true });
+      if (!amzSku) missed.push('아마존: 불러올 SKU 가 비어 있습니다 — 좌측 아마존 SKU 칸에 넣어 주세요');
+      filled.push('아마존');
+    }
+    // 이베이 탭이 요청 중이면(조회·수정) 칸을 바꾸지 않는다 — 끝나면 탭이 다시 채워 달라고 부른다.
+    if (on.ebay && !(typeof win.ebayBusy === 'function' && win.ebayBusy())) {
+      pushKey('ebEditSku', sku);
+      filled.push('eBay 미국');
+    }
+    // ── 네이버·쿠팡 '제조사·차종으로 번호 찾기' 칸 ──
+    // 예전에는 좌측에 브랜드·차종명을 쳐 놓고 탭의 찾기 칸에 똑같이 또 쳤다. 이제 좌측 값이 들어간다.
+    //  · 찾기 버튼은 누르지 않는다. 네이버 찾기는 상품 목록을 전부 훑는 무거운 조회라
+    //    (searchProductsByName — '상품 수집 n/전체') 좌측 칸이 바뀔 때마다 돌리면 API 한도를 먹는다.
+    //  · 좌측 '상품번호' 는 넣지 않는다. 그건 우리 내부 번호(예: 612)고, 네이버 탭의 '수정할 상품번호' 는
+    //    스마트스토어 상품번호(11자리)다 — 넣으면 엉뚱한 상품을 불러온다.
+    //  · 좌측이 비면 탭 칸을 지우지 않는다(탭에서 직접 친 검색어일 수 있다).
+    if (on.naver) {
+      pushKey('ssFindBrand', brand, { keepIfEmpty: true });
+      pushKey('ssFindModel', carModel, { keepIfEmpty: true });
+    }
+    // 비어 있으면 탭의 값을 지우지 않는다(탭에서 직접 찾은 상품일 수 있다).
+    if (on.coupang) {
+      pushKey('cpProductIdInput', cpid, { keepIfEmpty: true });
+      pushKey('cpFindBrand', brand, { keepIfEmpty: true });
+      pushKey('cpFindModel', carModel, { keepIfEmpty: true });
+      if (cpid) filled.push('쿠팡');
+    }
+    if (on.own) {
+      pushKey('iwBoardEditCodeInput', bareNo);
+      setOption('iwBoardEditBrand', brand);
+      // 자사몰을 하나만 켰으면 그 나라 게시판에서 찾는다. 여럿이면 사람이 고른다.
+      const langs = [checked.KOREA?.own && 'ko', checked.USA?.own && 'en', checked.JAPAN?.own && 'jp'].filter(Boolean);
+      if (langs.length === 1) setOption('iwBoardEditLang', langs[0]);
+      filled.push('아임웹 본사·해외몰');
+    }
+    return { ok: true, filled, missed, kept };
   }
+
   // g(조견표 HTML)에서 이미지 URL 추출 (HTML이면 src만, 아니면 원문)
-  const m = chartHtml.match(/src=["']([^"']+)["']/);
-  const chartUrl = m ? m[1] : chartHtml;
-  const setVal = (id, val) => { const el = doc.getElementById(id); if (el) el.value = (val || ''); };
+  const pickUrl = h => { const mm = String(h || '').match(/src=["']([^"']+)["']/); return mm ? mm[1] : String(h || '').trim(); };
+  // 국내용/해외용 조견표는 서로 다른 파일이다. KOREA·GLOBAL 버튼이 각각 저장해 둔 값을
+  // 쓰고, 해외용이 없을 때만 국내용으로 폴백하며 경고한다. 반대(국내 ← 해외)는 하지 않는다 — 조견표 칸은
+  // GLOBAL 만 불러왔으면 영문 표라, 예전에는 그게 네이버·쿠팡·B2B·본사 상세에 경고 없이 들어갔다.
+  const chartHtmlKo = chartHtmlByRegion.korea || (chartShownRegion === 'korea' ? chartHtml : '');
+  const chartHtmlEn = chartHtmlByRegion.global || '';
+  const chartUrl    = pickUrl(chartHtmlKo);
+  const chartUrlEn  = chartHtmlEn ? pickUrl(chartHtmlEn) : chartUrl;
+  // 조견표를 불러온 차와 지금 좌측 차가 다르면 알린다. 다음 차로 넘어가며 사진을 다시 안 불러오면 앞 차의
+  // 조견표가 이 차의 상세·이베이 이미지로 조용히 나갔다(chartHtmlByRegion 은 비우지 않고 계속 쓴다).
+  if (Object.values(on).some(Boolean)) {
+    for (const [region, label] of [['korea', 'KOREA(국내용)'], ['global', 'GLOBAL(해외용)']]) {
+      const other = chartFromOtherCar(region);
+      if (other) missed.push(`${label} 조견표는 '${other}' 차로 불러온 것입니다 — 이 차 사진을 다시 불러오세요`);
+    }
+  }
+  if (!chartHtmlKo && chartHtmlEn && (on.naver || on.coupang || on.b2b || checked.KOREA?.own)) {
+    missed.push('국내용(KOREA) 조견표가 없습니다 — 해외용(영문) 조견표는 국내 몰에 넣지 않았습니다. KOREA 사진을 불러오세요');
+  }
 
-  const filled = [];
+  // DB 의 세대 칸은 '2세대 12.03~19.05' 처럼 연식을 품고 있다. 그 값을 세대에 통째로
+  // 붙여 넣은 채 연식을 또 이으면 '12.03~19.05' 가 두 번 박힌다 → 이미 들어 있으면 뺀다.
+  const yearUnlessIn = g => (year && String(g || '').includes(year)) ? '' : year;
+
+  // 언어별 표기: 손으로 적은 칸이 최우선, 없으면 data/vehicle_i18n.json 사전, 그래도 없으면 한글.
+  // 사전에 없는 차종이 계속 나오는데 예전에는 고칠 칸 자체가 없어서 한글이 그대로 발행됐다.
+  const enB = manualLang('inp-brand',    'en') || enTitleCase(vuEn('brand', brand));
+  const enM = manualLang('inp-carmodel', 'en') || enTitleCase(vuEn('model', brand, carModel));
+  const enG = manualLang('inp-gen',      'en') || genEn(gen, vuEn('gen', gen));
+  const jaB = manualLang('inp-brand',    'ja') || vuJa('brand', brand);
+  const jaM = manualLang('inp-carmodel', 'ja') || vuJa('model', brand, carModel);
+  const jaG = manualLang('inp-gen',      'ja') || vuJa('gen', gen);
+
+  // 브랜드/차종을 iframe의 카테고리·게시판 select에 반영한다.
+  // iwModel이 B2B 카테고리 노드를, iwBoardBrand가 게시판을 실제로 결정하는데
+  // 기존 코드는 이 컨트롤을 한 번도 건드리지 않아 항상 기본 선택으로 등록됐다.
+  // 아임웹 카테고리는 결국 '브랜드 표' 다(국산차 7 + 수입차 40, 전부 자동차).
+  // 그래서 평소에는 좌측 브랜드가 그대로 카테고리가 되고, 폼의 선택 칸은 숨겨둔다.
+  // 문제는 표에 없는 브랜드(이륜차 등)다 — 아임웹은 "제조사를 선택해주세요" 로 등록을
+  // 막는데 고를 칸이 안 보이면 거기서 끝난다. 그 경우에만 칸을 다시 드러낸다.
+  const revealCategoryPicker = brandId => {
+    const group = doc.getElementById(brandId)?.closest('.redundant-field');
+    if (group) group.classList.add('needs-pick');
+  };
+  const hideCategoryPicker = brandId => {
+    const group = doc.getElementById(brandId)?.closest('.redundant-field');
+    if (group) group.classList.remove('needs-pick');
+  };
+
+  const applyVehicle = (natName, brandId, modelId, refreshBrand, refreshModel) => {
+    if (!brand) return;
+    const nat = vuNationalityOf(brand);
+    if (!nat) {
+      revealCategoryPicker(brandId);
+      missed.push(isBikeBrand(brand)
+        ? `"${brand}"는 아임웹 카테고리에 없는 이륜차 브랜드입니다 — 폼에 나타난 카테고리 칸에서 직접 고르세요`
+        : `"${brand}"가 아임웹 카테고리에 없습니다 — 폼에 나타난 카테고리 칸에서 직접 고르세요`);
+      return;
+    }
+    hideCategoryPicker(brandId);   // 이번엔 좌측으로 정해졌으니 도로 감춘다
+    // 이미 그대로면 목록을 다시 만들지 않는다. 폼이 카테고리를 늦게 받아 목록을 새로 그렸으면
+    // 선택이 첫 브랜드로 돌아가 있으므로, 여기서 어긋남이 보여 다시 넣게 된다.
+    const natEl = doc.querySelector(`input[name="${natName}"][value="${nat}"]`);
+    const bEl = doc.getElementById(brandId), mEl = doc.getElementById(modelId);
+    if (natEl && natEl.checked && bEl && bEl.value === brand && (!carModel || (mEl && mEl.value === carModel))) return;
+    setRadio(natName, nat);
+    try { if (typeof win[refreshBrand] === 'function') win[refreshBrand](); } catch (e) {}
+    const brandOk = setField(brandId, brand);
+    try { if (typeof win[refreshModel] === 'function') win[refreshModel](); } catch (e) {}
+    // 목록에 없으면(아임웹에 새로 생긴 차종을 아직 동기화 안 함) 폼의 카테고리 칸·동기화를 드러낸다 — 신규 폼은
+    // 이 칸들을 숨겨서(.shell-fed.pick) 안 드러내면 고칠 길이 없다. 다음 채우기에서 맞으면 위에서 도로 감춘다.
+    if (!brandOk || (carModel && !setField(modelId, carModel))) {
+      revealCategoryPicker(brandId);
+      missed.push(`"${brand} ${carModel}" 가 아임웹 카테고리 목록에 없습니다 — 폼의 '카테고리 동기화' 를 누르거나 칸에서 직접 고르세요`);
+    }
+  };
+
+  // SKU 끝의 N 뒤가 상품번호다(OBM0103N101 → 101). 좌측 상품번호와 다르면 다른 차의 SKU 를
+  // 들고 있는 것이다 — 그대로 올리면 그 차의 리스팅을 덮어쓴다. BSA 판 SKU 는 번호 끝에
+  // 1 을 더 붙이기도 해서(N1102 → N11021) 끝자리를 뗀 것도 같은 번호로 본다.
+  // 이베이·아마존 SKU 칸을 따로 본다(켠 몰의 칸만). 두 칸이 같은 SKU 면 한 번만 알린다.
+  for (const s of new Set([on.ebay && sku, on.amazon && amzSku].filter(Boolean))) {
+    const skuNo = (s.match(/N([A-Z]?\d+)$/i) || [])[1];
+    const same = skuNo && bareNo && (skuNo.toUpperCase() === bareNo || skuNo.slice(0, -1).toUpperCase() === bareNo);
+    if (skuNo && bareNo && !same) {
+      missed.push(`SKU ${s} 는 상품번호 ${bareNo} 의 것이 아닙니다(SKU 번호 ${skuNo}) — 다른 차 리스팅을 덮어쓸 수 있습니다`);
+    }
+    // 표에 있는 SKU 면 BSA 여부도 맞춰 본다. BSA 상품을 일반 SKU 로 올리면 가격·제목이 어긋난다.
+    const known = window.VUSuggest && window.VUSuggest.listing ? window.VUSuggest.listing(s) : null;
+    if (known && known.bsa !== bsa) {
+      missed.push(`SKU ${s} 는 ${known.bsa ? 'BSA' : 'BSA 없는'} 상품인데 좌측은 ${bsa ? 'BSA O' : 'BSA X'} 입니다`);
+    }
+  }
+
+  // 쿠팡: 복사등록은 템플릿을 베껴 '새 상품' 을 만든다. 이 차종이 이미 쿠팡 상품으로 있으면
+  // 같은 차 상품이 하나 더 생긴다(표에서 이미 92행이 그렇게 중복돼 있다). 막지는 않고 알린다 —
+  // 차종 상품은 같아도 세대가 새로 추가되는 경우엔 옵션 추가가 맞는지 사람이 판단해야 한다.
+  if (cpid && on.coupang) {
+    const p = window.VUSuggest && window.VUSuggest.coupangProduct ? window.VUSuggest.coupangProduct(cpid) : null;
+    const opt = p && bareNo ? p.options.find(o => o.no === bareNo) : null;
+    missed.push(opt
+      ? `쿠팡에 이미 있는 차입니다 — 상품ID ${cpid} 에 '${opt.text}' 옵션이 있습니다. 복사등록하면 같은 차 상품이 하나 더 생깁니다`
+      : `쿠팡에 이 차종 상품이 이미 있습니다 — 상품ID ${cpid}. 새 세대라면 복사등록 대신 그 상품에 옵션을 추가하는 게 맞을 수 있습니다`);
+  }
+
   // ── 아임웹 B2B (imwebTab) ──
-  if (doc.getElementById('iwTitleBrand')) {
+  if (on.b2b && doc.getElementById('iwTitleBrand')) {
+    // 국적 라디오 → 브랜드 select → 차종 select 순서. iwModel이 카테고리를 결정한다.
+    applyVehicle('iwNationality', 'iwBrand', 'iwModel',
+                 'updateImwebBrandOptions', 'updateImwebModelOptions');
     setVal('iwTitleBrand', brand);   // a → 제목용 제조사
     setVal('iwTitleModel', carModel);// b → 제목용 차종명
     setVal('iwYear', year);          // c → 연식
-    setVal('iwCode', code);          // d → 상품코드
-    setVal('iwSpecImageUrl', chartUrl); // g → 조견표 이미지 URL
-    const bo = doc.getElementById('iwBsaO'), bx = doc.getElementById('iwBsaX');
-    if (bo && bx) { bo.checked = bsa; bx.checked = !bsa; }  // f → BSA O/X
+    // 아임웹의 '상품 코드' 는 상품번호다(게시판 예: 'INFINITI G25 … [No.612]' — 612 는 DB 에서
+    // G25 의 상품번호). 좌측 '상품코드' 칸이 '차량코드' 로 바뀐 뒤에도 여기엔 그 칸을 넣고 있어서
+    // 제목이 '[No.612]' 대신 '[V36]' 같은 차량코드로 나갈 뻔했다.
+    setVal('iwCode', bareNo);        // i → 상품번호
+    setVal('iwSpecImageUrl', chartUrl); // g → 국내용 조견표 이미지 URL
+    setChecked('iwBsaO', bsa);       // f → BSA O/X (가격을 가르므로 이벤트까지 발사)
+    setChecked('iwBsaX', !bsa);
     filled.push('아임웹 B2B');
   }
 
   // ── 아임웹 본사·해외몰 (imwebBoardTab) : 포스팅 대상 게시판 = 현황판 자사몰(아임웹) 동기화 ──
-  if (doc.getElementById('iwTargetHead')) {
-    const setChk = (id, on) => { const el = doc.getElementById(id); if (el) el.checked = !!on; };
-    setChk('iwTargetHead', checked['KOREA'] && checked['KOREA']['own']); // korea
-    setChk('iwTargetUs',   checked['USA']   && checked['USA']['own']);   // usa
-    setChk('iwTargetJp',   checked['JAPAN'] && checked['JAPAN']['own']); // japan
-    setVal('iwBoardCode', code);              // d → 상품코드
+  if (on.own && doc.getElementById('iwTargetHead')) {
+    setChecked('iwTargetHead', checked['KOREA'] && checked['KOREA']['own']); // korea
+    setChecked('iwTargetUs',   checked['USA']   && checked['USA']['own']);   // usa
+    setChecked('iwTargetJp',   checked['JAPAN'] && checked['JAPAN']['own']); // japan
+    // 게시판은 iwBoardBrand 로 결정된다.
+    applyVehicle('iwBoardNationality', 'iwBoardBrand', 'iwBoardModel',
+                 'updateBoardBrandOptions', 'updateBoardModelOptions');
+    setVal('iwBoardPriceUsd', usdPrice);
+    setVal('iwBoardCode', bareNo);            // i → 상품번호 (위 iwCode 와 같은 이유)
     setVal('iwBoardTitleBrand', brand);       // a → 한글 제조사
     setVal('iwBoardTitleModel', carModel);    // b → 한글 차종
-    setVal('iwBoardTitleBrandEn', brand);     // a → 영문 제조사
-    setVal('iwBoardTitleModelEn', carModel);  // b → 영문 차종
-    setVal('iwBoardGeneration', gen);         // h → 세대 표기
-    setVal('iwBoardSpecImageUrl', chartUrl);  // g → 국내용 조견표 URL
-    setVal('iwBoardSpecImageUrlEn', chartUrl);// g → 해외용 조견표 URL
+    // 영문·일문 칸은 data/vehicle_i18n.json 사전에서 찾아 채운다.
+    // 사전에 없으면: 영문은 한글로 폴백(비우면 index.html 가드가 해외몰 등록을 전면 차단한다),
+    // 일문은 비워 둔다(폴백하면 imweb.js 가 영문→한글로 떨어뜨려 조용히 영문이 발행된다).
+    // 어느 쪽이든 어떤 값이 빠졌는지 missed 로 드러낸다.
+    const wantUs   = !!(checked['USA']   && checked['USA']['own']);
+    const wantJp   = !!(checked['JAPAN'] && checked['JAPAN']['own']);
+    const wantIntl = wantUs || wantJp;
+
+    setVal('iwBoardTitleBrandEn', enB || brand);        // a → 영문 제조사
+    setVal('iwBoardTitleModelEn', enM || carModel);     // b → 영문 차종
+    setVal('iwBoardGeneration',   enG || gen);          // h → 세대 표기
+    if (wantUs) {
+      if (!enB) missed.push(`영문 브랜드가 없어 한글("${brand}")이 그대로 나갑니다 — 좌측 '브랜드 English' 칸에 적어주세요`);
+      if (!enM) missed.push(`영문 차종이 없어 한글("${carModel}")이 그대로 나갑니다 — 좌측 '차종명 English' 칸에 적어주세요`);
+      if (!enG && gen) missed.push(`영문 세대가 없어 한글("${gen}")이 그대로 나갑니다 — 좌측 '세대 English' 칸에 적어주세요`);
+    }
+
+    setVal('iwBoardTitleBrandJp', jaB || '');           // a → 일문 제조사
+    setVal('iwBoardTitleModelJp', jaM || '');           // b → 일문 차종
+    setVal('iwBoardGenerationJp', jaG || '');           // h → 일문 세대 표기
+    if (wantJp) {
+      if (!jaB) missed.push(`일본어 브랜드가 비어 있습니다 — 좌측 '브랜드 日本語' 칸에 적어주세요`);
+      if (!jaM) missed.push(`일본어 차종이 비어 있습니다 — 좌측 '차종명 日本語' 칸에 적어주세요`);
+      if (!jaG && gen) missed.push(`일본어 세대가 비어 있습니다 — 좌측 '세대 日本語' 칸에 적어주세요`);
+    }
+    setVal('iwBoardSpecImageUrl', chartUrl);    // g → 국내용 조견표 URL
+    setVal('iwBoardSpecImageUrlEn', chartUrlEn);// g → 해외용 조견표 URL
+    if (wantIntl && !chartHtmlEn) missed.push('해외용 조견표가 없어 국내용으로 대체됨 — GLOBAL 사진 불러오기를 먼저 실행하세요');
     filled.push('아임웹 본사·해외몰');
   }
 
   // ── 네이버 스마트스토어 (naverTab) ──
-  if (doc.getElementById('optionProduct')) {
+  if (on.naver && doc.getElementById('optionProduct')) {
+    // 카테고리 라디오가 제목 접두어('옵틱글래스 오토바이 …')와 템플릿·가격을 가르므로 먼저 설정한다.
+    setRadio('category', isBike ? '오토바이' : '자동차');
     setVal('brand', brand);         // a → 제조사명
     setVal('model', carModel);      // b → 모델명
     setVal('optionModel', `${brand} ${carModel}`.trim());              // a+b → 옵션 모델명
-    setVal('optionProduct', `${year}[No.${no}]${bsa ? 'BSA' : ''}`); // c[No.i]f 붙여서, BSA는 체크시만
-    setVal('naverEsmHtml', chartHtml); // g → 상세설명(ESM HTML)
+    setVal('optionProduct', `${year}[No.${bareNo}]${bsa ? 'BSA' : ''}`); // c[No.i]f 붙여서, BSA는 체크시만
+    setVal('naverEsmHtml', chartHtmlKo); // g → 상세설명(ESM HTML, 국내용)
+    // titlePreview 는 oninput 파생이라 값 대입만으로는 채워지지 않는다(등록 차단 원인).
+    try { if (typeof win.updateTitlePreview === 'function') win.updateTitlePreview(); } catch (e) {}
     filled.push('네이버');
   }
 
   // ── 쿠팡 윙 (coupangTab) ──
-  if (doc.getElementById('cpOptModel')) {
+  if (on.coupang && doc.getElementById('cpOptModel')) {
+    setRadio('cpCategory', isBike ? '오토바이' : '자동차');
     setVal('cpBrand', brand);    // a → 제조사명
     setVal('cpModel', carModel); // b → 모델명
-    setVal('cpOptModel', `No.${no} (${gen}/${year})${bsa ? ' BSA' : ''}`); // No.i (h/c) f, BSA는 체크시만
-    setVal('cpEsmHtml', chartHtml); // g → 상세설명
+    // 쿠팡 등록상품명 예: '…와이드미러, 1개, No.H131번 (7세대/21.07-)'. 번호 뒤 '번' 은
+    // CSV DB 정본 표기다. 세대·연식이 둘 다 비면 '()' 나 '(/)' 를 남기지 않는다.
+    const cpGenYear = [gen, yearUnlessIn(gen)].filter(Boolean).join('/');
+    setVal('cpOptModel', `No.${bareNo}번${cpGenYear ? ` (${cpGenYear})` : ''}${bsa ? ' BSA' : ''}`);
+    setVal('cpEsmHtml', chartHtmlKo); // g → 상세설명(국내용)
+    // cpTitlePreview 가 비면 쿠팡은 차단 없이 '무제목'으로 등록된다.
+    try { if (typeof win.updateCoupangTitle === 'function') win.updateCoupangTitle(); } catch (e) {}
     filled.push('쿠팡');
   }
 
-  if (filled.length) addLog(`자동 입력 완료: ${filled.join(', ')}`, 'ok');
-  else addLog('자동 입력할 폼이 없습니다. (확인으로 폼을 먼저 여세요)', 'warn');
+  // ── eBay 미국 (ebayTab) ──
+  // 미국 리스팅이므로 영문 표기를 쓴다. 예전에는 한글 브랜드·차종이 그대로 올라갔다.
+  // 이베이 탭이 요청을 보내는 중이면(초안 저장·게시) 칸을 바꾸지 않는다 — 요청이 끝나면
+  // 탭이 다시 채워 달라고 부른다(ebay.js).
+  const ebBusy = typeof win.ebayBusy === 'function' && win.ebayBusy();
+  if (on.ebay && doc.getElementById('ebTitle') && typeof win.ebayTitleFor === 'function' && !ebBusy) {
+    const ebData = {
+      brand: enB || brand, model: enM || carModel, year: yearUnlessIn(enG || gen),
+      generation: enG || gen, code, bsa,
+    };
+    setVal('ebTitle', (ebData.brand || ebData.model) ? win.ebayTitleFor(ebData) : '');
+    // SKU 는 이제 좌측에만 있다(탭의 칸은 숨김). 비었으면 비운다 — 앞 차의 SKU 로 올라가면
+    // 그 차 리스팅을 덮어쓴다.
+    setVal('ebSku', sku);
+    setVal('ebPrice', usdPrice);
+    if (!sku) missed.push('이베이 SKU 가 비어 있습니다 — 좌측 SKU 목록에서 고르세요');
+    if (typeof win.ebayDescriptionFor === 'function') setVal('ebDescription', win.ebayDescriptionFor(ebData));
+    // 이베이는 해외 리스팅이라 해외용(GLOBAL) 조견표를, 없으면 국내용을 넘긴다 — 예전에는 좌측 칸(방금
+    // 불러온 쪽)을 그대로 넘겼다. 탭은 지난번 것을 이것으로 바꿔 끼운다(ebay.js replaceShellImages).
+    // 이미지 목록(VUImages)이 있으면 이베이 이미지는 그 목록이 정하므로 넘기지 않는다 — 섞으면 채울 때마다
+    // 목록과 서로 덮어써서 저장해 둔 초안이 사라진다.
+    if (typeof win.ebayAfterFill === 'function') win.ebayAfterFill({ chartHtml: window.VUImages ? '' : (chartHtmlEn || chartHtmlKo), quiet: !report });
+    refreshEbayTitleList(doc, win, ebData, sku);
+    filled.push('eBay 미국');
+  }
+
+  // ── 아마존 (amazonTab) ──
+  const DEFAULT_AMAZON_DESCRIPTION = `Product Description
+
+Boost your driving confidence with this innovative blind spot mirror!
+
+Its wide-angle design and optimal curvature dramatically reduce blind spots, giving you a clear panoramic view of your surroundings.
+
+
+
+The mirror is designed to match the original design of your side mirror, making it easy to install while preserving the original look of your vehicle.
+
+Plus, a special water-repellent coating ensures crystal-clear vision, even in rainy or wet conditions.
+
+
+
+An optional engraving feature allows the BSA sensor light to be visible on the mirror, improving your awareness of potential threats on the road.
+
+The mirror's design prioritizes safety, convenience, and clarity, offering an enhanced driving experience for all users.
+
+
+
+Constructed with high-quality materials, this blind spot mirror is built to last, offering reliable performance for long journeys.
+
+Upgrade your driving experience today and enjoy peace of mind with every ride!`;
+
+  const DEFAULT_AMAZON_BULLETS = [
+    'Eliminate Blind Spots: Our convex mirror with optimal curvature significantly reduces blind spots, providing a wide-angle view for superior safety. This wide-angle mirror design significantly reduces blind spots, keeping you aware of your surroundings and improving driving safety.',
+    'Crystal Clear Vision: Our chrome surface coating minimizes diffuse reflection, providing a clear view even in bright light. Additionally, a special water-repellent coating ensures optimal visibility during rainy or wet weather conditions.',
+    'Heated for All Season: Defeat foggy mirrors in winter and condensation buildup in summer with our integrated heating function. This feature matches the functionality of your car\'s original heated mirrors, providing a consistent and comfortable driving experience year-round.',
+    'Easy Installation: The replaceable jack-to-jack connector allows for a quick and easy swap, perfectly fitting your existing mirror\'s connection. Simply unplug your existing mirror and plug ours in for a perfect fit.',
+    'Personalization Available (Optional): Add a unique touch with our BSA engraving option (availability may vary). Add a custom touch to your mirrors and showcase your unique style.'
+  ].join('\n');
+
+  if (on.amazon && doc.getElementById('amzSku')) {
+    // 아마존 제목 칸은 탭에서 손으로 고칠 수 있다. 제목을 만드는 칸(브랜드·차종·세대·연식·코드·마켓)이
+    // 그대로면 아래에서 제목을 다시 만들지 않는다 — 예전에는 좌측 아무 칸이나 칠 때마다 고친 제목이
+    // 자동 제목으로 되돌아갔다.
+    const amzTitleInputs = () => ['amzBrand', 'amzModel', 'amzGen', 'amzYear', 'amzCode', 'amzMarketplaceId']
+      .map(id => doc.getElementById(id)?.value ?? '').join('|');
+    const amzBefore = amzTitleInputs();
+    // SKU 는 아마존이 리스팅을 구분하는 열쇠다 — 같은 SKU 로 올리면 앞 리스팅을 덮어쓴다.
+    // 차량코드로 만들면 안 된다(여러 상품이 같이 씀). 상품번호로도 안 된다 — No.101 하나를
+    // BMW 1~7시리즈가 같이 쓰는데 리스팅은 차종마다 따로다(1시리즈 OBM0103N101,
+    // 4시리즈 OBM0401N101). 그래서 좌측 아마존 SKU 칸(아마존에 실제로 있는 SKU)을 그대로 쓴다.
+    // 비어 있으면 비운 채 둔다 — 아마존 탭이 'SKU 를 입력해주세요' 로 막아 주는 편이
+    // 추측한 SKU 로 남의 리스팅을 덮어쓰는 것보다 낫다.
+    setVal('amzSku', amzSku);
+    if (!amzSku) missed.push('아마존 SKU 가 비어 있습니다 — 좌측 아마존 SKU 목록에서 고르세요');
+    // Product Type 도 좌측으로 옮겨 왔다. 비우면 등록 요청이 속성 오류로 돌아온다.
+    if (ptype) setVal('amzProductType', ptype);
+    else missed.push('아마존 Product Type 이 비어 있습니다 — 좌측 Product Type 칸에 넣어 주세요');
+    // 아마존 탭은 한 번에 한 마켓에만 올린다. 미국·일본을 둘 다 켰으면 마지막으로 누른 쪽이다.
+    // 예전에는 일본이 켜져 있으면 무조건 일본이라, 미국을 켜 둔 채로도 미국에는 한 건도 안 갔다.
+    const amzUs = !!checked.USA?.open1, amzJp = !!checked.JAPAN?.open1;
+    const jpAmz = amazonTargetCountry() === 'JAPAN';   // 일괄 등록도 이 마켓에만 올린다
+    if (amzUs && amzJp) {
+      missed.push(`아마존 미국·일본을 둘 다 켰습니다 — 아마존 탭은 한 번에 한 마켓만 올립니다. 지금은 ${jpAmz ? '일본' : '미국'}(마지막으로 누른 칸)이고, 다른 마켓은 현황판에서 그 칸을 눌러 바꾼 뒤 한 번 더 등록하세요`);
+    }
+    // 일본 아마존이면 일본어, 아니면 영문. 둘 다 없을 때만 한글로 떨어진다.
+    setVal('amzBrand', (jpAmz && jaB) || enB || brand || 'Optic Glass');
+    setVal('amzModel', (jpAmz && jaM) || enM || carModel);
+    // 세대·차량코드는 제목에만 쓰인다(updateAmazonTitle). 비울 때도 대입해야 한다 —
+    // iframe 이 재사용돼서 건너뛰면 직전 상품의 세대·코드가 제목에 그대로 남는다.
+    setVal('amzGen', (jpAmz && jaG) || enG || gen);
+    setVal('amzYear', yearUnlessIn((jpAmz && jaG) || enG || gen));
+    setVal('amzCode', code);
+    // 가격: 미국은 기존대로 원화를 달러로 환산한다. 일본은 환산하지 않고 비운다 —
+    // 엔화 판매가는 사람이 아마존 탭에서 직접 넣는다(환율을 코드에 박지 않기로 함).
+    // 비울 때도 반드시 대입한다. iframe 이 재사용돼서 건너뛰면 직전 상품의 달러가가 남는다.
+    if (jpAmz) {
+      setVal('amzPrice', '');
+      missed.push('아마존 일본: 판매가(엔)를 아마존 탭에서 직접 입력하세요 — 비우면 등록이 중단됩니다');
+      if (!doc.getElementById('amzBulletPoints')?.value.trim()) {
+        missed.push('아마존 일본: 주요 특징(불릿)을 일본어로 직접 입력하세요 — 비우면 등록이 중단됩니다');
+      }
+    } else {
+      // 좌측이 비어도 대입한다. 예전에는 건너뛰어 앞 차 가격·탭 기본값(89.99)이 경고 없이 등록됐다.
+      setVal('amzPrice', usdPrice);   // 이베이 상품등록 표의 옵션가(USD) 그대로
+      if (!doc.getElementById('amzPrice')?.value.trim()) {
+        missed.push('아마존 미국: 판매가(USD)가 비어 있습니다 — 좌측 판매가(USD)를 넣거나 아마존 탭에서 직접 입력하세요');
+      }
+    }
+    if (!window.VUImages && chartUrlEn) setVal('amzMainImageUrl', chartUrlEn);
+    // 상세설명 및 주요 특징 (Bullet Points)
+    if (jpAmz) {
+      setVal('amzDescription', '');
+      missed.push('아마존 일본: 상품 설명을 일본어로 직접 입력하세요 — 비우면 등록이 중단됩니다');
+    } else {
+      // 미국/글로벌: 사용자가 직접 고친 칸이 아니거나 비어 있으면 디폴트값 주입
+      const curDesc = doc.getElementById('amzDescription')?.value.trim();
+      if (!curDesc || doc.getElementById('amzDescription')?.dataset.vuManual !== '1') {
+        setVal('amzDescription', DEFAULT_AMAZON_DESCRIPTION);
+      }
+      const curBullets = doc.getElementById('amzBulletPoints')?.value.trim();
+      if (!curBullets || doc.getElementById('amzBulletPoints')?.dataset.vuManual !== '1') {
+        setVal('amzBulletPoints', DEFAULT_AMAZON_BULLETS);
+      }
+    }
+    if (jpAmz) {
+      setVal('amzMarketplaceId', 'A1VC38T7YXB528');
+      setVal('amzEndpoint', 'https://sellingpartnerapi-fe.amazon.com');
+      setVal('amzCurrency', 'JPY');
+    } else {
+      setVal('amzMarketplaceId', 'ATVPDKIKX0DER');
+      setVal('amzEndpoint', 'https://sellingpartnerapi-na.amazon.com');
+      setVal('amzCurrency', 'USD');
+    }
+    // 마켓에 딸린 가격 라벨(USD $ / JPY ¥)·입력 단위는 탭이 정한다. 제목도 여기서 다시 만든다.
+    if (amzTitleInputs() !== amzBefore) {
+      if (typeof win.syncAmazonMarketplace === 'function') win.syncAmazonMarketplace();
+      else if (win.updateAmazonTitle) win.updateAmazonTitle();
+    }
+    filled.push('아마존');
+  }
+  if (currentMode === 'new') window.VUImages?.fill(doc, win);
+  return { ok: true, filled, missed, kept };
+}
+
+// 이베이 '영문 상품명' 자동완성 목록. 후보는 두 가지다:
+//   · 상품 정보 — 좌측 칸으로 만든 제목(탭에 자동으로 들어가는 것과 같다)
+//   · 이베이 표 — 좌측 SKU 가 이베이 상품등록 표에 적힌 차종·연식 표기로 만든 제목
+//     (표는 '2nd gen 12-16' 처럼 줄인 연식을 써서 80자 안에 드는 경우가 많다)
+// 목록 글에서는 모든 후보가 같은 앞머리('Optic-glass … for')를 떼고 보여 준다 — 달라지는 건 뒤쪽이다.
+function refreshEbayTitleList(doc, win, ebData, sku) {
+  const VU = window.VUSuggest;
+  const el = doc.getElementById('ebTitle');
+  if (!VU || !el || typeof win.ebayTitleFor !== 'function') return;
+  if (el.dataset.vuCombo !== '1') VU.attach(doc, 'ebTitle', 'vu-eb-title', []);
+  const max = win.ebayTitleMax || 80;
+  const head = win.ebayTitleFor({});
+  const rows = [];
+  const add = (src, title) => {
+    if (!title || title === head || rows.some(r => r.value === title)) return;
+    const n = title.length;
+    rows.push({
+      label: `${title.slice(head.length).trim()} · ${n}자${n > max ? ` (${max}자 넘음)` : ''} · ${src}`,
+      value: title,
+      // 목록에서 고른 제목은 사람의 결정이다 — 좌측이 바뀌기 전까지 자동 제목으로 덮지 않는다.
+      pick: () => { el.dataset.vuManual = '1'; },
+    });
+  };
+  add('상품 정보', win.ebayTitleFor(ebData));
+  const l = sku && VU.listing ? VU.listing(sku) : null;
+  // 표의 연식 칸이 차종 이름만 적힌 행('Explorer van')은 제목이 안 된다 — 숫자가 있을 때만.
+  // 아마존 표에서만 온 SKU(source:'amazon')는 이베이 리스팅이 아니라 이베이 표 제목 후보로 쓰지 않는다.
+  if (l && l.source !== 'amazon' && l.modelEn && /\d/.test(l.yearText || '')) {
+    add(`이베이 표 ${l.sku}`, win.ebayTitleFor({
+      brand: ebData.brand || enTitleCase(l.brandEn), model: enTitleCase(l.modelEn),
+      year: fixOrdinals(l.yearText),   // 표의 '3th gen' · '2st gen' 을 바로잡는다
+    }));
+  }
+  VU.setOptions(doc, 'vu-eb-title', rows);
+}
+
+// '3th' → '3rd', '2st' → '2nd'. 이베이 표에 손으로 적은 서수가 틀린 곳이 있다.
+function fixOrdinals(s) {
+  return String(s || '').replace(/\b(\d+)(?:st|nd|rd|th)\b/gi, (_, n) => ordinalOf(n));
 }
 
 /* ══════════════════════════════════════════════
    섹션 8 표시 모드 전환
 ══════════════════════════════════════════════ */
-function setSection8Mode(mode) {
-  if (mode === 'new') {
-    logWindow.style.display = '';
-    cardArea.style.display = 'none';
-    sec8Desc.textContent = '신규등록 — 실행 로그';
-    btnClear.title = '로그 지우기';
-  } else {
-    logWindow.style.display = 'none';
-    cardArea.style.display = 'flex';
-    sec8Desc.textContent = '상품수정 — 검색 결과';
-    btnClear.title = '카드 모두 닫기';
-  }
-  updateEmptyState();
-}
-
 function updateEmptyState() {
+  const frame = $('form-frame');
+  const frameOpen = frame && frame.style.display === 'block';
   if (currentMode === 'new') {
-    emptyState.style.display = logWindow.children.length > 0 ? 'none' : 'flex';
+    emptyState.style.display = (frameOpen || logWindow.children.length > 0) ? 'none' : 'flex';
   } else {
-    emptyState.style.display = cardArea.children.length > 0 ? 'none' : 'flex';
+    emptyState.style.display = (frameOpen || cardArea.children.length > 0) ? 'none' : 'flex';
   }
 }
 
@@ -1256,7 +2778,14 @@ function uncheckAllAndClearCards() {
     });
     updateRowHighlight(country);
   });
+  onBoardSelectionChanged();   // 전부 끈 것도 저장한다 — 다음에 켤 때 지운 선택이 되살아나면 안 된다
+  updateLangFields();
+  updateMallFields();
   cardArea.innerHTML = '';
+  cardEdits.clear();
+  const frame = $('form-frame');
+  if (frame) frame.style.display = 'none';
+  updateEmptyState();
 }
 
 /* ══════════════════════════════════════════════
@@ -1269,8 +2798,44 @@ $('btn-back').addEventListener('click', () => {
 
 // 최근 사진 불러오기 (KOREA / GLOBAL) — 베리씨드 최신 사진 + 미리보기
 let loadedPhotoPath = '';
+// 국내용/해외용 조견표는 서로 다른 파일이다. 화면에는 방금 불러온 것만 보이지만
+// 등록 시에는 국내 채널에 korea, 해외·일본 게시판에 global 을 각각 써야 한다.
+const chartHtmlByRegion = { korea: '', global: '' };
+// 조견표를 불러올 때 좌측에 있던 차(브랜드·차종·상품번호). 위 값은 다음 차에서도 그대로 쓰이므로, 사진을
+// 다시 안 불러오고 넘어가면 앞 차의 조견표가 새 차의 상세·이베이 이미지로 나갔다 — fillFrame 이 이 기록과
+// 지금 좌측 차를 견줘 경고한다. 빈 칸은 '아직 모름' 이다: 차를 넣기 전에 불러온 사진은 그 뒤 확정한 칸을
+// 제 차로 삼는다(adoptChartCar) — 사진부터 불러오고 차를 넣는 순서도 거짓 경고 없이 쓴다.
+const chartCarByRegion = { korea: null, global: null };
+// 조견표 칸(inp-chart-html)이 지금 보여 주는 지역. 사람이 그 칸을 고치면 이 지역의 조견표가 된다.
+let chartShownRegion = 'korea';
+const CHART_CAR_KEYS = ['brand', 'model', 'no'];
+function chartCarNow() {
+  const v = id => ($(id)?.value || '').trim();
+  // 상품번호는 fillFrame 의 bareNo 와 같은 규칙으로 맞춘다('No.K138번' = 'k138').
+  const m = v('inp-no').match(/^(?:No\.?\s*)?([A-Za-z]?\d+(?:-\d+)?)/i);
+  return { brand: v('inp-brand'), model: v('inp-carmodel'), no: m ? m[1].toUpperCase() : v('inp-no') };
+}
+// 둘 다 적힌 칸이 하나라도 다르면 다른 차다. 한쪽이 비어 있으면 모른다 — 다르다고 하지 않는다.
+const chartCarDiffers = (a, b) => CHART_CAR_KEYS.some(k => a[k] && b[k] && a[k] !== b[k]);
+// 그 지역 조견표가 다른 차로 불러온 것이면 그 차의 이름, 아니면 null.
+function chartFromOtherCar(region) {
+  const car = chartCarByRegion[region];
+  if (!car || !chartHtmlByRegion[region] || !chartCarDiffers(car, chartCarNow())) return null;
+  return [car.brand, car.model, car.no && `No.${car.no}`].filter(Boolean).join(' ');
+}
+// 좌측 차 칸이 확정될 때(change) 부른다. 불러올 때 비어 있던 칸을 지금 값으로 채운다. 한 글자마다(input)
+// 받으면 '기' 로 굳어 '기아' 를 마저 치는 순간 거짓 경고가 난다.
+function adoptChartCar() {
+  const now = chartCarNow();
+  for (const car of Object.values(chartCarByRegion)) {
+    if (!car || chartCarDiffers(car, now)) continue;
+    for (const k of CHART_CAR_KEYS) if (!car[k]) car[k] = now[k];
+  }
+}
 async function loadSeedPhoto(region) {
   const label = region === 'global' ? 'GLOBAL' : 'KOREA';
+  const key = region === 'global' ? 'global' : 'korea';
+  const carAtLoad = chartCarNow();   // 버튼을 누른 순간의 차 — 기다리는 사이 좌측이 바뀔 수 있다
   try {
     const res = await ipc.invoke('veryup-load-photo', { region });
     if (res && res.success) {
@@ -1282,8 +2847,13 @@ async function loadSeedPhoto(region) {
       addLog(`${label} 사진 불러옴: ${res.name}`, 'ok');
       // 조견표 HTML 칸에 ESM 업로드 링크 자동 입력
       if (res.html) {
+        chartHtmlByRegion[key] = res.html;
+        chartCarByRegion[key] = carAtLoad;
+        chartShownRegion = key;
         $('inp-chart-html').value = res.html;
+        scheduleFrameSync();
         addLog(`${label} 조견표 HTML 자동 입력됨`, 'ok');
+        if (!chartHtmlByRegion.global) addLog('해외용 조견표는 아직 없습니다 — GLOBAL도 불러오세요.', 'warn');
       } else {
         addLog(`${label} 조견표 HTML 없음 (베리씨드에서 ESM 업로드 먼저 하면 링크가 들어옵니다)`, 'warn');
       }
@@ -1296,10 +2866,22 @@ async function loadSeedPhoto(region) {
 }
 $('btn-load-korea').addEventListener('click', () => loadSeedPhoto('korea'));
 $('btn-load-global').addEventListener('click', () => loadSeedPhoto('global'));
+// 미리보기는 data: URL 이라 끌 때 실제 파일 경로를 싣는다 — image-library.js 가 받아 대표 이미지로 쓴다.
+$('photo-preview-img').addEventListener('dragstart', e => {
+  if (loadedPhotoPath) e.dataTransfer.setData('application/x-vu-photo', loadedPhotoPath);
+});
+// 사람이 조견표 칸을 직접 고치면(진짜 키 입력) 그 칸이 보여 주는 지역의 조견표가 된다. 예전에는 버튼으로
+// 불러온 값이 칸보다 앞서서, 칸을 고쳐도 등록에는 불러온 값이 나갔다. 지금 차를 보며 고친 것이므로 차도 지금 차다.
+$('inp-chart-html').addEventListener('input', e => {
+  if (!e.isTrusted) return;
+  chartHtmlByRegion[chartShownRegion] = $('inp-chart-html').value.trim();
+  chartCarByRegion[chartShownRegion] = chartCarNow();
+});
+$('section7').addEventListener('change', e => {
+  if (['inp-brand', 'inp-carmodel', 'inp-no'].includes(e.target && e.target.id)) adoptChartCar();
+});
 
-// 확인 버튼: 체크한 플랫폼들만 오른쪽 iframe에 띄운다 (플랫폼명 → index.html 탭)
-const NAME_TO_TAB = { '아임웹': 'imwebBoardTab', 'B2B몰': 'imwebTab', '네이버': 'naverTab', '쿠팡': 'coupangTab' };
-$('btn-confirm-platform').addEventListener('click', () => {
+function getSelectedTabs() {
   const tabs = [];
   for (const country of Object.keys(checked)) {
     for (const type of TYPE_ORDER) {
@@ -1310,75 +2892,694 @@ $('btn-confirm-platform').addEventListener('click', () => {
       }
     }
   }
-  if (!tabs.length) { addLog('등록할 플랫폼(아임웹/B2B/네이버/쿠팡)을 체크한 뒤 확인을 누르세요.', 'warn'); return; }
-  const frame = $('form-frame');
-  frame.style.display = 'block';
-  const empty = $('empty-state'); if (empty) empty.style.display = 'none';
+  return tabs;
+}
 
-  // 부모가 직접 iframe DOM 제어: 체크한 탭만 남기고 첫 탭 활성화 (index.html 내부 스크립트에 의존 안 함)
-  const applyFilter = () => {
-    try {
-      const doc = frame.contentWindow.document;
-      const showPane = (tabId, btn) => {
-        doc.querySelectorAll('.tab-pane').forEach(p => { p.style.display = 'none'; });
-        const pane = doc.getElementById(tabId); if (pane) pane.style.display = 'block';
-        doc.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        if (btn) btn.classList.add('active');
-      };
-      doc.querySelectorAll('.tab-btn').forEach(btn => {
-        const oc = btn.getAttribute('onclick') || '';
-        const on = tabs.some(t => oc.includes(`'${t}'`));
-        btn.style.display = on ? '' : 'none';
-        btn.classList.remove('active');
-        if (on) {
-          const m = oc.match(/switchTab\('([^']+)'\)/);
-          const tabId = m && m[1];
-          // 부모가 직접 전환(index.html switchTab에 의존 안 함)
-          btn.onclick = () => showPane(tabId, btn);
+function applyFilter(preferTab) {
+  if (document.body.dataset.workspaceView === 'api') return;
+  const tabs = getSelectedTabs();
+  const frame = $('form-frame');
+  if (!frame || !frame.contentWindow) return;
+  try {
+    const doc = frame.contentWindow.document;
+    if (!doc || !doc.querySelector) return;
+    const showPane = (tabId, btn) => {
+      doc.querySelectorAll('.tab-pane').forEach(p => { p.style.display = 'none'; });
+      const pane = doc.getElementById(tabId);
+      if (pane) pane.style.display = 'block';
+      doc.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      markViewingCells(tabId);
+    };
+
+    // Update imweb target checkboxes & country label
+    const imwebCountries = [];
+    if (checked.KOREA?.own) imwebCountries.push('한국');
+    if (checked.USA?.own) imwebCountries.push('미국');
+    if (checked.JAPAN?.own) imwebCountries.push('일본');
+    const imwebCountryLabel = imwebCountries.join('·') || '한국';
+    const imwebCountryEl = doc.getElementById('imwebBoardTabCountry');
+    if (imwebCountryEl) imwebCountryEl.textContent = imwebCountryLabel;
+
+    const setChk = (id, on) => { const el = doc.getElementById(id); if (el) el.checked = !!on; };
+    setChk('iwTargetHead', checked.KOREA?.own);
+    setChk('iwTargetUs', checked.USA?.own);
+    setChk('iwTargetJp', checked.JAPAN?.own);
+
+    let firstActiveBtn = null;
+    let firstActiveTab = null;
+    let preferBtn = null;
+    let hasActiveVisible = false;
+
+    doc.querySelectorAll('.tab-btn').forEach(btn => {
+      const oc = btn.getAttribute('onclick') || '';
+      const on = tabs.some(t => oc.includes(`'${t}'`));
+      btn.style.display = on ? 'flex' : 'none';
+      if (on) {
+        const m = oc.match(/switchTab\('([^']+)'\)/);
+        const tabId = m && m[1];
+        if (preferTab && tabId === preferTab) {
+          preferBtn = btn;
         }
-      });
-      showPane(tabs[0], doc.querySelector(`.tab-btn[onclick*="'${tabs[0]}'"]`));
-    } catch (e) { addLog('폼 탭 정리 실패: ' + e.message, 'warn'); }
+        if (!firstActiveBtn) {
+          firstActiveBtn = btn;
+          firstActiveTab = tabId;
+        }
+        if (btn.classList.contains('active')) {
+          hasActiveVisible = true;
+        }
+        btn.onclick = (e) => {
+          if (e) e.preventDefault();
+          showPane(tabId, btn);
+        };
+      }
+    });
+
+    if (preferTab && preferBtn) {
+      showPane(preferTab, preferBtn);
+    } else if (!hasActiveVisible && firstActiveTab && firstActiveBtn) {
+      showPane(firstActiveTab, firstActiveBtn);
+    } else {
+      const activeBtn = doc.querySelector('.tab-btn.active');
+      const activeOc = activeBtn?.getAttribute('onclick') || '';
+      const m = activeOc.match(/switchTab\('([^']+)'\)/);
+      if (m && m[1] && tabs.includes(m[1])) {
+        showPane(m[1], activeBtn);
+      } else if (firstActiveTab && firstActiveBtn) {
+        showPane(firstActiveTab, firstActiveBtn);
+      }
+    }
+  } catch (e) {
+    addLog('폼 탭 정리 실패: ' + e.message, 'warn');
+  }
+}
+
+function openPlatformTab(targetTab, country) {
+  const tabs = getSelectedTabs();
+  const frame = $('form-frame');
+  const empty = $('empty-state');
+  if (!frame) return;
+  // 아마존 칸을 누른 나라가 그 탭의 마켓이다(미국·일본 둘 다 켜져 있을 때 fillFrame 이 따른다).
+  if (targetTab === 'amazonTab' && ['USA', 'JAPAN'].includes(country)) lastAmazonCountry = country;
+
+  if (!tabs.length) {
+    frame.style.display = 'none';
+    updateEmptyState();
+    return;
+  }
+
+  frame.style.display = 'block';
+  if (empty) empty.style.display = 'none';
+
+  const applyAndSync = (force = false) => {
+    applyFilter(targetTab);
+    setSection8Mode(currentMode, force);
+    // iframe 안의 제목 표기 칸에도 같은 목록을 붙인다.
+    // 아마존 전용 분기 안이 아니라 여기여야 모든 탭에서 실행된다(바인딩은 멱등).
+    try {
+      const fdoc = frame.contentWindow && frame.contentWindow.document;
+      if (fdoc && window.VUSuggest) window.VUSuggest.bindFrame(fdoc);
+    } catch (e) { /* 로드 전 접근은 조용히 넘어간다 */ }
+    if (targetTab === 'amazonTab' && ['USA', 'JAPAN'].includes(country)) {
+      const doc = frame.contentWindow.document;
+      const marketplace = doc.getElementById('amzMarketplaceId');
+      if (marketplace) {
+        marketplace.dataset.selectedMarketplace = country === 'JAPAN' ? 'A1VC38T7YXB528' : 'ATVPDKIKX0DER';
+        // 바뀔 때만 탭의 마켓 동기화(가격 라벨·통화·제목)를 부른다. 같은 마켓인데 부르면
+        // 탭에서 고친 제목이 탭을 열 때마다 자동 제목으로 되돌아간다.
+        if (marketplace.value !== marketplace.dataset.selectedMarketplace) {
+          marketplace.value = marketplace.dataset.selectedMarketplace;
+          try { frame.contentWindow.syncAmazonMarketplace?.(); } catch (e) { /* 탭 스크립트 오류는 채우기에서 드러난다 */ }
+        }
+      }
+    }
+    // 탭을 열자마자 좌측 값이 들어가 있어야 한다(기다렸다 버튼을 누르지 않아도).
+    syncFrame();
   };
 
-  // 이미 index.html이 떠 있으면 바로 적용(새로고침 없이), 아니면 로드 후 적용
   const readyDoc = frame.contentWindow && frame.contentWindow.document;
   if (readyDoc && readyDoc.querySelector && readyDoc.querySelector('.tab-btn')) {
-    applyFilter();
+    syncFrameTheme();
+    applyAndSync();
   } else {
-    frame.onload = applyFilter;
-    frame.src = 'index.html';
+    frame.onload = () => {
+      frame.dataset.ready = 'true';
+      syncFrameTheme();   // 새 문서라 테마가 초기화돼 있다
+      applyAndSync(true);
+    };
+    if (!frame.src || !frame.src.includes('index.html')) {
+      frame.src = `index.html?mode=${currentMode}`;
+    }
   }
-  addLog(`선택한 폼 ${tabs.length}개를 열었습니다.`, 'ok');
-});
+}
+
+/* ══════════════════════════════════════════════
+   접기 / 열기 — 쇼핑몰 탭·신규등록 패널을 접는다
+   기본 화면은 현황판(왼쪽 입력판)뿐이다. 대상을 고르고 상품 정보를 채우는 동안에는
+   폼이 필요 없어서, 창을 좁게 옆에 두고 쓴다. '열기' 를 눌러야 쇼핑몰 탭과
+   신규등록 패널이 오른쪽에 나온다. 앱은 접힌 채로 뜬다(main_process 가 ?panels=collapsed).
+   (그 전에는 왼쪽 입력판을 접었다 — 현황판이 기본이어야 한다는 요청으로 뒤집었다.)
+══════════════════════════════════════════════ */
+// 열기 상태의 창 폭과 접힌 상태의 창 폭. 접힌 폭은 좌측 입력판(380px)에 테두리를 더한 값이고,
+// main_process.js createUpWindow 의 첫 폭·minWidth 와 같아야 한다.
+const PANELS_OPEN_WIDTH = 1200;
+const PANELS_COLLAPSED_WIDTH = 400;
+const panelsCollapsed = () => !!$('app')?.classList.contains('panels-collapsed');
+
+// 폼을 띄울 때마다 부른다(현황판·쇼핑몰 메뉴·입력 확인·일괄 등록·일괄 수정). 창이 좁으면 넓힌다.
+// 접어 둔 건 사람이 정한 상태라 건드리지 않는다 — 안 그러면 현황판 칸을 누를 때마다 창이
+// 1200 으로 튀어나오는데 패널은 숨은 채라, 오른쪽 800px 이 빈다.
+function openDetailSidebar() {
+  if (panelsCollapsed()) return;
+  try { if (window.innerWidth < 1100) ipc?.send('veryup-resize-window', { width: PANELS_OPEN_WIDTH }); } catch (e) {}
+}
+
+function setPanels(open, { resize = true } = {}) {
+  const app = $('app');
+  if (!app) return;
+  const panels = [$('section8')].filter(Boolean);
+  // 숨는 칸에 포커스가 남으면 키보드가 길을 잃는다 — 버튼으로 옮긴다.
+  if (!open && panels.some(el => el.contains(document.activeElement))) $('btn-toggle-detail')?.focus();
+  app.classList.toggle('panels-collapsed', !open);
+  $('detail-toggle-icon').textContent = open ? '◀' : '▶';
+  $('detail-toggle-label').textContent = open ? '접기' : '열기';
+  $('btn-toggle-detail').setAttribute('aria-expanded', String(open));
+  if (!resize) return;
+  try { ipc?.send('veryup-resize-window', { width: open ? PANELS_OPEN_WIDTH : PANELS_COLLAPSED_WIDTH }); } catch (e) {}
+}
+
+/* ══════════════════════════════════════════════
+   일괄 등록 (선택된 플랫폼 순차 실행)
+══════════════════════════════════════════════ */
+let isBulkRunning = false;
+let bulkKind = '';   // 진행 중인 일: '일괄 등록' | '일괄 수정' (한 번에 하나만 돈다)
+// 일괄 등록의 시간 한도. 네이버·아임웹은 브라우저를 띄워 사람처럼 누르고(로그인 대기 포함), 이베이는 이미지
+// 호스팅이 끝나야 초안을 저장해서 몇 분씩 걸린다 — 넉넉히 잡는다. 넘기면 그 몰은 실패로 세고 다음 몰로 간다.
+// 예전에는 응답 없는 몰 하나가 '진행 중' 버튼을 영영 잠갔다. (테스트가 줄여 쓸 수 있게 객체로 둔다.)
+const bulkTiming = { stepMs: 10 * 60 * 1000, frameMs: 20 * 1000, pauseMs: 800 };
+const bulkDuration = ms => (ms >= 60000 ? `${Math.round(ms / 60000)}분` : `${Math.max(1, Math.round(ms / 1000))}초`);
+
+// 폼(iframe)이 다 떠서 그 몰의 등록 함수가 생길 때까지 기다린다. 예전에는 600ms 를 그냥 쉬었다 — 폼이 늦게
+// 뜨면 '함수를 찾을 수 없습니다' 로 그 몰을 건너뛰었고, 이미 떠 있어도 매번 600ms 를 버렸다.
+async function waitForFormFunction(fnName, timeoutMs) {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      const win = $('form-frame')?.contentWindow;
+      const doc = win && win.document;
+      if (doc && doc.readyState === 'complete' && doc.querySelector('.tab-btn') && typeof win[fnName] === 'function') return win;
+    } catch (e) { /* 로드 중 */ }
+    if (Date.now() >= until) return null;
+    await new Promise(r => setTimeout(r, 50));
+  }
+}
+
+// 시간 한도 안에 안 끝나면 실패 결과로 끝낸다. 요청 자체는 멈출 수 없다 — 그 몰 탭에서 결과를 봐야 한다.
+function withBulkTimeout(promise, ms) {
+  let timer;
+  const limit = new Promise(resolve => {
+    timer = setTimeout(() => resolve({ ok: false,
+      error: `${bulkDuration(ms)} 안에 끝나지 않았습니다 — 요청은 계속될 수 있으니 그 몰 탭에서 결과를 확인하세요` }), ms);
+  });
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+}
+
+// 등록 함수의 결과(폼과의 약속 { ok, error?, partial? } — index.html formResult)를 읽는다. ok === true 만
+// 성공이다. 예전 모양(아무것도 안 돌려줌)이나 알 수 없는 값은 실패로 센다 — 예전에는 await 만 하고 성공으로
+// 세서, 입력 누락으로 멈춘 몰도 마켓이 거부한 몰도 '처리 완료' 였다.
+function readBulkResult(r, what = '등록') {
+  if (r && r.ok === true) return { ok: true };
+  if (r && typeof r === 'object' && 'ok' in r) return { ok: false, partial: !!r.partial, error: r.error || '알 수 없는 오류' };
+  return { ok: false, error: `${what} 결과를 받지 못했습니다 — 그 몰 탭의 로그를 확인하세요` };
+}
+
+async function runBulkRegister() {
+  if (isBulkRunning) {
+    addLog(`이미 ${bulkKind}이 진행 중입니다.`, 'warn');
+    return;
+  }
+  // 수정 모드에서는 몰마다 등록 함수가 '수정 저장' 으로 넘어간다(registerCoupang → saveCoupangEdit 등).
+  // 일괄 등록은 신규 등록만 한다 — 버튼은 수정 모드에서 숨지만, 숨은 버튼을 부르는 길도 막는다.
+  if (currentMode !== 'new') {
+    addLog('일괄 등록은 신규등록 모드에서만 할 수 있습니다 — 수정은 각 몰 탭의 저장 버튼으로 하세요.', 'warn');
+    return;
+  }
+
+  // 1. 선택된 플랫폼 목록 파악 (fn: 폼의 등록 함수 — 결과를 { ok, error, partial } 로 돌려준다)
+  const targetPlatforms = [];
+  if (checked.KOREA?.open1) targetPlatforms.push({ id: 'naver', name: '네이버', tabId: 'naverTab', country: 'KOREA', fn: 'registerNaver' });
+  if (checked.KOREA?.open2) targetPlatforms.push({ id: 'coupang', name: '쿠팡', tabId: 'coupangTab', country: 'KOREA', fn: 'registerCoupang' });
+  if (checked.KOREA?.b2b) targetPlatforms.push({ id: 'imweb_b2b', name: '아임웹 B2B몰', tabId: 'imwebTab', country: 'KOREA', fn: 'registerImwebB2b' });
+  if (checked.KOREA?.own || checked.USA?.own || checked.JAPAN?.own) {
+    targetPlatforms.push({ id: 'imweb_board', name: '아임웹 자사몰/게시판', tabId: 'imwebBoardTab', country: 'KOREA', fn: 'registerImwebBoard' });
+  }
+  // 아마존 탭은 한 번에 한 마켓에만 올린다. 채우기(fillFrame)가 지금 채운 마켓 하나만 올린다 — 예전에는 둘 다
+  // 켜면 무조건 미국이라, 채우기·경고가 일본이라고 한 때도 미국으로 올렸고 lastAmazonCountry 까지 미국으로 바꿨다.
+  let amazonLeft = '';
+  if (checked.USA?.open1 || checked.JAPAN?.open1) {
+    const amzCountry = amazonTargetCountry();
+    targetPlatforms.push({ id: 'amazon', name: `아마존 ${amzCountry === 'JAPAN' ? '일본' : '미국'}`, tabId: 'amazonTab', country: amzCountry, fn: 'registerAmazon' });
+    if (checked.USA?.open1 && checked.JAPAN?.open1) amazonLeft = amzCountry === 'JAPAN' ? '미국' : '일본';
+  }
+  // 이베이는 초안까지만 저장한다(게시는 탭에서). 버튼을 누르는 대신 탭의 ebayDraft 로 끝날 때까지 기다린다 —
+  // 예전에는 click() 만 하고 곧장 성공으로 셌다. 거부돼도 성공이었고 오류는 이베이 탭 로그에만 남았다.
+  if (checked.USA?.open2) targetPlatforms.push({ id: 'ebay', name: 'eBay 미국', tabId: 'ebayTab', country: 'USA', fn: 'ebayDraft',
+    what: '초안 저장(Draft)', done: '초안 저장 완료 — 게시는 이베이 탭의 초안 게시 버튼으로 하세요' });
+
+  if (targetPlatforms.length === 0) {
+    addLog('현황판에서 등록할 플랫폼을 먼저 선택하세요.', 'warn');
+    return;
+  }
+
+  // 2. 우측 사이드바 펼치기 & 폼 채우기
+  openDetailSidebar();
+  clearTimeout(frameSyncTimer);
+  frameSyncTimer = null;
+  const syncReport = fillFrame({ report: true });
+  if (!syncReport.ok) {
+    addLog('등록 폼 준비 중입니다. 잠시 후 다시 시도해주세요.', 'warn');
+    return;
+  }
+
+  if (syncReport.missed && syncReport.missed.length > 0) {
+    syncReport.missed.forEach(m => addLog(`⚠ ${m}`, 'warn'));
+  }
+  const amazonLeftHow = `끝난 뒤 현황판에서 ${amazonLeft} 아마존 칸을 눌러 마켓을 바꾸고 아마존 탭의 등록 버튼을 누르세요(일괄 등록을 다시 누르면 다른 몰에도 한 번 더 올라갑니다)`;
+  if (amazonLeft) addLog(`⚠ 이번 일괄 등록은 아마존 ${amazonLeft === '일본' ? '미국' : '일본'}에만 올립니다. ${amazonLeft} 아마존은 올리지 않습니다 — ${amazonLeftHow}`, 'warn');
+
+  const btnBulk = $('btn-bulk-register');
+  const originalText = btnBulk ? btnBulk.innerHTML : '🚀 일괄 등록';
+
+  isBulkRunning = true;
+  bulkKind = '일괄 등록';
+  if (btnBulk) {
+    btnBulk.disabled = true;
+    btnBulk.innerHTML = '⏳ 일괄 등록 진행 중...';
+  }
+
+  addLog(`========== 일괄 등록 시작 (총 ${targetPlatforms.length}개 플랫폼) ==========`, 'info');
+
+  let successCount = 0, failCount = 0, partialCount = 0;
+  const failedNames = [];
+
+  try {
+    if (checked.USA?.own) {
+      const priceUsd = $('form-frame').contentDocument.getElementById('iwBoardPriceUsd').value.trim();
+      const rate = await window.VUCurrency.lockBatch(ipc, priceUsd);
+      addLog('영문 판매가 USD ' + window.VUCurrency.getBatchPriceUsd() + ' · 환율 기준일 ' + rate.marketDate + ' (이번 일괄 등록에 고정)', 'info');
+    }
+    for (const [i, plat] of targetPlatforms.entries()) {
+      addLog(`▶ [${plat.name}] 등록 준비 및 탭 전환...`, 'info');
+      let result;
+      try {
+        openPlatformTab(plat.tabId, plat.country);
+        const win = await waitForFormFunction(plat.fn, bulkTiming.frameMs);
+        if (!win) throw new Error(`등록 폼이 ${bulkDuration(bulkTiming.frameMs)} 안에 준비되지 않았습니다(${plat.fn} 없음)`);
+        addLog(`[${plat.name}] ${plat.what || '상품 등록'} 요청 전송 중...`, 'info');
+        // 등록 함수는 던지지 않기로 했지만, 던져도(예전 코드·폼 스크립트 오류) 실패로 세고 다음 몰로 간다.
+        result = readBulkResult(await withBulkTimeout(Promise.resolve().then(() => win[plat.fn]()), bulkTiming.stepMs));
+      } catch (err) {
+        result = { ok: false, error: (err && err.message) || String(err) };
+      }
+      if (result.ok) {
+        successCount++;
+        addLog(`✅ [${plat.name}] ${plat.done || '등록 완료'}`, 'ok');
+      } else {
+        failCount++;
+        failedNames.push(plat.name);
+        if (result.partial) {
+          partialCount++;
+          addLog(`⚠ [${plat.name}] 일부만 등록: ${result.error}`, 'warn');
+        } else {
+          addLog(`❌ [${plat.name}] 등록 실패: ${result.error}`, 'error');
+        }
+      }
+      // 몰 사이에 잠깐 쉰다 — 탭이 바뀌는 걸 눈으로 따라갈 수 있게.
+      if (i < targetPlatforms.length - 1) await new Promise(r => setTimeout(r, bulkTiming.pauseMs));
+    }
+
+    // 일부만 된 몰도 실패로 센다(다시 손봐야 한다). 어느 몰인지 한 줄 더 적는다.
+    const partialNote = partialCount ? ` · 그중 일부만 등록 ${partialCount}건` : '';
+    addLog(`========== 일괄 등록 완료 (성공: ${successCount}건, 실패: ${failCount}건${partialNote}) ==========`,
+           failCount === 0 ? 'ok' : (successCount > 0 ? 'warn' : 'error'));
+    if (failedNames.length) {
+      addLog(`다시 확인할 몰: ${failedNames.join(', ')} — 그 몰 탭의 로그에서 이유를 보고 그 탭에서 다시 등록하세요(일괄 등록을 다시 누르면 성공한 몰에도 한 번 더 올라갑니다)`, 'warn');
+    }
+    if (amazonLeft) addLog(`⚠ ${amazonLeft} 아마존은 이번에 올리지 않았습니다 — ${amazonLeftHow}`, 'warn');
+  } catch (globalErr) {
+    addLog(`일괄 등록 중단: ${globalErr.message}`, 'error');
+  } finally {
+    window.VUCurrency?.releaseBatch();
+    isBulkRunning = false;
+    scheduleFrameSync();   // 도는 동안 좌측에서 바꾼 값을 이제 넣는다
+    if (btnBulk) {
+      btnBulk.disabled = false;
+      btnBulk.innerHTML = originalText;
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════
+   일괄 수정 (단일 상품 수정 모드 — 선택된 플랫폼의 수정 저장을 순차 실행)
+   몰마다 그 탭에 '불러온 상품' 을 저장한다. 수정할 상품이 없는 몰은 저장 함수를 부르지 않고
+   EditItemMissingError 로 끝낸다 — 저장 함수에 맡기면 '먼저 불러오세요' 가 그 탭 로그에만 남고,
+   카드 몰(라쿠텐 등)은 '결과 없음' 인 채로 아무 일도 없이 지나갔다.
+   셸이 대신 불러와서 저장하지는 않는다: 고친 것 없는 저장도 마켓에는 수정이다(쿠팡은 승인 심사를 다시 탄다).
+══════════════════════════════════════════════ */
+class EditItemMissingError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'EditItemMissingError';
+  }
+}
+
+// 수정 모드에서 현황판에서 켠 몰. tabId 가 있으면 그 탭의 저장 함수(fn)를, card 면 카드의 '적용' 길을 탄다.
+// unavailable: 아임웹은 API 로 옮길 때까지 일괄 수정에서 뺀다(지금 저장은 브라우저 창을 띄워 누른다).
+// API 저장이 생기면 unavailable 만 지우면 된다 — 탭(editItemOf)과 저장 함수는 이미 이어 두었다.
+// currency: 그 몰이 읽는 좌측 변경 판매가 칸. 'market' 은 탭에 불러온 마켓의 통화(아마존 미국 USD · 일본 JPY).
+function bulkEditTargets() {
+  const targets = [];
+  if (checked.KOREA?.open1) targets.push({ name: '네이버', tabId: 'naverTab', country: 'KOREA', fn: 'registerNaver', currency: 'KRW' });
+  if (checked.KOREA?.open2) targets.push({ name: '쿠팡', tabId: 'coupangTab', country: 'KOREA', fn: 'registerCoupang', currency: 'KRW' });
+  if (checked.KOREA?.b2b) {
+    targets.push({ name: '아임웹 B2B몰', tabId: 'imwebTab', country: 'KOREA', fn: 'updateImwebB2bProduct', unavailable: 'API 연동 후' });
+  }
+  if (checked.KOREA?.own || checked.USA?.own || checked.JAPAN?.own) {
+    targets.push({ name: '아임웹 자사몰/게시판', tabId: 'imwebBoardTab', country: 'KOREA', fn: 'updateImwebBoardPost', unavailable: 'API 연동 후' });
+  }
+  // 아마존 탭은 불러온 마켓 하나만 고친다. country 를 넘기지 않는다 — 넘기면 탭을 열며 마켓을 바꿔서,
+  // 불러온 상품과 마켓이 달라져 저장이 거부된다.
+  if (checked.USA?.open1 || checked.JAPAN?.open1) targets.push({ name: '아마존', tabId: 'amazonTab', country: null, fn: 'registerAmazon', currency: 'market' });
+  if (checked.USA?.open2) targets.push({ name: 'eBay 미국', tabId: 'ebayTab', country: 'USA', fn: 'ebayUpdate', what: '가격·판매 수량 수정', currency: 'USD' });
+  const countryKo = { KOREA: '한국', USA: '미국', JAPAN: '일본', ARAB: '중동' };
+  for (const country of Object.keys(PLATFORMS)) {
+    for (const plat of PLATFORMS[country]) {
+      if (plat.active && plat.name && !NAME_TO_TAB[plat.name] && checked[country][plat.type]) {
+        targets.push({ name: `${plat.name} ${countryKo[country] || country}`, card: `card-${country}-${plat.type}` });
+      }
+    }
+  }
+  return targets;
+}
+
+// 수정할 상품을 돌려준다. 없으면 던진다 — 일괄 수정은 이 예외로 그 몰을 '상품 없음' 으로 센다.
+function requireEditItem(target, win) {
+  if (target.card) {
+    const edit = cardEdits.get(target.card);
+    // 카드를 다시 그리거나 지웠으면 폼도 없다 — 기억만 남은 상품은 고를 수 없다.
+    if (edit && document.getElementById(`${target.card}-edit-name`)) return { id: edit.item.id, name: edit.item.name, edit };
+    const status = document.getElementById(`${target.card}-status`)?.textContent || '';
+    throw new EditItemMissingError(/결과 없음|오류/.test(status)
+      ? `수정할 상품이 없습니다 — 검색 결과가 없습니다(${status})`
+      : '수정할 상품이 없습니다 — 카드의 검색 결과에서 상품을 고르세요');
+  }
+  const item = typeof win.editItemOf === 'function' ? win.editItemOf(target.tabId) : null;
+  if (!item) throw new EditItemMissingError(`수정할 상품이 없습니다 — ${target.name} 탭에서 상품을 먼저 불러오세요`);
+  return item;
+}
+
+// 좌측 '변경 판매가' 칸 — 통화마다 하나. 몰은 자기 통화 칸만 읽는다(bulkEditTargets 의 currency).
+const EDIT_PRICES = {
+  KRW: { id: 'inp-edit-krw', label: '변경 판매가 (원)',  pattern: /^\d+$/,                rule: '정수' },
+  USD: { id: 'inp-edit-usd', label: '변경 판매가 (USD)', pattern: /^\d+(?:\.\d{1,2})?$/, rule: '소수 둘째 자리까지의 수' },
+  JPY: { id: 'inp-edit-jpy', label: '변경 판매가 (엔)',  pattern: /^\d+$/,                rule: '정수' },
+};
+
+// 보이는 칸(그 몰을 켰을 때)만 읽는다 — 몰을 끄면 칸이 숨는데, 남은 값이 모르게 들어가면 안 된다.
+// 쉼표·공백은 뗀다(목록 글자는 '150,000원' 이지만 칸에는 숫자만 들어간다 — 손으로 친 쉼표만 떼면 된다).
+function editPriceOf(currency) {
+  const el = $(EDIT_PRICES[currency].id);
+  if (!el || el.closest('.mall-field')?.hidden) return '';
+  return el.value.replace(/[,\s]/g, '');
+}
+
+function formatPrice(value, currency) {
+  const n = Number(value);
+  if (String(value ?? '').trim() === '' || !Number.isFinite(n)) return String(value ?? '');
+  return n.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) + (currency === 'KRW' ? '원' : currency === 'JPY' ? '엔' : ' USD');
+}
+
+// 결과 줄의 판매가 부분. from 은 탭에 들어 있던 값(쿠팡은 고친 옵션마다), to 는 넣은 값이다.
+const pricesBefore = ({ from }) => [...new Set((from || []).map(v => String(v ?? '').trim()).filter(Boolean))];
+const priceUnchanged = priced => {
+  const before = pricesBefore(priced);
+  return before.length === 1 && Number(before[0]) === Number(priced.to);
+};
+function describePrice(priced) {
+  const { currency, to, note } = priced;
+  const before = pricesBefore(priced), after = formatPrice(to, currency);
+  const was = before.length ? before.map(v => formatPrice(v, currency)).join(' · ') : '없음';
+  return `${priceUnchanged(priced) ? `판매가 그대로 ${after}` : `판매가 ${was} → ${after}`}${note ? ` (${note})` : ''}`;
+}
+
+// 좌측 SKU 가 이베이 표에서 BSA 판인지. 쿠팡에서 같은 상품번호에 BSA·일반 옵션이 같이 있을 때 고른다. 모르면 null.
+function skuBsa() {
+  const listing = window.VUSuggest?.listing?.($('inp-sku')?.value || '') || window.VUSuggest?.listing?.($('inp-amz-sku')?.value || '');
+  return listing ? !!listing.bsa : null;
+}
+
+// 결과 카드. 수정 모드에서는 로그창이 숨어 있어 결과를 카드 영역 맨 위에 적는다(로그에도 같이 남긴다).
+// bulkEditLive: 도는 동안의 카드 — 도중 모드 전환 거절도 여기에 적는다.
+let bulkEditLive = null;
+function bulkEditReport() {
+  let card = $('bulk-edit-result');
+  if (!card) {
+    card = document.createElement('div');
+    card.className = 'product-card';
+    card.id = 'bulk-edit-result';
+    card.innerHTML = `
+      <div class="product-card-header">
+        <span class="platform-badge">일괄 수정</span>
+        <span class="card-title">선택한 몰 수정 저장</span>
+        <span class="card-status" id="bulk-edit-status"></span>
+      </div>
+      <div class="product-card-body"><ul class="bulk-edit-rows" id="bulk-edit-rows"></ul></div>`;
+  }
+  cardArea.prepend(card);
+  $('bulk-edit-rows').innerHTML = '';
+  updateEmptyState();
+  const icons = { info: 'ℹ️', ok: '✅', warn: '⚠️', error: '❌' };
+  return {
+    row(msg, level = 'info') {
+      addLog(msg, level);
+      const li = document.createElement('li');
+      li.className = level;
+      li.textContent = `${icons[level] || ''} ${msg}`;
+      $('bulk-edit-rows').appendChild(li);
+    },
+    status(text) { $('bulk-edit-status').textContent = text; },
+  };
+}
+
+async function runBulkEdit() {
+  if (isBulkRunning) {
+    addLog(`이미 ${bulkKind}이 진행 중입니다.`, 'warn');
+    return;
+  }
+  // 신규 모드에서는 몰마다 같은 함수가 '등록' 으로 간다 — 버튼은 숨지만, 숨은 버튼을 부르는 길도 막는다.
+  if (currentMode !== 'edit') {
+    addLog('일괄 수정은 단일 상품 수정 모드에서만 할 수 있습니다.', 'warn');
+    return;
+  }
+  openDetailSidebar();
+  const report = bulkEditReport();
+  const targets = bulkEditTargets();
+  if (targets.length === 0) {
+    report.row('현황판에서 수정할 플랫폼을 먼저 선택하세요.', 'warn');
+    report.status('대상 없음');
+    return;
+  }
+  // 변경 판매가는 보내기 전에 전부 검사한다. 한 칸이라도 틀렸으면 아무 몰도 저장하지 않는다 — 몇 몰만
+  // 저장된 뒤 멈추면 어디까지 바뀌었는지 사람이 맞춰야 한다(상품 일괄 수정의 '요청을 전송하지 않았습니다' 와 같다).
+  const prices = {};
+  for (const [currency, spec] of Object.entries(EDIT_PRICES)) {
+    const value = editPriceOf(currency);
+    if (!value) continue;
+    let problem = '';
+    if (!spec.pattern.test(value) || !(Number(value) > 0) || Number(value) > Number.MAX_SAFE_INTEGER) problem = `0보다 큰 ${spec.rule}로 입력하세요`;
+    else if (currency === 'KRW' && targets.some(t => t.tabId === 'coupangTab') && Number(value) % 10 !== 0) problem = '쿠팡 판매가는 10원 단위여야 합니다';
+    if (problem) {
+      report.row(`${spec.label} "${value}" — ${problem}. 아무 몰도 저장하지 않았습니다.`, 'error');
+      report.status('중단');
+      return;
+    }
+    prices[currency] = value;
+  }
+  // 찾는 열쇠(SKU·상품ID)를 지금 좌측 값으로 맞춰 둔다. 도중에 늦게 들어가면 탭이 '불러온 상품과
+  // 칸이 다르다' 며 저장을 거부한다. 폼이 아직 안 떴으면(카드 몰만 켬) 넘길 것도 없다.
+  clearTimeout(frameSyncTimer);
+  frameSyncTimer = null;
+  fillFrame({ report: false });
+  // 판매가를 넣을 옵션을 고르는 상품번호·BSA 도 시작할 때 값으로 고정한다(도는 사이 좌측을 고쳐도 따라가지 않게).
+  const keyNo = bareNoOf($('inp-no')?.value), keyBsa = skuBsa();
+
+  const btn = $('btn-bulk-edit');
+  const originalText = btn ? btn.innerHTML : '🛠 일괄 수정';
+  isBulkRunning = true;
+  bulkKind = '일괄 수정';
+  bulkEditLive = report;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⏳ 일괄 수정 진행 중...';
+  }
+  report.status('진행 중...');
+  const priceList = Object.entries(prices).map(([currency, value]) => formatPrice(value, currency));
+  report.row(`일괄 수정 시작 (총 ${targets.length}개 플랫폼${priceList.length ? ` · 변경 판매가 ${priceList.join(' · ')}` : ''})`, 'info');
+
+  let successCount = 0, failCount = 0, skipCount = 0;
+  const failedNames = [], missingNames = [], pricedCurrencies = new Set();
+  try {
+    for (const [i, target] of targets.entries()) {
+      if (target.unavailable) {
+        skipCount++;
+        report.row(`[${target.name}] 일괄 수정은 ${target.unavailable} 지원합니다 — 그 탭의 저장 버튼으로 수정하세요`, 'warn');
+        continue;
+      }
+      let result, label = '', priced = null;
+      try {
+        let item, run;
+        if (target.card) {
+          item = requireEditItem(target);
+          run = () => applyCardEdit(item.edit).then(res => ({ ok: true, message: res && res.message }));
+        } else {
+          openPlatformTab(target.tabId, target.country);
+          const win = await waitForFormFunction(target.fn, bulkTiming.frameMs);
+          if (!win) throw new Error(`수정 폼이 ${bulkDuration(bulkTiming.frameMs)} 안에 준비되지 않았습니다(${target.fn} 없음)`);
+          item = requireEditItem(target, win);
+          label = [item.id, item.market].filter(Boolean).join(' · ');
+          // 변경 판매가를 그 탭에 불러온 상품에 넣고 같은 저장으로 보낸다. 넣지 못하면(쿠팡에 그 번호 옵션이
+          // 없다 등) applyEditPrice 가 던진다 — 그 몰은 저장하지 않고 실패로 센다. 판매가만 빼고 저장하면
+          // 사람은 판매가까지 바뀐 줄 안다.
+          const currency = target.currency === 'market' ? (item.market === '일본' ? 'JPY' : 'USD') : target.currency;
+          if (currency && prices[currency]) {
+            if (typeof win.applyEditPrice !== 'function') throw new Error('이 탭은 판매가를 넣을 수 없습니다(applyEditPrice 없음)');
+            priced = { currency, ...win.applyEditPrice(target.tabId, prices[currency], { no: keyNo, bsa: keyBsa }) };
+            pricedCurrencies.add(currency);
+          }
+          run = () => win[target.fn]();
+        }
+        label = label || [item.id, item.market].filter(Boolean).join(' · ');
+        addLog(`[${target.name}] ${label ? `${label} ` : ''}${target.what || '수정 저장'} 요청 전송 중...`, 'info');
+        // 저장 함수는 던지지 않기로 했지만, 던져도(폼 스크립트 오류·카드 몰 IPC 오류) 실패로 세고 다음 몰로 간다.
+        const raw = await withBulkTimeout(Promise.resolve().then(run), bulkTiming.stepMs);
+        result = { ...readBulkResult(raw, '수정'), message: raw && raw.message };
+      } catch (err) {
+        result = { ok: false, missing: err instanceof EditItemMissingError, error: (err && err.message) || String(err) };
+      }
+      const what = label ? `${target.name} ${label}` : target.name;
+      const priceText = priced ? ` · ${describePrice(priced)}` : '';
+      if (result.ok) {
+        successCount++;
+        report.row(`[${what}] 수정 완료${priceText}${result.message ? ` — ${result.message}` : ''}`, 'ok');
+      } else {
+        failCount++;
+        failedNames.push(target.name);
+        // 바꾼 판매가는 탭의 상품에 들어간 채로 남는다 — 저장이 안 됐다는 것을 같이 적는다.
+        const unsaved = priced && !priceUnchanged(priced)
+          ? ` (판매가 ${formatPrice(priced.to, priced.currency)}: 탭에만 들어가 있고 저장되지 않았습니다)` : '';
+        if (result.missing) {
+          missingNames.push(target.name);
+          report.row(`[${what}] 상품 없음: ${result.error}`, 'error');
+        } else if (result.partial) {
+          report.row(`[${what}] 일부만 수정: ${result.error}${unsaved}`, 'warn');
+        } else {
+          report.row(`[${what}] 수정 실패: ${result.error}${unsaved}`, 'error');
+        }
+      }
+      if (i < targets.length - 1) await new Promise(r => setTimeout(r, bulkTiming.pauseMs));
+    }
+
+    const missingNote = missingNames.length ? ` · 그중 상품 없음 ${missingNames.length}건` : '';
+    const skipNote = skipCount ? `, 건너뜀: ${skipCount}건` : '';
+    report.row(`일괄 수정 완료 (성공: ${successCount}건, 실패: ${failCount}건${missingNote}${skipNote})`,
+               failCount === 0 ? 'ok' : (successCount > 0 ? 'warn' : 'error'));
+    if (missingNames.length) {
+      report.row(`수정할 상품이 없는 몰: ${missingNames.join(', ')} — 그 몰에 이 상품이 있는지 확인하고, 탭에서 불러온 뒤 다시 누르세요`, 'warn');
+    }
+    const otherFailed = failedNames.filter(n => !missingNames.includes(n));
+    if (otherFailed.length) report.row(`다시 확인할 몰: ${otherFailed.join(', ')} — 그 몰 탭의 로그에서 이유를 보세요`, 'warn');
+    // 적어 둔 판매가를 받은 몰이 하나도 없으면 알린다(아마존 탭에 다른 마켓 상품이 불러와져 있었다 등).
+    for (const [currency, value] of Object.entries(prices)) {
+      if (!pricedCurrencies.has(currency)) report.row(`${EDIT_PRICES[currency].label} ${formatPrice(value, currency)}: 넣은 몰이 없습니다 — 그 통화의 몰 탭에 상품을 불러왔는지 확인하세요`, 'warn');
+    }
+    report.status(failCount === 0 ? '완료' : `실패 ${failCount}건`);
+  } catch (globalErr) {
+    report.row(`일괄 수정 중단: ${globalErr.message}`, 'error');
+    report.status('중단');
+  } finally {
+    isBulkRunning = false;
+    scheduleFrameSync();   // 도는 동안 좌측에서 바꾼 값을 이제 넣는다
+    bulkEditLive = null;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  }
+}
+
+// 일괄 등록·수정 중에는 모드를 못 바꾼다. 남은 몰의 함수는 탭의 모드를 보고 갈라지므로(registerCoupang →
+// saveCoupangEdit 등), 도중에 바뀌면 남은 몰이 말없이 반대쪽(등록 ↔ 수정 저장)으로 넘어갔다.
+// 바꾸려던 모드를 거절하면 라디오를 지금 모드로 되돌리고 로그에 알린 뒤 true 를 돌려준다.
+function refuseModeChangeDuringBulk(mode) {
+  mode = mode === 'edit' ? 'edit' : 'new';
+  if (!isBulkRunning || mode === currentMode) return false;
+  const radio = document.querySelector(`.mode-radio[value="${currentMode}"]`);
+  if (radio) radio.checked = true;
+  const goesTo = currentMode === 'new' ? '수정 저장' : '신규 등록';
+  const msg = `⚠ ${bulkKind} 중에는 모드를 바꿀 수 없습니다 — 끝난 뒤 바꾸세요. 도중에 바꾸면 남은 몰이 ${goesTo}으로 넘어갑니다.`;
+  if (bulkEditLive) bulkEditLive.row(msg, 'warn');
+  else addLog(msg, 'warn');
+  return true;
+}
 
 // 모드 전환
 document.querySelectorAll('.mode-radio').forEach(radio => {
   radio.addEventListener('change', () => {
-    currentMode = radio.value;
-    if (currentMode === 'new') {
-      btnRun.style.display = '';
-      uncheckAllAndClearCards();
-    } else {
-      btnRun.style.display = 'none';
-      logWindow.innerHTML = '';
-    }
-    setSection8Mode(currentMode);
+    if (refuseModeChangeDuringBulk(radio.value)) return;
+    setSection8Mode(radio.value);
+    ipc.send('veryup-set-mode', currentMode);
+    scheduleFrameSync();   // 수정 모드는 찾는 열쇠(SKU·상품ID·상품번호)만 넘긴다
+    openDetailSidebar();
+  });
+});
+document.querySelectorAll('.mode-label').forEach(lbl => {
+  lbl.addEventListener('click', () => {
+    openDetailSidebar();
   });
 });
 
-// 실행 버튼
-btnRun.addEventListener('click', runRegister);
+// 접기 / 열기 — 쇼핑몰 탭·신규등록 패널
+$('btn-toggle-detail')?.addEventListener('click', () => setPanels(panelsCollapsed()));
+
+// 일괄 등록 버튼
+$('btn-bulk-register')?.addEventListener('click', runBulkRegister);
+// 일괄 수정 버튼
+$('btn-bulk-edit')?.addEventListener('click', runBulkEdit);
+
+// 입력 확인 버튼
+btnRun.addEventListener('click', () => {
+  openDetailSidebar();
+  runRegister();
+});
+
+// 좌측 칸이 바뀌면(치기·목록 고르기·라디오) 곧장 오른쪽 폼에 넣는다. 목록에서 고르면
+// 형제 칸들도 한꺼번에 바뀌므로 잠깐 모았다가 한 번에 넣는다(scheduleFrameSync).
+$('section7').addEventListener('input', scheduleFrameSync);
+$('section7').addEventListener('change', scheduleFrameSync);
+for (const { id } of Object.values(EDIT_PRICES)) $(id)?.addEventListener('focus', () => loadPriceTiers());
+for (const id of ['inp-sku', 'inp-amz-sku', 'inp-usd', 'inp-cpid', ...Object.values(EDIT_PRICES).map(p => p.id)]) $(id)?.addEventListener('focus', () => loadLiveValues());
 
 // 초기화 버튼
-btnClear.addEventListener('click', () => {
-  if (currentMode === 'new') {
-    logWindow.innerHTML = '';
-  } else {
-    uncheckAllAndClearCards();
-  }
-  updateEmptyState();
-});
+if (btnClear) {
+  btnClear.addEventListener('click', () => {
+    if (currentMode === 'new') {
+      logWindow.innerHTML = '';
+    } else {
+      uncheckAllAndClearCards();
+    }
+    updateEmptyState();
+  });
+}
 
 /* ══════════════════════════════════════════════
    IPC 수신 (메인 프로세스 → 렌더러)
@@ -1387,19 +3588,49 @@ ipc.on('veryup-log', (event, { message, level }) => {
   addLog(message, level || 'info');
 });
 
-ipc.on('veryup-search-result', (event, { country, platform, items }) => {
-  const platObj = (PLATFORMS[country] || []).find(p => p.name === platform);
-  if (platObj) {
-    const cardId = `card-${country}-${platObj.type}`;
-    renderSearchResult(cardId, country, platObj.type, platObj, { items });
-  }
+ipc.on('veryup-set-mode', (event, mode) => {
+  // 메인 프로세스(런처 등)가 모드를 바꾸라고 해도 일괄 등록 중엔 거절하고, 메인의 기억을 지금 모드로 되돌린다.
+  if (refuseModeChangeDuringBulk(mode)) { ipc.send('veryup-set-mode', currentMode); return; }
+  setSection8Mode(mode);
+  scheduleFrameSync();
 });
 
 /* ══════════════════════════════════════════════
-   초기화
+   초기화 (main_process.js query parameter 연동)
 ══════════════════════════════════════════════ */
+window.VUCurrency?.init(ipc);
+window.VUImages?.init({ ipc, onChange: () => scheduleFrameSync() });
 renderBoard();
-setSection8Mode('new');
+updateLangFields();
+updateMallFields();
+bindLangAutoFill();
+loadAmazonProductType();
+loadPriceTiers({ force: true });
+loadLiveValues({ force: true });
+const urlParams = new URLSearchParams(window.location.search);
+const initialMode = urlParams.get('mode') || 'new';
+setSection8Mode(initialMode);
+// 기본 화면은 현황판뿐이다. 앱은 main_process 가 ?panels=collapsed 로 띄운다 — 창도 이미 접힌
+// 폭으로 만들어져 있어 크기 요청은 안 보낸다. 쿼리 없이 열면(테스트·개발) 예전처럼 다 펼친다.
+if (urlParams.get('panels') === 'collapsed') setPanels(false, { resize: false });
+// 지난번 현황판 선택을 되살린다. 모드를 정한 뒤에 해야 수정 모드의 카드 몰이 제 길로 간다.
+// 접혀 있으면 폼은 숨은 채로 미리 떠 있다가, 열기를 누르면 바로 보인다.
+document.querySelectorAll('.board-preset').forEach(btn => {
+  btn.addEventListener('click', () => setBoardSelection(presetSelection(BOARD_PRESETS[btn.dataset.preset] || [])));
+});
+const savedBoard = loadBoardSelection();
+if (savedBoard) setBoardSelection(savedBoard);
+updateBoardPresets();
+// Reloads retain the original URL query; restore the latest mode from main.
+// Ignore a delayed reply if the user or an IPC event has already changed modes.
+const revisionAtLoad = modeRevision;
+ipc.invoke('veryup-get-mode').then(mode => {
+  if ((mode === 'new' || mode === 'edit') && modeRevision === revisionAtLoad && !refuseModeChangeDuringBulk(mode)) {
+    setSection8Mode(mode);
+  }
+}).catch(err => console.warn('모드 불러오기 실패:', err));
 </script>
+<script src="fx-auto-price.js"></script>
+<script src="bulk-edit.js"></script>
 </body>
 </html>

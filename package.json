@@ -1,28 +1,47 @@
 {
   "name": "very-up-ver2",
-  "version": "2.0.0",
-  "description": "VERY UP VER2 - Multi-country commerce automation tool",
+  "version": "3.0.0",
+  "description": "VERY UP VER3 - Multi-country commerce automation tool",
   "main": "src/main_process.js",
   "type": "module",
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node tests/run-all.mjs",
     "test:ebay": "node --test tests/ebay.test.mjs tests/ebay-proxy.test.mjs",
+    "test:ebay-migrate": "node --test tests/ebay-migrate.test.mjs",
+    "test:env-file": "node --test tests/env-file.test.mjs",
+    "test:platform-browser": "node --test tests/platform-browser.test.mjs",
+    "test:ebay-search-diagnostics": "node --test tests/ebay-search-diagnostics.test.mjs",
     "test:proxy": "python -m unittest discover -s tests -p test_proxy.py -v",
     "test:amazon-settings": "node --test tests/amazon-settings.test.mjs",
     "test:server-credentials": "node --test tests/server-credentials.test.mjs",
     "test:admin-credentials": "python -m unittest discover -s tests -p test_credentials.py -v",
+    "test:public": "python -m unittest discover -s tests -p test_public.py -v",
+    "test:ebay-notify": "python -m unittest discover -s tests -p test_ebay_notify.py -v",
+    "test:request-log": "python -m unittest discover -s tests -p test_request_log.py -v",
     "test:amazon-update": "node --test tests/amazon-update.test.mjs",
     "test:marketplace-search": "node --test tests/marketplace-search.test.mjs",
     "test:marketplace-search-ui": "node tests/marketplace-search-ui.mjs",
+    "test:product-table": "node --test tests/product-table.test.mjs",
+    "test:product-table-ui": "node tests/product-table-ui.mjs",
     "test:section8": "node tests/section8-mode.mjs",
+    "test:detail-toggle": "node tests/detail-toggle-ui.mjs",
+    "test:new-listing-ui": "node tests/new-listing-layout-ui.mjs",
+    "test:board-selection": "node tests/board-selection-ui.mjs",
+    "test:edit-find-keys": "node tests/edit-find-keys-ui.mjs",
+    "test:edit-label": "node tests/edit-label.mjs",
     "test:form-injection": "node tests/form-injection.mjs",
-    "test:ebay-ui": "node tests/ebay-ui.mjs"
+    "test:vu-combo-commit": "node tests/vu-combo-commit.mjs",
+    "test:ebay-ui": "node tests/ebay-ui.mjs",
+    "test:naver-api": "node --test tests/naver-api.test.mjs",
+    "test:naver-appcheck": "node tests/naver-appcheck.mjs",
+    "test:imweb-oauth": "node tests/imweb-oauth.mjs",
+    "test:imweb-token": "node tests/imweb-token.mjs"
   },
   "build": {
     "appId": "com.veryup.ver2",
-    "productName": "VERY UP VER2",
+    "productName": "VERY UP VER3",
     "asar": false,
     "npmRebuild": false,
     "directories": {
@@ -33,6 +52,7 @@
       "data/**/*",
       "node_modules/**/*",
       "package.json",
+      "veryup.env",
       "!session_naver.json",
       "!data/session_naver.json",
       "!data/esm_session.json",
@@ -45,6 +65,7 @@
       "!data/papago.json",
       "!**/ebay_config.json",
       "!**/ebay_jobs.json",
+      "!**/ebay_listings_cache.json",
       "!**/*.log"
     ],
     "win": {
@@ -64,14 +85,15 @@
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.2",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^16.4.5",
     "electron-updater": "^6.8.9",
+    "parse5": "^7.3.0",
     "playwright": "^1.43.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "electron": "^30.0.1",
-    "electron-builder": "^24.13.3",
-    "electron-packager": "^17.1.2"
+    "electron-builder": "^24.13.3"
   }
 }

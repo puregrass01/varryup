@@ -5,6 +5,18 @@
 <h1>대시보드</h1>
 <p class="sub">{{ user["name"] }} 님, 안녕하세요. 오늘의 현황입니다.</p>
 
+{# 직원(role='staff')에게는 전 직원 수·최근 로그인 IP 를 보여주지 않는다.
+   app.py 의 dashboard() 가 is_admin=False 일 때 통계 자체를 조회하지 않고 넘긴다 —
+   여기서 {% if %} 만 지우면 정의되지 않은 변수로 화면이 깨진다. #}
+{% if not is_admin %}
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 8px">직원 계정</h2>
+  <p style="margin:0;font-size:14px;color:var(--muted)">
+    이 계정은 앱에서 쓰는 직원 계정입니다. 전 직원 명부·로그인 이력·사용량 통계는 관리자만 볼 수 있습니다.<br>
+    여기서는 <a href="/password" style="color:var(--accent)">비밀번호 변경</a>만 할 수 있습니다.
+  </p>
+</div>
+{% else %}
 <div class="grid g3" style="margin-bottom:22px">
   <div class="card stat"><div class="n">{{ today_logins }}</div><div class="l">오늘 로그인 (성공)</div></div>
   <div class="card stat"><div class="n">{{ active_count }}</div><div class="l">활성 직원 계정</div></div>
@@ -29,4 +41,5 @@
     </tbody>
   </table>
 </div>
+{% endif %}
 {% endblock %}

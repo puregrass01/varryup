@@ -5,7 +5,8 @@
 <h1>로그인 로그</h1>
 <p class="sub">누가 언제 어디(IP)서 접속했는지 최근 100건입니다.</p>
 
-<div class="card">
+<div class="card" style="padding:0">
+  <div class="scroll-y">
   <table>
     <thead><tr><th>시각</th><th>아이디</th><th>IP</th><th>결과</th></tr></thead>
     <tbody>
@@ -21,5 +22,6 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 {% endblock %}

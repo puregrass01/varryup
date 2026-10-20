@@ -3,38 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VERY UP VER2 - 런처</title>
+    <title>VERY UP VER3 - 런처</title>
+    <script src="theme.js"></script>
     <link rel="stylesheet" href="launcher.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
     <!-- 커스텀 윈도우 컨트롤 -->
     <div style="position:fixed;top:0;left:0;right:0;height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;-webkit-app-region:drag;z-index:9999;">
-        <span style="font-size:0.75rem;color:rgba(255,255,255,0.3);font-family:'Outfit',sans-serif;letter-spacing:0.05em;">VERY UP VER2</span>
+        <span style="font-size:0.75rem;color:var(--text);font-family:'Outfit',sans-serif;letter-spacing:0.05em;font-weight:600;">VERY UP VER3</span>
         <div style="-webkit-app-region:no-drag;display:flex;gap:6px;">
+            <button data-theme-toggle title="밝게 / 어둡게"
+                style="width:28px;height:28px;border-radius:50%;border:none;background:var(--chip);color:var(--text-dim);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;"
+                onmouseover="this.style.background='var(--chip-hover)'" onmouseout="this.style.background='var(--chip)'">🌙</button>
             <button onclick="const {ipcRenderer}=require('electron');ipcRenderer.send('minimize-win')" title="최소화"
-                style="width:28px;height:28px;border-radius:50%;border:none;background:rgba(255,255,255,0.08);color:#aaa;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;"
-                onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">─</button>
+                style="width:28px;height:28px;border-radius:50%;border:none;background:var(--chip);color:var(--text-dim);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;"
+                onmouseover="this.style.background='var(--chip-hover)'" onmouseout="this.style.background='var(--chip)'">─</button>
             <button onclick="const {ipcRenderer}=require('electron');ipcRenderer.send('close-win')" title="닫기"
-                style="width:28px;height:28px;border-radius:50%;border:none;background:rgba(255,255,255,0.08);color:#aaa;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;"
-                onmouseover="this.style.background='rgba(220,50,50,0.7)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,0.08)';this.style.color='#aaa'">✕</button>
+                style="width:28px;height:28px;border-radius:50%;border:none;background:var(--chip);color:var(--text-dim);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;"
+                onmouseover="this.style.background='rgba(220,50,50,0.7)';this.style.color='#fff'" onmouseout="this.style.background='var(--chip)';this.style.color='var(--text-dim)'">✕</button>
         </div>
     </div>
     <!-- 직원 로그인 오버레이 (로그인 전엔 이 화면이 카드를 가린다) -->
-    <div id="loginOverlay" style="position:fixed;inset:0;z-index:5000;background:#0f1420;display:flex;align-items:center;justify-content:center;">
-        <div style="width:320px;max-width:86vw;background:#1a2130;border:1px solid #2a3346;border-radius:16px;padding:30px 26px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
+    <div id="loginOverlay" style="position:fixed;inset:0;z-index:5000;background:var(--bg);display:flex;align-items:center;justify-content:center;">
+        <div style="width:320px;max-width:86vw;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:30px 26px;box-shadow:0 20px 60px rgba(15,23,42,.22);">
             <div style="text-align:center;font-family:'Outfit',sans-serif;">
-                <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.01em;">VERY UP</div>
-                <div style="font-size:12px;color:#8b97a6;margin-top:3px;">직원 로그인</div>
+                <div style="font-size:22px;font-weight:800;color:var(--text);letter-spacing:-.01em;">VERY UP</div>
+                <div style="font-size:12px;color:var(--text-dim);margin-top:3px;">직원 로그인</div>
             </div>
             <div style="margin-top:22px;display:flex;flex-direction:column;gap:12px;">
                 <input id="li_user" placeholder="아이디" autocomplete="username"
-                    style="padding:11px 12px;border-radius:9px;border:1px solid #2a3346;background:#0f1420;color:#fff;font-size:14px;outline:none;">
+                    style="padding:11px 12px;border-radius:9px;border:1px solid var(--line);background:var(--field);color:var(--text);font-size:14px;outline:none;">
                 <input id="li_pw" type="password" placeholder="비밀번호" autocomplete="current-password"
-                    style="padding:11px 12px;border-radius:9px;border:1px solid #2a3346;background:#0f1420;color:#fff;font-size:14px;outline:none;">
+                    style="padding:11px 12px;border-radius:9px;border:1px solid var(--line);background:var(--field);color:var(--text);font-size:14px;outline:none;">
                 <button id="li_btn" onclick="doLogin()"
-                    style="padding:12px;border:none;border-radius:9px;background:#0f766e;color:#fff;font-size:15px;font-weight:600;cursor:pointer;">로그인</button>
-                <div id="li_err" style="display:none;color:#e8807f;font-size:13px;text-align:center;line-height:1.4;"></div>
+                    style="padding:12px;border:none;border-radius:9px;background:var(--btn-face);color:var(--btn-text);font-size:15px;font-weight:600;cursor:pointer;">로그인</button>
+                <div id="li_err" style="display:none;color:var(--err);font-size:13px;text-align:center;line-height:1.4;"></div>
+                <!-- 관리자 서버(직원·인증키·로그)를 기본 브라우저로 연다. 주소는 메인 프로세스가 만든다. -->
+                <button id="li_server" onclick="openAdminServer()" title="관리자 서버 로그인 페이지를 브라우저로 엽니다"
+                    style="padding:10px;border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--text-dim);font-size:13px;cursor:pointer;">
+                    서버 열기
+                </button>
+                <!-- 서버에 닿지 못했을 때만 나타난다. 비밀번호가 틀린 경우에는 뜨지 않는다. -->
+                <button id="li_local" onclick="enterLocalMode()" style="display:none;padding:10px;border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--text-dim);font-size:13px;cursor:pointer;">
+                    서버 없이 로컬 모드로 시작
+                </button>
+                <div id="li_localhint" style="display:none;color:var(--text-dim);font-size:11.5px;text-align:center;line-height:1.5;">
+                    각 플랫폼 탭에서 직접 입력한 API 키로 동작합니다.
+                </div>
             </div>
         </div>
     </div>
@@ -48,7 +64,7 @@
             <!-- 로고 -->
             <div class="launcher-logo">
                 <h1>VERY UP</h1>
-                <span class="ver-badge">VER 2.0</span>
+                <span class="ver-badge">VER 3.0</span>
             </div>
             <p class="launcher-sub">시작할 프로그램을 선택하세요</p>
 
@@ -102,11 +118,12 @@
 
             </div>
 
-            <p class="launcher-footer">VERY UP VER2 &nbsp;·&nbsp; Optic Glass Commerce Automation</p>
+            <p class="launcher-footer">VERY UP VER3 &nbsp;·&nbsp; Optic Glass Commerce Automation</p>
         </div>
     </div>
 
     <script>
+        VUTheme.init();   // 테마 값·버튼은 theme.js 소유
         const { ipcRenderer } = require('electron');
 
         function showErr(m) {
@@ -123,16 +140,57 @@
             try {
                 const res = await ipcRenderer.invoke('server-login', { username, password });
                 if (res && res.ok) {
-                    document.getElementById('loginOverlay').style.display = 'none';
+                    hideOverlay();
                 } else {
                     showErr((res && res.error) || '로그인에 실패했습니다.');
+                    // 서버 자체에 닿지 못한 경우에만 로컬 모드를 제안한다.
+                    if (res && res.offline) offerLocalMode();
                 }
             } catch (e) {
-                showErr('서버에 연결할 수 없습니다. 서버가 켜져 있는지 확인하세요.');
+                showErr('서버에 연결할 수 없습니다.');
+                offerLocalMode();
             } finally {
                 btn.disabled = false; btn.textContent = '로그인';
             }
         }
+
+        function hideOverlay() {
+            document.getElementById('loginOverlay').style.display = 'none';
+        }
+        async function openAdminServer() {
+            const btn = document.getElementById('li_server');
+            btn.disabled = true;
+            try {
+                const res = await ipcRenderer.invoke('open-admin-server');
+                if (!res || !res.ok) showErr((res && res.error) || '서버 주소를 열 수 없습니다.');
+            } catch (e) {
+                showErr('서버를 열지 못했습니다.');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+        function offerLocalMode() {
+            document.getElementById('li_local').style.display = 'block';
+            document.getElementById('li_localhint').style.display = 'block';
+        }
+        async function enterLocalMode() {
+            try { await ipcRenderer.invoke('enter-local-mode'); } catch (e) { /* 실패해도 진입은 시킨다 */ }
+            hideOverlay();
+        }
+
+        // 서버를 아예 안 쓰는 배포(ADMIN_SERVER_URL 미설정 또는 VERYUP_LOCAL_ONLY=1)면
+        // 로그인 화면을 띄우지 않고 바로 들어간다.
+        (async () => {
+            try {
+                const mode = await ipcRenderer.invoke('server-mode');
+                // 서버 주소가 없으면 "서버 열기" 는 열 곳이 없다.
+                if (mode && !mode.adminServer) document.getElementById('li_server').style.display = 'none';
+                if (mode && mode.loginRequired === false) {
+                    await ipcRenderer.invoke('enter-local-mode');
+                    hideOverlay();
+                }
+            } catch (e) { /* 핸들러가 없으면 기존처럼 로그인 화면을 유지한다 */ }
+        })();
         // 로그인 화면에서 엔터로 제출
         document.addEventListener('keydown', (e) => {
             const ov = document.getElementById('loginOverlay');

@@ -1,4 +1,5 @@
 import { BasePlatform } from './base_platform.js';
+import { uploadRepresentative, replaceDescriptionImages } from './naver_managed_images.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -47,52 +48,8 @@ export class NaverSmartStore extends BasePlatform {
 
     console.log('Login required. Please complete the login in the opened browser...');
 
-    // 서버에서 받은 로그인 정보가 있으면 자동입력 시도.
-    // ※ 네이버는 보안이 강해 자동입력이 막히거나 캡차가 뜰 수 있음 → 실패하면 아래 수동 로그인으로 진행.
-    if (this.autoLogin && this.autoLogin.loginId && this.autoLogin.password) {
-        try {
-            console.log('[네이버] 자동 로그인 시도... URL:', this.page.url());
-            await this.page.waitForLoadState('domcontentloaded');
-            await sleep(1200);
-
-            // '네이버 아이디로 로그인'을 누르면 네이버 로그인이 '새 팝업창'으로 열린다.
-            // 그 팝업 페이지를 잡아서(target) 거기에 입력해야 한다. (원래 창은 판매자 탭이라 소용없음)
-            let loginPage = null;
-            for (const sel of [
-                'button:has-text("네이버 아이디로 로그인")',
-                'a:has-text("네이버 아이디로 로그인")',
-                '[role="tab"]:has-text("네이버 아이디로 로그인")',
-            ]) {
-                const el = this.page.locator(sel).first();
-                if (await el.count() === 0) continue;
-                try {
-                    const [popup] = await Promise.all([
-                        this.page.waitForEvent('popup', { timeout: 5000 }).catch(() => null),
-                        el.click({ timeout: 2500 }),
-                    ]);
-                    loginPage = popup;
-                    console.log('[네이버] 탭 클릭:', sel, '| 팝업:', popup ? '열림' : '없음(같은창)');
-                    break;
-                } catch (e) { /* 다음 후보 시도 */ }
-            }
-
-            // 팝업이 열렸으면 팝업에, 아니면 현재 창에 입력
-            const target = loginPage || this.page;
-            await target.waitForLoadState('domcontentloaded').catch(() => {});
-            await sleep(1500);
-            console.log('[네이버][진단] 입력대상 URL:', target.url());
-
-            const pwField = target.locator('input[type="password"]:visible, #pw').first();
-            const idField = target.locator('#id, input[type="text"]:visible, input[type="email"]:visible').first();
-            await pwField.waitFor({ timeout: 8000 });
-            await idField.fill(this.autoLogin.loginId);
-            await pwField.fill(this.autoLogin.password);
-            await target.keyboard.press('Enter');
-            console.log('[네이버] 자동 입력 완료. (캡차·2단계 인증이 뜨면 직접 처리)');
-        } catch (e) {
-            console.log('[네이버] 자동 로그인 입력 실패 → 수동으로 진행:', e.message);
-        }
-    }
+    // 서버 로그인정보가 있으면 네이버 아이디 팝업까지 자동입력 시도. (실패 시 수동 진행)
+    await this._tryAutoLogin();
 
     try {
         // Wait for SmartStore dashboard (after login redirect completes)
@@ -117,6 +74,57 @@ export class NaverSmartStore extends BasePlatform {
     await this.page.waitForLoadState('networkidle');
     
     return true;
+  }
+
+  /**
+   * 네이버 로그인 페이지가 보이면 '네이버 아이디로 로그인' 팝업을 열어 아이디/비번을 자동입력한다.
+   * 첫 로그인(login)과 등록 중 재로그인(_navigateWithCacheBust) 양쪽에서 재사용한다.
+   * 네이버가 자동입력을 막거나 캡차를 띄우면 실패로 두고 수동 진행하게 한다.
+   */
+  async _tryAutoLogin() {
+    if (!(this.autoLogin && this.autoLogin.loginId && this.autoLogin.password)) return false;
+    try {
+      console.log('[네이버] 자동 로그인 시도... URL:', this.page.url());
+      await this.page.waitForLoadState('domcontentloaded').catch(() => {});
+      await sleep(1200);
+
+      // '네이버 아이디로 로그인'을 누르면 로그인이 '새 팝업창'으로 열린다 → 그 팝업에 입력해야 한다.
+      let loginPage = null;
+      for (const sel of [
+        'button:has-text("네이버 아이디로 로그인")',
+        'a:has-text("네이버 아이디로 로그인")',
+        '[role="tab"]:has-text("네이버 아이디로 로그인")',
+      ]) {
+        const el = this.page.locator(sel).first();
+        if (await el.count() === 0) continue;
+        try {
+          const [popup] = await Promise.all([
+            this.page.waitForEvent('popup', { timeout: 8000 }).catch(() => null),
+            el.click({ timeout: 2500 }),
+          ]);
+          loginPage = popup;
+          console.log('[네이버] 탭 클릭:', sel, '| 팝업:', popup ? '열림' : '없음(같은창)');
+          break;
+        } catch (e) { /* 다음 후보 시도 */ }
+      }
+
+      const target = loginPage || this.page;   // 팝업이 열렸으면 팝업, 아니면 현재 창
+      await target.waitForLoadState('domcontentloaded').catch(() => {});
+      await sleep(1500);
+      console.log('[네이버][진단] 입력대상 URL:', target.url());
+
+      const pwField = target.locator('input[type="password"]:visible, #pw').first();
+      const idField = target.locator('#id, input[type="text"]:visible, input[type="email"]:visible').first();
+      await pwField.waitFor({ timeout: 8000 });
+      await idField.fill(this.autoLogin.loginId);
+      await pwField.fill(this.autoLogin.password);
+      await target.keyboard.press('Enter');
+      console.log('[네이버] 자동 입력 완료. (캡차·2단계 인증이 뜨면 직접 처리)');
+      return true;
+    } catch (e) {
+      console.log('[네이버] 자동 로그인 입력 실패 → 수동으로 진행:', e.message);
+      return false;
+    }
   }
 
   async copyAndRegisterProduct(data) {
@@ -171,12 +179,13 @@ export class NaverSmartStore extends BasePlatform {
 
     // 5. Skip Main Image Upload - copy registration keeps the template's representative image.
     //    The SmartStore uses a photo-storage modal (not a simple file input), so we skip this.
-    console.log('Skipping main image update (using template image from copy registration).');
+    if (data.mainImagePath) await uploadRepresentative(this.page, data.mainImagePath);
+    else console.log('Skipping main image update (using template image from copy registration).');
 
     // 6. Update Smart Editor ONE (상세설명) - inject ESM HTML
-    if (data.esmHtml) {
+    if (data.esmHtml || data.detailHtml) {
         console.log('Updating product description (Smart Editor ONE)...');
-        await this._updateSmartEditorContent(data.esmHtml, data.category);
+        await this._updateSmartEditorContent([data.esmHtml, data.detailHtml].filter(Boolean).join('\n'), data.category, !!data.detailHtml);
     } else {
         console.log('No ESM HTML provided, skipping description update.');
     }
@@ -191,13 +200,19 @@ export class NaverSmartStore extends BasePlatform {
     console.log('Setting origin info...');
     await this._updateOriginInfo();
 
-    // 9. Save the product
+    // 9. Save the product — 저장 요청의 응답을 지켜보며 누른다(판정 신호).
     console.log('Saving copied product...');
-    await this._saveProduct();
+    const watch = this._watchSaveResponse();
+    try {
+        const saved = await this._saveProduct();
 
-    // 10. Extract URL from success or current page
-    console.log('Extracting registered product URL...');
-    return await this._extractResultUrl();
+        // 10. 저장이 실제로 됐는지 확인하고 URL 을 얻는다. 확인하지 못하면 던진다 —
+        //     main 의 중복 방지 원장은 여기서 값이 돌아와야만 '등록됨'을 적는다.
+        console.log('Extracting registered product URL...');
+        return await this._extractResultUrl(watch.save, saved);
+    } finally {
+        watch.stop();
+    }
   }
 
   // ── Helper: Navigate to copy or edit page with login redirect handling ──────
@@ -226,7 +241,9 @@ export class NaverSmartStore extends BasePlatform {
         
         // Handle login redirect if needed
         if (isLoginPage()) {
-            console.log('Redirected to login page. Waiting for manual login (120s)...');
+            console.log('등록 중 로그인 페이지로 튕김 → 자동 로그인 재시도...');
+            await this._tryAutoLogin();   // 첫 로그인과 동일하게 네이버 아이디 팝업 자동입력
+            console.log('로그인 대기 (자동입력 실패 시 직접 로그인, 120초)...');
             try {
                 await this.page.waitForURL(/sell\.smartstore\.naver\.com/, { timeout: 120000 });
                 await sleep(3000);
@@ -351,7 +368,7 @@ export class NaverSmartStore extends BasePlatform {
   }
 
   // ── Helper: Update Smart Editor ONE content ─────────────────────────
-  async _updateSmartEditorContent(esmHtml, category) {
+  async _updateSmartEditorContent(esmHtml, category, replaceAll = false) {
     try {
         // Scroll to description section first
         const descSection = this.page.locator('.title-line:has-text("상세설명")').first();
@@ -403,6 +420,11 @@ export class NaverSmartStore extends BasePlatform {
                 console.log(`  SmartEditor ONE popup opened! URL: ${editorPage.url()}`);
                 await editorPage.waitForLoadState('networkidle');
                 await sleep(3000); // Wait for editor components to fully render
+                if (replaceAll) {
+                    await replaceDescriptionImages(editorPage, esmHtml);
+                    await editorPage.waitForEvent('close', { timeout: 10000 }).catch(() => {});
+                    return;
+                }
 
                 // The user says: 
                 // "자동차의 경우 16번째 줄에 있고, 오토바이의 경우 1번째 줄에 있어."
@@ -505,11 +527,13 @@ export class NaverSmartStore extends BasePlatform {
                     console.log(`  Target image index ${targetIndex} is out of bounds (found ${imageCount} images). Cannot replace.`);
                 }
             } else {
-                console.log('  Failed to intercept SmartEditor ONE popup.');
+                if (replaceAll) throw new Error('네이버 상세설명 팝업을 열지 못했습니다. 상품은 저장하지 않았습니다.');
+            console.log('  Failed to intercept SmartEditor ONE popup.');
             }
         } else {
             console.log('  "SmartEditor ONE" button not found. Dumping "상세설명" section HTML for debugging...');
             const sectionHtml = await this.page.locator('xpath=//div[contains(@class, "title-line") and contains(., "상세설명")]/..').evaluate(el => el.outerHTML).catch(() => 'Failed to dump');
+            if (replaceAll) throw new Error('네이버 상세설명 버튼을 찾지 못했습니다. 상품은 저장하지 않았습니다.');
             const debugHtmlPath = path.join(os.tmpdir(), 'debug_desc_section.html');
             fs.writeFileSync(debugHtmlPath, sectionHtml);
             console.log(`  Saved HTML to ${debugHtmlPath}`);
@@ -517,6 +541,7 @@ export class NaverSmartStore extends BasePlatform {
 
     } catch(e) {
         console.log('  Smart Editor update failed:', e.message);
+        if (replaceAll) throw e;
     }
   }
 
@@ -567,8 +592,7 @@ export class NaverSmartStore extends BasePlatform {
         // Step 3: If still hidden, force-expand via AngularJS scope
         const optionInput0 = this.page.locator('#choice_option_value0');
         if (await optionInput0.count() === 0) {
-            console.log('  Option input #choice_option_value0 not found.');
-            return;
+            throw new Error('옵션 입력칸(#choice_option_value0)을 찾지 못했습니다.');
         }
 
         let isVisible = await optionInput0.isVisible({ timeout: 2000 }).catch(() => false);
@@ -599,22 +623,20 @@ export class NaverSmartStore extends BasePlatform {
         }
 
         if (!isVisible) {
-            console.log('  Option inputs still not visible. Skipping.');
-            return;
+            throw new Error('옵션 입력칸이 화면에 열리지 않았습니다.');
         }
 
         // Step 4: Fill all 3 option values
-        // Option 0: 모델명
-        if (data.optionModel) {
-            await this._fillOptionInput('choice_option_value0', data.optionModel, 'Option 0 (모델명)');
-        }
-        // Option 1: 상품선택
-        if (data.optionProduct) {
-            await this._fillOptionInput('choice_option_value1', data.optionProduct, 'Option 1 (상품선택)');
-        }
-        // Option 2: 운전석/조수석 선택
-        if (data.optionSeat) {
-            await this._fillOptionInput('choice_option_value2', data.optionSeat, 'Option 2 (운전석/조수석)');
+        // 넣으라고 받은 값을 못 넣으면 템플릿 옵션이 그대로 남는다 → 채우지 못한 칸이 있으면 멈춘다.
+        const fills = [
+            ['choice_option_value0', data.optionModel, 'Option 0 (모델명)', '모델명'],
+            ['choice_option_value1', data.optionProduct, 'Option 1 (상품선택)', '상품선택'],
+            ['choice_option_value2', data.optionSeat, 'Option 2 (운전석/조수석)', '운전석/조수석'],
+        ];
+        for (const [inputId, value, label, name] of fills) {
+            if (!value) continue;
+            const filled = await this._fillOptionInput(inputId, value, label);
+            if (!filled) throw new Error(`옵션 "${name}" 입력칸(#${inputId})을 채우지 못했습니다.`);
         }
 
         // Step 5: Click '옵션목록으로 적용' button
@@ -632,10 +654,14 @@ export class NaverSmartStore extends BasePlatform {
             // Update stock and price for all option rows
             await this._updateOptionStockAndPrice(data);
         } else {
-            console.log('  옵션목록으로 적용 button not found.');
+            // 적용을 못 누르면 입력칸 값이 옵션 목록에 들어가지 않는다 — 템플릿 옵션 그대로 저장된다.
+            throw new Error('"옵션목록으로 적용" 버튼을 찾지 못했습니다.');
         }
     } catch(e) {
-        console.log('Option update failed (non-critical):', e.message);
+        // 예전엔 "non-critical" 로 삼키고 저장까지 진행했다. 그러면 템플릿의 옵션(다른 차종)이 붙은
+        // 상품이 만들어지고 등록 성공으로 보고됐다. 옵션을 못 바꾸면 저장하지 않고 멈춘다.
+        console.log('Option update failed:', e.message);
+        throw new Error(`스마트스토어 옵션 변경 실패 — 상품은 저장하지 않았습니다. (${e.message})`);
     }
   }
 
@@ -747,7 +773,9 @@ export class NaverSmartStore extends BasePlatform {
         console.log(`  ✓ Option grid updated. Stock updated: ${stockUpdated}, Price updated: ${priceUpdated}`);
 
     } catch(e) {
-        console.log('  Option stock/price update skipped:', e.message);
+        // 옵션 재고·조수석 가격을 못 넣은 채 저장하면 가격이 틀린 상품이 생긴다 → 옵션 변경 실패로 올린다.
+        console.log('  Option stock/price update failed:', e.message);
+        throw new Error(`옵션 재고/가격 입력 실패: ${e.message}`);
     }
   }
 
@@ -780,69 +808,157 @@ export class NaverSmartStore extends BasePlatform {
     }
   }
 
-  // ── Helper: Save product ────────────────────────────────────────────
-  async _saveProduct() {
-    try {
-        // IMPORTANT: Dismiss any remaining modals before trying to save
-        await this._dismissModals();
-        await sleep(1000);
+  // ── Helper: Watch the save request ──────────────────────────────────
+  // 판매자센터는 "저장하기"를 누르면 /api/products 로 본문을 보낸다(수정 화면에서 실측 —
+  // 옛 수정 모듈은 PATCH 를 가로챘다. 복사등록은 새 상품이라 POST 일 것이다).
+  // 그 응답 상태가 저장 성공·거부의 가장 확실한 신호라 저장 전후로 지켜본다.
+  // 주소가 달라 못 잡으면 status 0 으로 남고, 그때는 화면 신호(성공 팝업·주소)로 판정한다.
+  _watchSaveResponse() {
+    const save = { status: 0, text: '', method: '' };
+    const onResponse = async (r) => {
+      try {
+        const method = r.request().method();
+        if (!['POST', 'PUT', 'PATCH'].includes(method)) return;
+        if (!/\/api\/products$/.test(r.url().split('?')[0])) return;
+        save.status = r.status();
+        save.method = method;
+        try { save.text = (await r.text()).slice(0, 500); } catch { /* 본문 없음 */ }
+      } catch { /* 응답 읽기 실패는 무시 — 화면 신호로 판정한다 */ }
+    };
+    this.page.on('response', onResponse);
+    return { save, stop: () => { try { this.page.off('response', onResponse); } catch { /* 이미 닫힘 */ } } };
+  }
 
-        // Force remove any modal backdrops and overlays
+  /** 지금 떠 있는 팝업들의 글자 (저장 결과 판정·오류 안내용) */
+  async _visibleModalText() {
+    try {
+      return await this.page.evaluate(() => Array.from(document.querySelectorAll('.modal-dialog, .seller-layer-modal'))
+        .filter(el => el.getClientRects().length > 0)
+        .map(el => String(el.textContent || '').replace(/\s+/g, ' ').trim())
+        .filter(Boolean).join(' / ').slice(0, 300));
+    } catch { return ''; }
+  }
+
+  // ── Helper: Save product ────────────────────────────────────────────
+  // 예전엔 전체를 try/catch 로 감싸 로그만 남겼다 — 저장 버튼을 못 찾거나 클릭이 실패해도
+  // 등록 성공으로 보고됐고, 원장에 '등록됨'이 남아 최대 24시간 재시도가 막혔다. 이제 던진다.
+  async _saveProduct() {
+    // IMPORTANT: Dismiss any remaining modals before trying to save
+    await this._dismissModals();
+    await sleep(1000);
+
+    // Force remove any modal backdrops and overlays (정리 작업이라 실패해도 저장은 시도한다)
+    try {
         await this.page.evaluate(() => {
             document.querySelectorAll('.modal-backdrop, .modal.fade.in').forEach(el => {
-                if (!el.querySelector('button:has-text("저장")')) el.remove();
+                // ':has-text' 는 Playwright 전용이라 브라우저 querySelector 에선 SyntaxError 가 난다.
+                // 예전 코드는 그 예외로 저장 단계 전체가 건너뛰어졌다 → 글자로 직접 확인한다.
+                const hasSave = Array.from(el.querySelectorAll('button')).some(b => String(b.textContent || '').includes('저장'));
+                if (!hasSave) el.remove();
             });
             document.body.classList.remove('modal-open');
             document.body.style.overflow = '';
             document.body.style.paddingRight = '';
         });
-        await sleep(500);
-
-        // Scroll to top where save button is typically visible
-        await this.page.evaluate(() => window.scrollTo(0, 0));
-        await sleep(500);
-
-        // The save button: '저장하기'
-        const submitBtn = this.page.locator('button:has-text("저장하기")').first();
-
-        if (await submitBtn.count() > 0) {
-            await submitBtn.click({ force: true });
-            await sleep(5000);
-
-            // Handle save confirmation dialog
-            const confirmBtn = this.page.locator('.modal-dialog button:has-text("확인"), .seller-layer-modal button:has-text("확인")');
-            if (await confirmBtn.count() > 0 && await confirmBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-                await confirmBtn.click({ force: true });
-                await sleep(3000);
-            }
-            console.log('  ✓ Save button clicked.');
-        } else {
-            console.log('  Save button not found. Product may need manual save.');
-        }
-    } catch(e) {
-        console.log('  Save failed:', e.message);
+    } catch (e) {
+        console.log('  Backdrop cleanup failed (continuing):', e.message);
     }
+    await sleep(500);
+
+    // Scroll to top where save button is typically visible
+    await this.page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+    await sleep(500);
+
+    // The save button: '저장하기'
+    const submitBtn = this.page.locator('button:has-text("저장하기")').first();
+    if (await submitBtn.count() === 0) {
+        throw new Error('저장하기 버튼을 찾지 못했습니다 — 상품이 저장되지 않았습니다.');
+    }
+    try {
+        await submitBtn.click({ force: true });
+    } catch (e) {
+        throw new Error(`저장하기 버튼을 누르지 못했습니다 — 상품이 저장되지 않았습니다. (${e.message})`);
+    }
+    await sleep(5000);
+
+    // Handle save confirmation dialog
+    // 누르기 전에 팝업 글자와 상품 링크를 남긴다 — 이 팝업이 성공 안내면 '확인'을 누르는 순간 링크가
+    // 사라지고, 저장이 안 됐으면 이유(필수값 누락 등)가 대개 여기 적혀 있다.
+    let modalText = '', href = '';
+    const confirmBtn = this.page.locator('.modal-dialog button:has-text("확인"), .seller-layer-modal button:has-text("확인")').first();
+    if (await confirmBtn.count() > 0 && await confirmBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+        modalText = await this._visibleModalText();
+        href = await this._successLinkHref();
+        await confirmBtn.click({ force: true });
+        await sleep(3000);
+    }
+    console.log('  ✓ Save button clicked.');
+    return { modalText, href };
+  }
+
+  /** 성공 팝업의 상품 링크 (없으면 '') */
+  async _successLinkHref() {
+    try {
+        const linkLocator = this.page.locator('.modal-dialog a[href*="smartstore"], .modal-dialog a:has-text("상품보기")').first();
+        if (await linkLocator.count() > 0) return (await linkLocator.getAttribute('href')) || '';
+    } catch { /* 링크 없음 — 다른 신호로 판정 */ }
+    return '';
   }
 
   // ── Helper: Extract result URL ──────────────────────────────────────
-  async _extractResultUrl() {
-    try {
-        await sleep(2000);
-        
-        // Look for success modal with product link
-        const linkLocator = this.page.locator('.modal-dialog a[href*="smartstore"], .modal-dialog a:has-text("상품보기")');
-        if (await linkLocator.count() > 0) {
-            const href = await linkLocator.getAttribute('href');
-            console.log(`  ✓ Product URL found: ${href}`);
-            return href;
-        }
-        
-        // Fallback: return current page URL
-        const currentUrl = this.page.url();
-        console.log(`  Product URL (fallback): ${currentUrl}`);
-        return currentUrl;
-    } catch(e) {
-        return this.page.url();
+  // 저장이 실제로 됐는지 판정하고 결과 URL 을 돌려준다. 확인하지 못하면 던진다.
+  // 예전엔 성공 팝업이 없으면 '지금 열린 페이지 주소'를 그대로 돌려줘서, 저장이 안 돼 아직
+  // 복사등록 양식(#/products/copy/{템플릿})에 있어도 등록 성공으로 보고됐다.
+  async _extractResultUrl(save = {}, { modalText = '', href: savedHref = '' } = {}) {
+    await sleep(2000);
+
+    // Look for success modal with product link (지금 떠 있는 것 → 없으면 '확인' 전에 잡아 둔 것)
+    const href = (await this._successLinkHref()) || savedHref;
+
+    const verdict = judgeNaverSave({
+        saveStatus: save.status || 0,
+        saveText: save.text || '',
+        href,
+        url: this.page.url(),
+        modalText: [modalText, await this._visibleModalText()].filter(Boolean).join(' / '),
+    });
+    if (!verdict.ok) {
+        console.log(`  ✗ 저장 확인 실패: ${verdict.error}`);
+        throw new Error(verdict.error);
     }
+    console.log(`  ✓ Product saved (${verdict.basis}): ${verdict.url}`);
+    return verdict.url;
   }
+}
+
+const NAVER_FORM_URL = /#\/products\/(?:copy|edit|create)(?:[/?]|$)/;
+const NAVER_LOGIN_URL = /nid\.naver\.com|accounts\.commerce\.naver\.com|#\/login/;
+const SAVE_DONE_TEXT = /(등록|저장)(이|을|를)?\s*(완료|되었습니다|됐습니다)/;
+const SAVE_FAIL_TEXT = /(실패|오류|에러|않았|못했|입력해\s*주|필수)/;
+
+/**
+ * 복사등록 저장 결과 판정 (브라우저 없이 시험할 수 있게 순수 함수로 둔다).
+ * 신호 우선순위: 저장 API 응답 오류 → 성공 팝업의 상품 링크 → 저장 API 2xx → 로그인 튕김 →
+ * 성공 문구 팝업 → 아직 등록·수정 양식 주소면 실패 → 양식을 떠났으면 성공.
+ * @returns {{ok: true, url: string, basis: string} | {ok: false, error: string}}
+ */
+export function judgeNaverSave({ saveStatus = 0, saveText = '', href = '', url = '', modalText = '' } = {}) {
+  const popup = modalText ? ` (팝업: "${String(modalText).slice(0, 150)}")` : '';
+  if (saveStatus >= 400) {
+    let reason = String(saveText || '').slice(0, 200);
+    try { const j = JSON.parse(saveText); reason = j.message || j.errorMessage || j.code || reason; } catch { /* 본문이 JSON 이 아님 */ }
+    return { ok: false, error: `스마트스토어가 저장을 거부했습니다 (HTTP ${saveStatus})${reason ? `: ${reason}` : ''}` };
+  }
+  if (href) return { ok: true, url: href, basis: '성공 팝업 링크' };
+  if (saveStatus >= 200 && saveStatus < 300) return { ok: true, url, basis: `저장 응답 ${saveStatus}` };
+  if (NAVER_LOGIN_URL.test(url)) {
+    return { ok: false, error: '저장 중 로그인 화면으로 넘어갔습니다 — 상품이 저장되지 않았습니다. 다시 로그인한 뒤 시도하세요.' };
+  }
+  if (modalText && SAVE_DONE_TEXT.test(modalText) && !SAVE_FAIL_TEXT.test(modalText)) {
+    return { ok: true, url, basis: '성공 문구' };
+  }
+  if (NAVER_FORM_URL.test(url)) {
+    return { ok: false, error: `저장 완료를 확인하지 못했습니다 — 화면이 아직 상품 등록 양식에 있습니다${popup}. 판매자센터에서 등록 여부를 확인한 뒤 다시 시도하세요.` };
+  }
+  return { ok: true, url, basis: '양식을 벗어남' };
 }

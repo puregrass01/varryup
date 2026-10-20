@@ -37,6 +37,9 @@ server/admin.db
 *.db
 __pycache__/
 server/secret.key
+server/dev_admin_secret.key
+server/ebay-queue-dev/
+server/.venv/
 
 # eBay per-user encrypted credentials and publishing journal
 ebay_config.json
@@ -47,3 +50,5 @@ ebay_jobs.json.tmp
 # eBay 계정 삭제 알림 수신 기록 (eBay userId 포함 — 커밋 금지)
 server/ebay_deletions.jsonl
 server/updates/
+server/currency_rates.json
+server/currency_rates.tmp

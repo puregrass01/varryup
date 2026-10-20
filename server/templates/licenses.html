@@ -24,10 +24,12 @@
         <td style="color:var(--muted)">{{ l["expires_at"] or "무제한" }}</td>
         <td style="text-align:right">
           <form method="post" action="/licenses/{{ l['id'] }}/toggle" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
             <button class="btn ghost sm" type="submit">{% if l["status"] == "active" %}차단{% else %}활성화{% endif %}</button>
           </form>
           <form method="post" action="/licenses/{{ l['id'] }}/delete" style="display:inline"
                 onsubmit="return confirm('이 라이선스를 삭제할까요?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
             <button class="btn ghost sm" type="submit" style="color:var(--danger)">삭제</button>
           </form>
         </td>
@@ -42,6 +44,7 @@
 <div class="card">
   <h2 style="font-size:15px;margin:0 0 16px">라이선스 발급</h2>
   <form method="post" action="/licenses/add" class="grid" style="grid-template-columns:2fr 1fr 1.5fr 1.5fr;gap:14px;align-items:end">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <div><label>라이선스 키 (비우면 자동 생성)</label><input name="key" placeholder="VERYUP-XXXX-XXXX-XXXX"></div>
     <div><label>좌석 수</label><input name="seats" type="number" value="1" min="1"></div>
     <div><label>배정 대상 (메모)</label><input name="assigned_to" placeholder="예: 김직원 / 본사"></div>
