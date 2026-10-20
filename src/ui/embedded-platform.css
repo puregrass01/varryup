@@ -1,0 +1,209 @@
+/* Embedded inside index_up iframe */
+.embedded-platform .app-header {
+    display: none !important;
+}
+.embedded-platform .app-container {
+    padding: 14px 18px;
+    gap: 12px;
+    max-width: none;
+    height: 100vh;
+    box-sizing: border-box;
+}
+.embedded-platform .glass-panel {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 14px 16px;
+}
+/* Shopping mall tabs are now rendered as a vertical sidebar in the parent shell */
+.embedded-platform .app-tabs {
+    display: none !important;
+}
+
+/* These headers contain only a repeated title and the login action already on the left. */
+.embedded-platform #naverTab > .panel-header,
+.embedded-platform #imwebTab > .panel-header,
+.embedded-platform #imwebBoardTab > .panel-header,
+.embedded-platform #esmTab > .panel-header,
+.embedded-platform #coupangTab > .panel-header,
+.embedded-platform #amazonTab > .panel-header {
+    display: none !important;
+}
+
+/* ── Compact layout ─────────────────────────────────────────────
+   The shell already halves .form-input, but the panel stayed the full
+   iframe width, so ~460px to the right of every field was dead space.
+   Cap the column instead and give the inputs the column back: the field
+   keeps its pixel width, the empty strip goes away.                */
+.embedded-platform .tab-pane:not(#aiGenTab) {
+    /* 520px 였을 때 '예: 싼타페 TM…' 처럼 옵션 입력이 잘려 보였다. 1.5배로 넓히고
+       창(main_process.js createUpWindow)도 이 폭이 들어가도록 같이 키웠다. */
+    max-width: 780px;
+}
+.embedded-platform .form-input,
+.embedded-platform select.form-input,
+.embedded-platform .dual-input {
+    width: 100%;
+    max-width: 100%;
+}
+
+/* Vertical rhythm: the same fields in about two thirds of the height. */
+.embedded-platform {
+    --space-sm: 0.4rem;
+    --space-md: 0.65rem;
+    --space-lg: 1rem;
+}
+.embedded-platform .app-container {
+    padding: 10px 12px;
+    gap: 8px;
+}
+.embedded-platform .glass-panel {
+    padding: 10px 12px;
+}
+.embedded-platform .form-label {
+    font-size: 0.75rem;
+    margin-bottom: 2px;
+}
+.embedded-platform .form-input,
+.embedded-platform select.form-input {
+    padding: 6px 10px;
+    min-height: 32px;
+    font-size: 0.85rem;
+}
+.embedded-platform .tab-btn {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+}
+
+/* The shell already shows a log on the left. Two log panes meant reading both,
+   and the form's one pushed everything below the fold. Its lines are forwarded
+   to the shell log (forwardLogToShell in index.html), so nothing is lost. */
+.embedded-platform .log-container {
+    display: none !important;
+}
+/* eBay titles its log as step 3 - without the log the heading is an empty band. */
+.embedded-platform .step-indicator:has(+ .log-container) {
+    display: none;
+}
+
+/* Inputs the shell now owns: the eBay SKU and Amazon Product Type moved to the
+   left "상품 정보" panel, and the imweb board targets are the 현황판 own-mall
+   tiles. A second copy here could drift from the shell and be sent instead. */
+.embedded-platform .shell-owned {
+    display: none !important;
+}
+
+/* ── Full width, pairs side by side (2026-10-07) ────────────────
+   The 390px "half-width pass" left ~200px empty beside every row and stacked
+   each pair, so the edit form ran three screens tall. The form now takes the
+   frame (up to the 780px cap above) and a pair shares one row again - the
+   same fields in about half the height. min-width keeps a long select or
+   value from pushing its neighbour out of the row.                        */
+.embedded-platform .dual-input .input-col {
+    min-width: 0;
+}
+/* The API settings moved to the API KEY workspace (api-key-tab.js), which left
+   the divider under the hidden header as an empty band at the top of the form. */
+.embedded-platform .panel-header + .divider {
+    display: none;
+}
+.embedded-platform .submit-section {
+    margin-top: var(--space-sm);
+}
+/* A labelled field and its action button on one line (eBay search / SKU load). */
+.inline-field {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    margin-bottom: var(--space-md);
+}
+.inline-field > .form-group {
+    flex: 1;
+    min-width: 0;
+    margin-bottom: 0;
+}
+
+/* ── Option rows ────────────────────────────────────────────────
+   .option-grid is capped at 50% in style.css, from back when the form ran the
+   full width. In the narrow embedded form that cap leaves too little for the
+   input: a 110px label, a 10px gap and 24px of padding eat a 195px grid, and
+   all you see is the first character of the placeholder. Let the grid use the
+   form and narrow the input instead - it lands at the same width as a paired
+   field, which is what the rest of the form looks like.                 */
+.embedded-platform .option-grid {
+    width: 100%;
+    max-width: 100%;
+}
+.embedded-platform .option-row .form-input {
+    flex: 0 1 auto;
+    width: 25%;
+    max-width: 25%;
+}
+
+/* ── 입력칸 50% → 25% (2026-10-16) ─────────────────────────────
+   짝 칸 한 줄을 반 폭으로 줄여 칸 하나가 폼의 25% 다. 긴 글(불릿·설명·이미지 목록
+   textarea)이 든 줄은 넓게 둔다 — 25% 면 영문 불릿 한 줄이 서너 단어로 끊긴다.
+   API KEY 화면(#apiKeysTab)은 몰 폼이 아니라 제외한다 — 키 칸이 반으로 잘린다.        */
+.embedded-platform .tab-pane:not(#apiKeysTab) .dual-input:not(:has(textarea, .file-upload-box)) {
+    width: 50%;
+    max-width: 50%;
+    align-items: flex-end;   /* 좁아져 라벨이 두 줄이 돼도(이베이 '전체 재고 / 미국 판매 수량') 입력칸 줄은 맞춘다 */
+}
+
+/* ── 신규 등록: 몰 폼에는 판매가·재고·판매설정·상품명·상세설명만 (2026-10-16) ──
+   나머지(상품 구분·제조사·모델·템플릿 ID·옵션·BSA·대표 이미지 주소)는 좌측 상품 정보·
+   현황판·이미지 목록이 채운다(index_up.html fillFrame · VUImages). vu-new 는 셸이
+   신규 모드일 때만 단다(section8-mode.js) — 수정 모드 폼은 그대로다.
+   .pick 은 아임웹 카테고리 칸이다. 좌측 브랜드가 카테고리 표에 없어 셸이 고를 칸을
+   드러냈으면(.needs-pick) 국산/수입·카테고리 동기화도 같이 보여야 고를 수 있다.        */
+.embedded-platform.vu-new .shell-fed:not(.pick),
+.embedded-platform.vu-new .tab-pane:not(:has(.needs-pick)) .shell-fed.pick {
+    display: none !important;
+}
+/* 숨긴 단계 자리의 번호(2 → 4)를 남기지 않는다. display:none 인 단계는 세지 않는다. */
+.embedded-platform.vu-new .tab-pane { counter-reset: vu-step; }
+.embedded-platform.vu-new .step-indicator { counter-increment: vu-step; }
+.embedded-platform.vu-new .step-number { font-size: 0; }
+.embedded-platform.vu-new .step-number::after { content: counter(vu-step); font-size: 0.75rem; }
+
+
+.embedded-platform #apiKeysTab {
+    max-width: 900px !important;
+    width: 100% !important;
+    padding: 20px !important;
+    box-sizing: border-box;
+}
+#apiKeysTab #key-platform-content { max-width: 760px; }
+#apiKeysTab .dual-input { flex-direction: row !important; flex-wrap: wrap; }
+#apiKeysTab .dual-input .input-col { flex: 1; min-width: 220px; }
+#key-platform-tabs button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+#key-platform-tabs button .key-platform-logo {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    background: #ffffff;
+    border-radius: 4px;
+    padding: 1px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+#key-platform-tabs button .key-platform-logo-wide {
+    width: auto;
+    max-width: 40px;
+}
+#key-platform-tabs button[aria-selected="true"] { background: #2563eb; border-color: #2563eb; color: white; }
+
+/* API workspace owns the pane while iframe load/hash callbacks finish. */
+.api-key-view .tab-pane:not(#apiKeysTab) { display:none !important; }
+.api-key-view #apiKeysTab { display:block !important; }
+
+#apiKeysTab details.api-accordion[open] { background: var(--sunk); color: var(--text-main); }
+#apiKeysTab .api-accordion-summary { color: var(--text-main); }
+#apiKeysTab input.form-input, #apiKeysTab select.form-input { width: 100% !important; }

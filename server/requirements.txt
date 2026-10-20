@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+jinja2
+python-multipart
+itsdangerous
+cryptography
+httpx
+yfinance>=0.2.54,<2

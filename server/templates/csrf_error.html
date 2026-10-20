@@ -1,0 +1,42 @@
+{# CSRF 토큰 불일치 화면.
+   base.html 을 확장하지 않는 이유: 이 화면은 로그인 전(/login)에도 나올 수 있어
+   base.html 이 요구하는 user 컨텍스트가 없을 수 있다(login.html 과 같은 이유로 독립 페이지다). #}
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>요청이 차단되었습니다 · VERY UP 관리자</title>
+<style>
+  :root{--accent:#0f766e;--ink:#1a212c;--muted:#697585;--line:#e3e7ec;--danger:#be3131}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#141b26;
+    font-family:"Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;color:var(--ink);padding:16px}
+  .box{background:#fff;width:460px;max-width:100%;border-radius:14px;padding:30px;
+    box-shadow:0 20px 60px rgba(0,0,0,.35)}
+  h1{font-size:18px;margin:0 0 10px;color:var(--danger)}
+  p{font-size:14px;line-height:1.7;margin:0 0 12px}
+  ul{font-size:13.5px;color:var(--muted);line-height:1.8;margin:0 0 18px;padding-left:20px}
+  .diag{background:#fff6e5;border:1px solid #c98a12;color:#8a5a00;border-radius:8px;padding:10px 13px;font-size:13.5px}
+  a.btn{display:inline-block;background:var(--accent);color:#fff;border-radius:9px;
+    padding:11px 18px;font-size:14px;text-decoration:none}
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>⛔ 요청이 차단되었습니다 (보안 토큰 불일치)</h1>
+    <p>이 요청에는 유효한 보안 토큰(CSRF)이 없어 <b>아무 것도 변경하지 않고</b> 중단했습니다.</p>
+    {# 세션 쿠키가 **아예 오지 않은** 경우는 원인이 다르고, 다시 시도해도 영원히 같은 화면이 나온다.
+       app.py 의 require_csrf() 가 cookie_missing 으로 구분해 넘겨 준다. #}
+    {% if cookie_missing %}
+    <p class="diag"><b>원인 진단:</b> {{ cookie_hint }}</p>
+    {% endif %}
+    <ul>
+      <li>화면을 오래 열어 둔 경우 — 세션(8시간)이 만료됐습니다. 다시 열어 처음부터 진행하세요.</li>
+      <li>다른 사이트에서 이 주소로 보낸 요청이라면 — 정상적으로 차단된 것입니다.</li>
+      <li>반복된다면 브라우저의 쿠키 차단 설정을 확인하세요(관리 화면은 세션 쿠키가 필요합니다).</li>
+    </ul>
+    <a class="btn" href="{{ back }}">← 돌아가기</a>
+  </div>
+</body>
+</html>

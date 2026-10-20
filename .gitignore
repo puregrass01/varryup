@@ -1,0 +1,56 @@
+# 패키지 (용량 너무 큼, npm install로 재생성 가능)
+node_modules/
+
+# 빌드 결과물
+dist/
+
+# API 키 / 시크릿 (절대 올리면 안 됨)
+data/imweb_openapi_config.json
+data/coupang_config.json
+data/amazon_config.json
+data/papago.json
+# PC별 설정 — UPDATE_TOKEN 이 들어 있다. 새 PC 는 veryup.env.example 을 복사해 쓴다.
+veryup.env
+
+# 세션 / 로그인 정보
+data/esm_session.json
+data/session_naver.json
+session_naver.json
+
+# 테스트 / 임시 캐시 파일
+data/test_cache.json
+data/product_*_detail.json
+
+# 임시 / 백업 폴더
+scratch/
+_cleanup_backup/
+
+# AI 작업 내부 파일
+.claude/
+
+# 로그 파일
+*.log
+
+# data/defaults 안에 실제 인증키·세션이 들어있어 통째로 제외 (앱은 로컬 파일 그대로 사용)
+data/defaults/
+
+# 관리자 서버 실행 데이터 (DB=계정해시/로그, 캐시)
+server/admin.db
+*.db
+__pycache__/
+server/secret.key
+server/dev_admin_secret.key
+server/ebay-queue-dev/
+server/.venv/
+
+# eBay per-user encrypted credentials and publishing journal
+ebay_config.json
+ebay_config.json.tmp
+ebay_jobs.json
+ebay_jobs.json.tmp
+
+# eBay 계정 삭제 알림 수신 기록 (eBay userId 포함 — 커밋 금지)
+server/ebay_deletions.jsonl
+server/updates/
+server/currency_rates.json
+server/currency_rates.tmp

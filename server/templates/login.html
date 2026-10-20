@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>로그인 · VERY UP 관리자</title>
+<style>
+  :root{--accent:#0f766e;--ink:#1a212c;--muted:#697585;--line:#e3e7ec}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#141b26;
+    font-family:"Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;color:var(--ink)}
+  .box{background:#fff;width:340px;max-width:90vw;border-radius:14px;padding:34px 30px;
+    box-shadow:0 20px 60px rgba(0,0,0,.35)}
+  .logo{font-size:20px;font-weight:700;text-align:center;letter-spacing:-.01em}
+  .logo small{display:block;font-weight:400;font-size:12px;color:var(--muted);margin-top:3px}
+  form{margin-top:24px;display:flex;flex-direction:column;gap:14px}
+  label{font-size:13px;color:var(--muted);display:block;margin-bottom:5px}
+  input{width:100%;font-size:14px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;font-family:inherit}
+  input:focus{outline:2px solid var(--accent);border-color:transparent}
+  button{background:var(--accent);color:#fff;border:none;border-radius:9px;padding:12px;
+    font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:4px}
+  button:hover{filter:brightness(1.06)}
+  /* 쿠키 미전송 진단 문구는 두세 줄로 길다 — 줄간격을 줘야 읽힌다. */
+  .err{background:#fbe9e9;color:#be3131;border:1px solid #be3131;border-radius:8px;
+    padding:9px 12px;font-size:13px;line-height:1.65;margin-top:16px}
+  .hint{text-align:center;color:var(--muted);font-size:12px;margin-top:18px}
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="logo">VERY UP<small>관리자 서버 로그인</small></div>
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+    <form method="post" action="/login">
+      {# CSRF 토큰. 로그인 폼에도 넣는다 — 공격자 계정으로 강제 로그인시키는 login CSRF 를 막는다. #}
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <div>
+        <label>아이디</label>
+        <input name="username" autofocus autocomplete="username" required>
+      </div>
+      <div>
+        <label>비밀번호</label>
+        <input name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button type="submit">로그인</button>
+    </form>
+    {# 예전의 "기본 계정 · admin / admin1234" 안내는 지웠다.
+       db._bootstrap_admin 이 기본계정 자동 생성을 없앴으므로(BOOTSTRAP_ADMIN_* 환경변수 방식)
+       그 문구는 사실과 다를 뿐 아니라, 맞을 경우엔 로그인 화면이 비밀번호를 알려 주는 셈이 된다. #}
+    <div class="hint">관리자 계정이 없다면 서버 로그의 BOOTSTRAP_ADMIN_* 안내를 확인하세요.</div>
+  </div>
+</body>
+</html>

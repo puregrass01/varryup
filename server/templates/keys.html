@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}인증키 관리 · VERY UP 관리자{% endblock %}
+{% block nav_keys %}active{% endblock %}
+{% block body %}
+<h1>인증키 중앙 관리</h1>
+<p class="sub">쿠팡·네이버·ESM·아임웹·이베이·아마존 인증키를 <b>암호화</b>해서 서버에 보관합니다. 열람·수정·삭제는 모두 기록됩니다.</p>
+
+{% if msg %}<div class="msg">{{ msg }}</div>{% endif %}
+
+<div class="card" style="margin-bottom:20px">
+  <table>
+    <thead><tr><th>플랫폼</th><th>별칭</th><th>수정자</th><th>수정일</th><th></th></tr></thead>
+    <tbody>
+      {% for c in creds %}
+      <tr>
+        <td><span class="pill admin">{{ c["platform"] }}</span>
+          {# 정규화(소문자·공백 제거) 되기 전에 저장된 행 표시.
+             이런 행은 앱의 /api/credentials?platform=... 조회와 절대 일치하지 않는다 —
+             화면에는 멀쩡히 보이는데 앱만 인증키를 못 받는 상태이므로 눈에 띄게 알린다. #}
+          {% if c["platform"] != (c["platform"]|trim|lower) %}
+          <span class="pill off" title="플랫폼 값에 대문자나 공백이 섞여 있어 앱이 이 인증키를 찾지 못합니다. 삭제 후 다시 등록하세요.">⚠ 형식 오류</span>
+          {% endif %}
+        </td>
+        <td>{{ c["label"] }}</td>
+        <td style="color:var(--muted)">{{ c["updated_by"] or "-" }}</td>
+        <td style="color:var(--muted)">{{ c["updated_at"].replace("T"," ") }}</td>
+        <td style="text-align:right">
+          <a class="btn ghost sm" href="/keys/{{ c['id'] }}">🔓 값 보기·수정</a>
+          <form method="post" action="/keys/{{ c['id'] }}/delete" style="display:inline"
+                onsubmit="return confirm('이 인증키를 삭제할까요? 되돌릴 수 없습니다.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
+            <button class="btn ghost sm" type="submit" style="color:var(--danger)">삭제</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" style="color:var(--muted)">저장된 인증키가 없습니다. 아래에서 추가하세요.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card" style="margin-bottom:20px">
+  <h2 style="font-size:15px;margin:0 0 16px">인증키 추가</h2>
+  <form method="post" action="/keys/add">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div class="grid" style="grid-template-columns:1.1fr 1fr 1.6fr;gap:14px;margin-bottom:14px">
+      <div>
+        <label>종류</label>
+        <select id="kind" onchange="fillHint()">
+          <option value="login">로그인 (아이디·비번)</option>
+          <option value="api">API 키</option>
+        </select>
+      </div>
+      <div>
+        <label>플랫폼</label>
+        <select name="platform" id="platform" onchange="fillHint()">
+          <option value="coupang">쿠팡 (coupang)</option>
+          <option value="naver">네이버 (naver)</option>
+          <option value="esm">ESM (esm)</option>
+          <option value="imweb">아임웹 (imweb)</option>
+          <option value="ebay">이베이 (ebay)</option>
+          <option value="amazon">아마존 (amazon)</option>
+        </select>
+      </div>
+      <div><label>별칭 (구분용 이름)</label><input name="label" placeholder="예: 네이버-본사 로그인" required></div>
+    </div>
+    <label>인증키 값 (JSON 형식)</label>
+    <textarea name="payload" id="payload" rows="6" required
+      style="width:100%;font-family:Consolas,monospace;font-size:13px;padding:11px;border:1px solid var(--line);border-radius:8px;background:#fbfcfd"></textarea>
+    <p style="font-size:12.5px;color:var(--muted);margin:8px 0 0">🔒 저장 시 자동으로 암호화됩니다. 평문으로 보관되지 않습니다.</p>
+    <button class="btn" type="submit" style="margin-top:14px">🔐 암호화하여 저장</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 14px">🕵 인증키 접근 기록 (최근 20건)</h2>
+  <table>
+    <thead><tr><th>시각</th><th>사용자</th><th>동작</th><th>플랫폼</th><th>IP</th></tr></thead>
+    <tbody>
+      {% for l in logs %}
+      <tr>
+        <td>{{ l["created_at"].replace("T"," ") }}</td>
+        <td>{{ l["username"] }}</td>
+        <td>
+          {# 모르는 action 을 '삭제'로 표시하면 감사 기록을 잘못 읽게 된다.
+             view-denied(권한 거부)·view-failed(복호화 실패)·dismiss(eBay 요청 기각) 처럼
+             다른 모듈이 남기는 값도 있으므로 모르는 값은 그대로 보여 준다. #}
+          {% if l["action"] == "view" %}<span class="pill">열람</span>
+          {% elif l["action"] == "create" %}<span class="pill ok">등록</span>
+          {% elif l["action"] == "update" %}<span class="pill admin">수정</span>
+          {% elif l["action"] == "delete" %}<span class="pill off">삭제</span>
+          {% elif l["action"] == "view-denied" %}<span class="pill off">열람 거부</span>
+          {% elif l["action"] == "view-failed" %}<span class="pill off">복호화 실패</span>
+          {% else %}<span class="pill off">{{ l["action"] }}</span>{% endif %}
+        </td>
+        <td>{{ l["platform"] }}</td>
+        <td style="color:var(--muted)">{{ l["ip"] }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" style="color:var(--muted)">기록이 없습니다.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  const LOGIN = '{\n  "loginId": "",\n  "password": ""\n}';
+  const API = {{ hints | tojson }};
+  function fillHint(){
+    const kind = document.getElementById('kind').value;
+    const p = document.getElementById('platform').value;
+    const t = document.getElementById('payload');
+    if(!t.value.trim() || t.dataset.auto === '1'){
+      t.value = (kind === 'login') ? LOGIN : (API[p] || '');
+      t.dataset.auto = '1';
+    }
+  }
+  document.getElementById('payload').addEventListener('input', function(){ this.dataset.auto='0'; });
+  fillHint();
+</script>
+{% endblock %}

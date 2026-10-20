@@ -1,0 +1,30 @@
+.vu-image-gallery { display:flex; flex-wrap:wrap; gap:12px; margin:4px 0; max-height:320px; overflow:auto; padding:4px; }
+.vu-image-tile { position:relative; margin:0; width:70px; }
+.vu-image-tile img { width:70px; height:70px; object-fit:contain; background:#fff; border-radius:5px; transition:filter .15s ease; }
+.vu-image-tile:hover img, .vu-image-tile:focus-within img { filter:blur(2px); }
+.vu-image-tile figcaption { font-size:11px; text-align:center; color:var(--text-secondary,#64748b); }
+.vu-image-tile .vu-image-open { display:block; border:0; padding:0; background:transparent; cursor:zoom-in; }
+.vu-image-tile .vu-image-remove,
+#bulk-edit-workspace .vu-image-tile .vu-image-remove {
+  position:absolute; top:0; right:0; width:22px; height:22px; padding:0; border:1px solid #fff;
+  border-radius:50%; background:#b91c1c; color:#fff; font:700 18px/1 Arial,sans-serif;
+  display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:0;
+}
+.vu-image-tile:hover .vu-image-remove, .vu-image-tile:focus-within .vu-image-remove,
+#bulk-edit-workspace .vu-image-tile:hover .vu-image-remove,
+#bulk-edit-workspace .vu-image-tile:focus-within .vu-image-remove { opacity:1; }
+.vu-image-tile .vu-image-remove:focus-visible { opacity:1; outline:2px solid var(--accent,#2563eb); outline-offset:2px; }
+#bulk-edit-workspace .vu-image-tile .vu-image-remove:hover:not(:disabled) { background:#991b1b; color:#fff; }
+.vu-image-tile .vu-image-remove:disabled { cursor:default; background:#64748b; }
+.vu-image-moves { display:flex; gap:4px; justify-content:center; }
+.vu-image-moves button { padding:0 6px; border:1px solid var(--border,#cbd5e1); border-radius:4px; background:transparent; color:inherit; cursor:pointer; }
+.vu-image-save-hint, .vu-image-empty { font-size:12px; color:var(--text-secondary,#64748b); margin:2px 0; }
+.vu-image-add { width:70px; height:70px; padding:4px; border:1px dashed var(--border,#cbd5e1); border-radius:5px; background:transparent; color:inherit; font-size:11px; cursor:pointer; }
+.vu-image-import { display:flex; gap:8px; align-items:center; margin:4px 0; }
+.vu-image-import textarea { flex:1; min-width:0; padding:8px; border:1px solid var(--border,#cbd5e1); border-radius:5px; color:inherit; background:var(--bg-card,#fff); }
+.vu-image-import button { padding:8px; border:1px solid var(--border,#cbd5e1); border-radius:5px; color:inherit; background:var(--bg-card,#fff); cursor:pointer; }
+.vu-image-dialog { max-width:90vw; max-height:90vh; overflow:auto; background:var(--bg-card,#fff); color:var(--text-primary,#111); border-radius:8px; }
+.vu-image-dialog::backdrop { background:#0009; }
+.vu-image-dialog > button { display:block; position:sticky; top:0; margin-left:auto; cursor:pointer; }
+.vu-image-dialog > img { max-width:100%; height:auto; display:block; }
+@media (hover:none) { .vu-image-tile .vu-image-remove, #bulk-edit-workspace .vu-image-tile .vu-image-remove { opacity:1; } }

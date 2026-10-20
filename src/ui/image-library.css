@@ -1,0 +1,31 @@
+.vu-images { margin:12px 0; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-card); font-size:11px; }
+.vu-images summary { cursor:pointer; font-size:12px; font-weight:700; }
+.vu-images select { width:100%; margin:10px 0 6px; padding:6px; background:var(--bg-input,var(--bg-card)); color:var(--text-primary); border:1px solid var(--border); border-radius:4px; }
+.vu-image-actions { display:flex; flex-wrap:wrap; gap:4px; margin:7px 0; }
+.vu-images button { padding:5px 7px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--bg-card); color:var(--text-primary); font-size:11px; }
+.vu-images button:disabled { opacity:.5; cursor:wait; }
+.vu-image-path { overflow-wrap:anywhere; color:var(--text-secondary); line-height:1.5; }
+.vu-image-list { max-height:235px; overflow:auto; display:flex; flex-direction:column; gap:5px; margin:8px 0; }
+.vu-image-row { display:flex; align-items:center; gap:6px; min-height:48px; border-bottom:1px solid var(--border); padding:4px 0; }
+.vu-image-row img { width:42px; height:42px; object-fit:contain; background:white; border-radius:3px; }
+.vu-image-row label { display:flex; align-items:center; flex:1; gap:6px; min-width:0; }
+.vu-image-row span { overflow-wrap:anywhere; }
+.vu-image-row small { display:block; color:var(--text-secondary); margin-top:3px; }
+.vu-image-status { margin:6px 0; line-height:1.5; color:var(--text-secondary); overflow-wrap:anywhere; }
+.vu-images .vu-image-prepare { width:100%; background:var(--accent,#2563eb); color:white; padding:8px; }
+
+/* 신규등록 패널 오른쪽 칸(폼 옆). 예전 가운데 쇼핑몰 탭 안의 좁은 칸과 같은 촘촘한 모양이다. */
+#section8 .vu-images { flex:0 0 200px; align-self:flex-start; max-height:100%; overflow-y:auto; box-sizing:border-box; margin:0; padding:6px; font-size:10px; }
+#section8 .vu-images summary { font-size:11px; }
+#section8 .vu-images button { font-size:10px; padding:4px; }
+#section8 .vu-images select { font-size:11px; padding:5px 2px; }
+#section8 .vu-image-path { max-height:48px; overflow:auto; font-size:9px; user-select:text; }
+#section8 .vu-image-row img { width:28px; height:34px; }
+#section8 .vu-image-row label { gap:3px; }
+#section8 .vu-image-row { gap:2px; }
+#section8 .vu-image-row small { font-size:9px; }
+#section8 .vu-image-list { max-height:none; }
+/* 접으면 폭을 폼에 돌려준다. */
+#section8 .vu-images:not([open]) { flex-basis:auto; }
+
+#vu-image-html-editor textarea { box-sizing:border-box; width:100%; margin:6px 0; padding:5px; font:11px monospace; resize:vertical; color:var(--text-primary); background:var(--bg-input,var(--bg-card)); border:1px solid var(--border); border-radius:4px; }

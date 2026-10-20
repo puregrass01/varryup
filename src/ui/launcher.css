@@ -1,0 +1,240 @@
+/* ===== VERY UP VER3 - Launcher CSS ===== */
+
+:root {
+    --seed-primary: #10b981;
+    --seed-glow: rgba(16, 185, 129, 0.35);
+    --up-primary: #3b82f6;
+    --up-glow: rgba(59, 130, 246, 0.35);
+    --bg: #080f1e;
+    --text: #f1f5f9;
+    --text-dim: #94a3b8;
+    --card-bg: rgba(255, 255, 255, 0.04);
+    --card-border: rgba(255, 255, 255, 0.1);
+    --radius: 20px;
+
+    /* 로그인 오버레이 + 창 버튼. 밝은 화면에서는 전부 뒤집힌다. */
+    --panel: #1a2130;
+    --line: #2a3346;
+    --field: #0f1420;
+    --chip: rgba(255, 255, 255, 0.08);
+    --chip-hover: rgba(255, 255, 255, 0.2);
+    --err: #e8807f;
+    --btn-face: #111827;
+    --btn-text: #ffffff;
+}
+
+/* ── 라이트 테마 (기본) ── */
+:root[data-theme="light"] {
+    --bg: #eef2f7;
+    --text: #0f172a;
+    --text-dim: #52627a;
+    --card-bg: rgba(15, 23, 42, 0.03);
+    --card-border: rgba(15, 23, 42, 0.12);
+    /* 배경 글로우는 밝은 바탕에서 탁하게만 보인다 → 확 낮춘다. */
+    --seed-glow: rgba(16, 185, 129, 0.14);
+    --up-glow: rgba(59, 130, 246, 0.14);
+
+    --panel: #ffffff;
+    --line: #d5dbe5;
+    --field: #ffffff;
+    --chip: rgba(15, 23, 42, 0.07);
+    --chip-hover: rgba(15, 23, 42, 0.16);
+    --err: #b91c1c;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-app-region: drag;
+}
+
+/* ── 배경 ── */
+.launcher-bg {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.glow {
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.5;
+    pointer-events: none;
+}
+.glow-left  { background: var(--seed-glow); left: -150px; top: 50%; transform: translateY(-50%); }
+.glow-right { background: var(--up-glow);   right: -150px; top: 50%; transform: translateY(-50%); }
+
+/* ── 래퍼 ── */
+.launcher-wrap {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    padding: 28px 32px;
+    -webkit-app-region: no-drag;
+}
+
+/* ── 로고 ── */
+.launcher-logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.launcher-logo h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 3.2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -1px;
+}
+.ver-badge {
+    background: var(--chip);
+    border: 1px solid var(--card-border);
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.05em;
+    align-self: flex-start;
+    margin-top: 8px;
+}
+
+.launcher-sub {
+    color: var(--text-dim);
+    font-size: 1rem;
+    margin-top: -16px;
+}
+
+/* ── 카드 그리드 ── */
+.card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    width: 100%;
+    max-width: 780px;
+}
+
+/* ── 앱 카드 ── */
+/* 한글은 기본 줄바꿈 규칙상 음절 아무 데서나 끊긴다 → 680px 창에서 '베리씨 / 드' 처럼
+   단어 한가운데가 갈라졌다. keep-all 이면 단어 단위로만 끊는다. */
+.app-card, .launcher-sub, .ver-badge { word-break: keep-all; }
+
+.app-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 22px 18px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    text-align: left;
+    color: var(--text);
+    transition: all 0.25s ease;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+}
+
+.app-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius);
+    opacity: 0;
+    transition: opacity 0.25s;
+}
+
+.app-card:hover { transform: translateY(-4px); border-color: transparent; }
+.app-card:active { transform: translateY(-2px); }
+
+/* 씨드 카드 */
+.seed-card::before { background: linear-gradient(135deg, rgba(16,185,129,0.12), transparent); }
+.seed-card:hover { box-shadow: 0 0 0 1px var(--seed-primary), 0 16px 40px rgba(16,185,129,0.25); }
+.seed-card:hover::before { opacity: 1; }
+
+/* 업 카드 */
+.up-card::before { background: linear-gradient(135deg, rgba(59,130,246,0.12), transparent); }
+.up-card:hover { box-shadow: 0 0 0 1px var(--up-primary), 0 16px 40px rgba(59,130,246,0.25); }
+.up-card:hover::before { opacity: 1; }
+
+/* ── 아이콘 ── */
+.card-icon {
+    flex-shrink: 0;
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.seed-icon { background: rgba(16,185,129,0.15); color: var(--seed-primary); }
+.up-icon   { background: rgba(59,130,246,0.15);  color: var(--up-primary); }
+
+/* ── 카드 콘텐츠 ── */
+.card-content { flex: 1; }
+.card-content h2 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+.card-content p {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+    line-height: 1.4;
+}
+.card-features {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.card-features li {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+}
+
+/* ── 화살표 ── */
+.card-arrow {
+    font-size: 1.4rem;
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+.app-card:hover .card-arrow {
+    opacity: 0.6;
+    transform: translateX(0);
+}
+.seed-card:hover .card-arrow { color: var(--seed-primary); opacity: 1; }
+.up-card:hover   .card-arrow { color: var(--up-primary);   opacity: 1; }
+
+/* ── 푸터 ── */
+.launcher-footer {
+    font-size: 0.72rem;
+    /* 0.4 알파는 밝은 배경에서 배경과 구분이 안 된다(밝기 차 80). */
+    color: var(--text-dim);
+    opacity: 0.7;
+    letter-spacing: 0.05em;
+}

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}VERY UP 관리자{% endblock %}</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#ffffff; --ink:#1a212c; --muted:#697585;
+    --line:#e3e7ec; --accent:#0f766e; --accent-soft:#e2f1ef;
+    --ok:#297a3f; --ok-soft:#e4f1e7; --danger:#be3131; --danger-soft:#fbe9e9;
+    --sidebar:#141b26;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;line-height:1.6}
+  a{color:inherit;text-decoration:none}
+  .layout{display:flex;min-height:100vh}
+  /* sidebar */
+  .side{width:210px;background:var(--sidebar);color:#c7d0dc;flex:none;
+    display:flex;flex-direction:column;padding:20px 0}
+  .brand{font-weight:700;font-size:17px;color:#fff;padding:6px 22px 20px;letter-spacing:-.01em}
+  .brand small{display:block;font-weight:400;font-size:11px;color:#7c8798;margin-top:2px}
+  .nav{display:flex;flex-direction:column;gap:2px;padding:0 12px}
+  .nav a{padding:10px 14px;border-radius:8px;font-size:14px;color:#c7d0dc;display:flex;gap:10px;align-items:center}
+  .nav a:hover{background:#1f2a3a;color:#fff}
+  .nav a.active{background:var(--accent);color:#fff}
+  .side-foot{margin-top:auto;padding:16px 22px;font-size:12.5px;color:#8b97a6;border-top:1px solid #232f3f}
+  .side-foot a{color:#c7d0dc}
+  /* main */
+  .main{flex:1;padding:30px 34px;max-width:1000px}
+  h1{font-size:22px;margin:0 0 4px;letter-spacing:-.01em}
+  .sub{color:var(--muted);margin:0 0 24px;font-size:14px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px 22px;
+    box-shadow:0 1px 2px rgba(20,30,45,.04),0 6px 18px rgba(20,30,45,.04)}
+  .grid{display:grid;gap:16px}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:760px){.g3{grid-template-columns:1fr}.side{width:64px}.brand,.nav a span,.side-foot{display:none}}
+  .stat .n{font-size:30px;font-weight:700;letter-spacing:-.02em;color:var(--accent)}
+  .stat .l{color:var(--muted);font-size:13px;margin-top:2px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+  th{background:#f7f9fa;font-size:12.5px;color:var(--muted);font-weight:600}
+  tbody tr:last-child td{border-bottom:none}
+  /* 로그·사용량 표는 행이 계속 쌓인다. 페이지 전체가 늘어나는 대신 카드 안에서만 스크롤시키고,
+     머리글은 위에 붙여 둔다(th 에 이미 배경색이 있어 행이 비쳐 보이지 않는다). */
+  .scroll-y{overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;
+    max-height:calc(100vh - 300px);min-height:220px;
+    scrollbar-width:thin;scrollbar-color:#c3ccd6 transparent}
+  .scroll-y.sm{max-height:320px;min-height:0}
+  /* border-collapse 인 표에서는 sticky 로 띄운 th 의 아래 테두리가 사라진다 → 그림자로 대신 그린다 */
+  .scroll-y thead th{position:sticky;top:0;z-index:2;box-shadow:inset 0 -1px 0 var(--line)}
+  .scroll-y table{margin:0}
+  .scroll-y::-webkit-scrollbar{width:10px;height:10px}
+  .scroll-y::-webkit-scrollbar-track{background:transparent}
+  .scroll-y::-webkit-scrollbar-thumb{background:#c3ccd6;border-radius:6px;
+    border:2px solid var(--surface);background-clip:padding-box}
+  .scroll-y::-webkit-scrollbar-thumb:hover{background:#a9b4c1;background-clip:padding-box}
+  .pill{font-size:12px;padding:2px 9px;border-radius:20px;font-weight:600;display:inline-block}
+  .pill.ok{background:var(--ok-soft);color:var(--ok)}
+  .pill.off{background:var(--danger-soft);color:var(--danger)}
+  .pill.admin{background:var(--accent-soft);color:var(--accent)}
+  .btn{display:inline-block;background:var(--accent);color:#fff;border:none;border-radius:8px;
+    padding:9px 16px;font-size:14px;cursor:pointer;font-family:inherit}
+  .btn:hover{filter:brightness(1.05)}
+  .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btn.sm{padding:5px 11px;font-size:12.5px}
+  input,select{font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--line);
+    border-radius:8px;background:#fff;width:100%}
+  label{font-size:13px;color:var(--muted);display:block;margin-bottom:5px}
+  .msg{background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok);border-radius:8px;
+    padding:10px 14px;font-size:13.5px;margin-bottom:16px}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="side">
+    <div class="brand">VERY UP<small>관리자 서버</small></div>
+    <nav class="nav">
+      {# 메뉴는 라우트의 권한 검사와 **똑같이** 맞춘다.
+         app.py 에서 /staff·/usage·/logs 를 관리자 전용으로 좁혔으므로(RBAC), 직원에게 링크를
+         남겨 두면 누를 때마다 대시보드로 튕기는 화면이 된다. 링크를 지우는 것은 표시일 뿐이고
+         실제 차단은 라우트에서 한다 — 둘 중 하나만 고치지 말 것.
+         `is_admin` 은 app.py 의 render() 가 _is_admin(user) 로 계산해 넣어 준다.
+         여기서 user["role"] == "admin" 을 직접 비교하면 role=" Admin " 같은 행이 라우트는
+         통과하는데 메뉴는 못 보는 어긋남이 생긴다 — 그 선언이 바로 이 주석이다. #}
+      <a href="/" class="{% block nav_home %}{% endblock %}"><span>📊 대시보드</span></a>
+      {% if is_admin %}
+      <a href="/staff" class="{% block nav_staff %}{% endblock %}"><span>👤 직원 계정</span></a>
+      <a href="/keys" class="{% block nav_keys %}{% endblock %}"><span>🔑 인증키 관리</span></a>
+      <a href="/licenses" class="{% block nav_licenses %}{% endblock %}"><span>🪪 라이선스</span></a>
+      <a href="/usage" class="{% block nav_usage %}{% endblock %}"><span>📈 AI 사용량</span></a>
+      <a href="/logs" class="{% block nav_logs %}{% endblock %}"><span>📜 로그인 로그</span></a>
+      <a href="/logs/api" class="{% block nav_logs_api %}{% endblock %}"><span>🛒 쇼핑몰 API 응답</span></a>
+      <a href="/logs/live" class="{% block nav_logs_live %}{% endblock %}"><span>⚡ 실시간 요청</span></a>
+      {% endif %}
+    </nav>
+    <div class="side-foot">
+      {{ user["name"] }} 님<br>
+      <a href="/password">비밀번호 변경</a> · <a href="/logout">로그아웃 →</a>
+    </div>
+  </aside>
+  <main class="main">
+    {% block body %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>

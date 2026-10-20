@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}로그인 로그 · VERY UP 관리자{% endblock %}
+{% block nav_logs %}active{% endblock %}
+{% block body %}
+<h1>로그인 로그</h1>
+<p class="sub">누가 언제 어디(IP)서 접속했는지 최근 100건입니다.</p>
+
+<div class="card" style="padding:0">
+  <div class="scroll-y">
+  <table>
+    <thead><tr><th>시각</th><th>아이디</th><th>IP</th><th>결과</th></tr></thead>
+    <tbody>
+      {% for r in logs %}
+      <tr>
+        <td>{{ r["created_at"].replace("T", " ") }}</td>
+        <td>{{ r["username"] }}</td>
+        <td>{{ r["ip"] }}</td>
+        <td>{% if r["result"] == "success" %}<span class="pill ok">성공</span>{% else %}<span class="pill off">실패</span>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" style="color:var(--muted)">기록이 없습니다.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

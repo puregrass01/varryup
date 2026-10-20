@@ -1,0 +1,17 @@
+/* Scoped additions; all existing platforms retain their current template. */
+#ebayTab .help-text { color: var(--text-dim); font-size: 0.8rem; line-height: 1.65; margin: 10px 0 16px; }
+#ebayTab .step-indicator { margin-top: 24px; }
+#ebayTab .panel-header { flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+#ebayTab .btn-row { flex-wrap: wrap; margin: 12px 0; }
+#ebayTab textarea { resize: vertical; }
+#ebayTab #ebPreview:not(:empty) { background: var(--input-bg); padding: 16px; border-radius: var(--radius-sm); margin-top: 16px; }
+#ebayTab details { margin-bottom: 16px; }
+/* 정책 ID 3종: 목록(datalist) 아이콘을 오른쪽에서 왼쪽으로 옮긴다.
+   인디케이터만 흐름에서 빼 왼쪽에 고정하므로 입력값은 그대로 왼쪽부터 읽힌다
+   (direction:rtl 은 값까지 우측정렬돼 쓰지 않는다).
+   목록이 실제로 붙은 뒤([list])에만 적용해, 조회 전에는 빈 여백이 생기지 않게 한다. */
+#ebayTab #ebFulfillment[list], #ebayTab #ebPayment[list], #ebayTab #ebReturn[list] { position: relative; padding-left: 34px; }
+#ebayTab #ebFulfillment[list]::-webkit-calendar-picker-indicator,
+#ebayTab #ebPayment[list]::-webkit-calendar-picker-indicator,
+#ebayTab #ebReturn[list]::-webkit-calendar-picker-indicator { position: absolute; left: 10px; margin: 0; }
+@media (max-width: 720px) { #ebayTab .dual-input { flex-direction: column; } }
