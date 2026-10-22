@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadVehicleNames, reverseLookup, untag } from './amazon_jp_draft.js';
 import { toFormData } from './platforms/openapi/imweb_client.js';
+import { hasBsa } from './utils/duplicate_guard.js';
 
 const TARGETS = { USD: 0, JPY: 1 };    // 구역 통화 → 단어표의 [영어, 일본어] 자리
 const PLAN_TTL = 30 * 60 * 1000;
@@ -19,6 +20,7 @@ const MIRROR = ['Wide View Side Mirror', '広角ドアミラー'];
 // 옵션 그룹 · 값 [영어, 일본어] — 이미 번역된 상품 3 · 126 의 구역별 표기 그대로(2026-10-20 읽음).
 export const OPTION_WORDS = {
   '구성 선택': ['Select Option', 'セット内容'],
+  '구성': ['Select Option', 'セット内容'],
   'BSA 여부': ['BSA Sensor', 'BSA(後側方警戒システム)の有無'],
   '측후방센서(BSA)등 유/무': ['BSA Sensor', 'BSA(後側方警戒システム)の有無'],
   '제조사명 | 연식 | 모델명': ['Brand | Year | Model', 'メーカー | 年式 | 車種名'],
@@ -28,11 +30,25 @@ export const OPTION_WORDS = {
   '조수석': ['Right', '助手席'],
   'BSA 없음': ['No BSA', 'なし'],
   'BSA 있음': ['With BSA', 'あり'],
+  '2set': ['2set', '2セット'],
+  '3set': ['3set', '3セット'],
+  '1세트(운전석+조수석)': ['1set (Left + Right)', '1セット(運転席+助手席)'],
+  // 2026-10-21 사용자 승인 — 미러가 아닌 상품(사이드스텝 · 스피커)의 옵션
+  '차량 제조사|차량 연식|차량명': ['Brand | Year | Model', 'メーカー | 年式 | 車種名'],
+  '차량 제조사|차량연식|차량명': ['Brand | Year | Model', 'メーカー | 年式 | 車種名'],
+  '차량연식': ['Year', '年式'],
+  '차량선택': ['Select Vehicle', '車種選択'],
+  '벤츠 GLS': ['Mercedes-Benz GLS', 'メルセデス・ベンツ GLS'],
+  '벤츠 GLE': ['Mercedes-Benz GLE', 'メルセデス・ベンツ GLE'],
+  '장착 유무': ['Installation', '取付'],
+  '본사장착': ['Installed at HQ', '本社で取付'],
+  '장착없이 구매만': ['Purchase only', '購入のみ'],
 };
 
 // '옵틱글래스 아우디 S6 광각미러 [No.445]' · '옵틱글래스 광각미러 [No.104(옵)]' — 본사몰 미러 상품명(2026-10-20 1,573개)
 const MIRROR_NAME = /^옵틱글래스\s+(?:(.+?)\s+)?광각미러\s*\[No\.\s*([^\]]+?)\s*\]\s*(?:\(옵\))?$/;
 const alnum = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+const optionKey = s => String(s).replace(/_x000D_/g, '').trim();
 // 앞에 붙은 브랜드를 뗀다. (?![a-z]) 는 'Ram' 이 'Rampage' 를 자르지 않게 한다. 다 지워지면 원래 값을 둔다.
 const cut = (s, ...brands) => brands.reduce((x, b) =>
   x.replace(new RegExp('^' + b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![a-z])\\s*', 'i'), '').trim() || x, s);
@@ -89,6 +105,9 @@ export function makeTranslator({ vu, dict, catalog }) {
     const no = `[No.${m[2].replace(/\s*\(옵\)$/, '')}]`;   // 상품 126 의 기존 번역처럼 (옵) 표시는 뺀다
     const c = m[1] ? car(m[1]) : { en: '', ja: '' };
     if (c.skip) return c;
+    // 한국 이름의 BSA 표시는 같은 차의 일반 상품과 가르는 값이다(상품번호 'No.K130 BSA'). 사전 · 괄호 빼기에서 빠지면 다시 붙인다
+    // — 2026-10-21 상품 1038 '더 뉴 기아 레이 (bsa버젼)' 이 영어에서 'THE NEW RAY' 만 남았다.
+    if (hasBsa(m[1] || '')) for (const k of ['en', 'ja']) if (c[k] && !/BSA/i.test(c[k])) c[k] += ' (BSA)';
     // 카탈로그 영문 칸에 한글 메모가 있다('Picanto (피칸토)') — 괄호째 빼고, 그래도 한글이 남으면 건너뛴다.
     const join = (...xs) => xs.filter(Boolean).join(' ').replace(/\s*\([^)]*[가-힣][^)]*\)/g, '');
     const en = join(SHOP, c.en, MIRROR[0], no), ja = join(SHOP, c.ja, MIRROR[1], no);
@@ -99,7 +118,8 @@ export function makeTranslator({ vu, dict, catalog }) {
 
 /** 한 구역의 옵션 그룹들 → 보낼 PATCH 들. 단어표에 있는(= 한국어 그대로인) 그룹명 · 값만 바꾼다. lang 0 영어 · 1 일본어 */
 export function planOptions(groups, lang) {
-  const to = s => OPTION_WORDS[s]?.[lang];
+  // 엑셀로 올린 옵션에는 줄바꿈 찌꺼기 '_x000D_' 가 붙어 있다('BSA 여부_x000D_' — 2026-10-20 상품 6개).
+  const to = s => OPTION_WORDS[optionKey(s)]?.[lang];
   return groups.flatMap(g => {
     const changes = [], body = {};
     if (to(g.name) && to(g.name) !== g.name) { body.name = to(g.name); changes.push(g.name + '→' + body.name); }
@@ -216,7 +236,7 @@ export function createImwebUnitNames({ client, dir, names = () => loadVehicleNam
             done.push((cur === 'USD' ? '미국 ' : '일본 ') + p.changes.join(', '));
           }
           // 단어표에 없는 한국어 옵션은 그대로 두고 결과 CSV '확인' 칸에 적는다(관리자에서 직접 번역).
-          const left = [...new Set(groups.flatMap(g => [g.name, ...g.values.map(v => v.name)]).filter(s => HANGUL.test(s) && !OPTION_WORDS[s]))];
+          const left = [...new Set(groups.flatMap(g => [g.name, ...g.values.map(v => v.name)]).filter(s => HANGUL.test(s) && !OPTION_WORDS[optionKey(s)]))];
           if (left.length) row.note = [row.note, (cur === 'USD' ? '미국' : '일본') + ' 옵션 한국어 남음: ' + left.join(', ')].filter(Boolean).join(' / ');
         }
         if (row.usNext) await setName(api, row.prodNo, u.USD, row.usNext);

@@ -775,14 +775,38 @@ export class Amazon {
     return found;
   }
 
+  /**
+   * SKU 마다 그 마켓에 리스팅이 있는지(getListingsItem 200 / 404). searchListingsItems 는 BIL 이 만든
+   * '오퍼만 있는' 일본 SKU 를 돌려주지 않는다(2026-10-02 전수 조회: 4건만 나옴) — 그래서 한 건씩 묻는다.
+   * 1,000건이면 호출 간격 조절(220ms) 때문에 4분쯤. 404 가 아닌 오류는 남은 SKU 를 묻지 않고 던진다.
+   */
+  async skusOnMarketplace(skus, marketplaceId, { width = 4, onProgress = () => {} } = {}) {
+    if (!this.api) this.loadConfig();
+    const api = this.apiForMarketplace(marketplaceId), list = [...new Set((skus || []).map(String))], found = new Set();
+    let next = 0, done = 0, failure = null;
+    const worker = async () => {
+      while (!failure && next < list.length) {
+        const sku = list[next++];
+        try { if (await api.getListingItem(sku, marketplaceId)) found.add(sku); }
+        catch (e) { if (e?.status !== 404) { failure = e; return; } }
+        onProgress(++done, list.length);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(width, list.length) }, worker));
+    if (failure) throw failure;
+    return found;
+  }
+
   productForEdit(res, sku, marketplaceId) {
     const attrs = res?.attributes || {};
     const marketValue = values => values?.find(v => v.marketplace_id === marketplaceId) || values?.find(v => !v.marketplace_id);
     const summaries = res?.summaries?.find(s => s.marketplaceId === marketplaceId) || res?.summaries?.[0] || {};
 
     const title = marketValue(attrs.item_name)?.value || summaries.itemName || '';
-    const offer = res?.offers?.find(o => o.marketplaceId === marketplaceId);
-    const price = marketValue(attrs.purchasable_offer)?.our_price?.[0]?.schedule?.[0]?.value_with_tax ?? offer?.price?.amount ?? '';
+    // 판매가는 일반 고객가(audience ALL · offerType B2C)다 — 비즈니스(B2B) 가격이 먼저 오면 그 값을 판매가로 읽었다.
+    const offer = res?.offers?.find(o => o.marketplaceId === marketplaceId && o.offerType !== 'B2B');
+    const consumer = attrs.purchasable_offer?.filter(v => !v.audience || v.audience === 'ALL');
+    const price = marketValue(consumer)?.our_price?.[0]?.schedule?.[0]?.value_with_tax ?? offer?.price?.amount ?? '';
     const stock = attrs.fulfillment_availability?.find(a => a.fulfillment_channel_code === 'DEFAULT')?.quantity
       ?? res?.fulfillmentAvailability?.find(a => a.fulfillmentChannelCode === 'DEFAULT')?.quantity ?? '';
     const brand = marketValue(attrs.brand)?.value || '';
@@ -859,8 +883,10 @@ export class Amazon {
     const price = listingPrice(data, marketplaceId);
     if (Number.isFinite(price)) {
       const offers = cloneAttr(existingAttrs.purchasable_offer) || [];
-      let idx = offers.findIndex(o => o?.marketplace_id === marketplaceId);
-      if (idx < 0) idx = offers.findIndex(o => !o?.marketplace_id);
+      // 읽기(productForEdit)와 같은 오퍼를 고친다 — 일반 고객가(audience ALL). B2B 가격이 먼저 오면 그것을 고쳤다.
+      const consumer = o => !o?.audience || o.audience === 'ALL';
+      let idx = offers.findIndex(o => o?.marketplace_id === marketplaceId && consumer(o));
+      if (idx < 0) idx = offers.findIndex(o => !o?.marketplace_id && consumer(o));
       const offer = idx >= 0 ? offers[idx] : {};
       if (offer.our_price?.[0]?.schedule?.[0]) offer.our_price[0].schedule[0].value_with_tax = price;
       else offer.our_price = [{ schedule: [{ value_with_tax: price }] }];

@@ -207,9 +207,9 @@
     });
     saveBtn.onclick = () => iwAct(async () => {
       if (!window.confirm('미리보기한 ' + num(iwPlanned) + '개 상품의 미국·일본 판매가를 저장합니다.\n\n' +
-        '· 미리보기 뒤에 가격이 바뀐 상품은 보내지 않습니다.\n' +
-        '· 저장 뒤 옵션 가격은 바로 다시 읽어 확인하고, 계획과 다르면 원래 값으로 되돌린 뒤 멈춥니다.\n' +
-        '· 기본가는 첫 저장 뒤와 저장 100개마다 목록으로 다시 읽어 확인하고, 다르면 멈춥니다.\n\n계속할까요?')) { iwTell('저장을 취소했습니다.'); return; }
+        '· 미리보기 뒤에 기본가가 바뀐 상품은 보내지 않습니다.\n' +
+        '· 가격을 모두 먼저 보내고, 다 보낸 뒤 한 번에 다시 읽어 확인합니다(계획과 다른 상품은 결과에 적습니다).\n' +
+        '· 첫 상품만 바로 확인하고, 계획과 다르면 그 상품을 되돌린 뒤 멈춥니다.\n\n계속할까요?')) { iwTell('저장을 취소했습니다.'); return; }
       const r = await call('imweb-unit-prices-save');
       iwPlanned = 0;
       iwShow([
@@ -357,7 +357,7 @@
     });
     ipc.on('imweb-unit-prices-progress', (_, payload) => {
       const r = payload?.running;
-      if (r) iwTell((r.step === 'save' ? '저장 ' : '미리보기 ') + (r.total ? num(r.index) + '/' + num(r.total) + ' · ' : '') + (r.message || ''));
+      if (r) iwTell(({ save: '저장 ', check: '확인 ' }[r.step] || '미리보기 ') + (r.total ? num(r.index) + '/' + num(r.total) + ' · ' : '') + (r.message || ''));
     });
     ipc.on('imweb-unit-names-progress', (_, payload) => {
       const r = payload?.running;

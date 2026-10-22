@@ -8,6 +8,7 @@ import { createIdentityIndex, productIdentity } from './utils/product_identity.j
 
 const NAVER_SEARCH_SIZE = 100;   // 네이버 목록 조회 한 번에 읽는 상품 수
 const NAVER_VERIFY_GROUP = 10;   // 네이버 저장 뒤 확인을 묶는 상품 수(결과가 화면에 너무 늦게 뜨지 않을 만큼)
+const IMWEB_SAVE_GROUP = 20;     // 아임웹 한 번에 넘기는 줄 수(상품 4~5개). 결과는 묶음마다 화면에 뜬다
 const LOAD_MANY_MAX = 200;
 
 // imwebBulk: 아임웹 네 범위(B2B · 본사 한국/미국/일본)의 Open API 어댑터(imweb_bulk.js).
@@ -299,6 +300,60 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
     }
     return outcomes;
   }
+  // 아임웹 일괄 저장. 같은 상품의 줄(기본가 + 조합)은 한 번 읽어 모두 판단하고, 바뀌는 줄만 보낸 뒤 한 번 다시 읽어 확인한다.
+  // 예전엔 줄마다 읽기 → 보내기 → 다시 읽기라 조합 목록을 줄마다 두 번 읽었다(기본가 + 조합 3개 = 12회 → 8회).
+  // 판단은 한 줄 저장과 같다(imweb_bulk checkBefore · verify): 불러온 뒤 바뀐 줄은 보내지 않고, 이미 같으면 '변경 없음'.
+  // 중단은 상품 사이에서 본다 — 한 상품의 줄은 끝까지 보내 기본가 · 조합가가 반쯤 바뀐 채로 남지 않게 한다.
+  async function saveImwebPrices(jobs, { cancelled = () => false } = {}) {
+    const scope = jobs[0].scope, outcomes = new Array(jobs.length), byProduct = new Map();
+    const fail = (i, e, sent) => { outcomes[i] = { success: false, ...describeError(sent ? e : markPreSend(e), { sent }) }; return outcomes[i]; };
+    for (const [i, job] of jobs.entries()) {
+      try { const ctx = priceContext(job); if (!byProduct.has(ctx.id)) byProduct.set(ctx.id, []); byProduct.get(ctx.id).push({ i, ctx }); }
+      catch (e) { fail(i, e, false); }
+    }
+    const need = rows => ({ base: rows.some(r => !r.ctx.input.optionId), options: rows.some(r => r.ctx.input.optionId) });
+    let stop = '';
+    for (const [id, rows] of byProduct) {
+      if (stop || cancelled()) { rows.forEach(r => fail(r.i, new Error(stop || '중단해서 보내지 않았습니다.'), false)); continue; }
+      let now;
+      try { now = await imwebBulk.readPrices(scope, id, need(rows)); }
+      catch (e) { rows.forEach(r => { if (fail(r.i, e, false).blocking) stop = e.message; }); continue; }
+      const sent = [];
+      for (const { i, ctx } of rows) {
+        if (stop) { fail(i, new Error('앞 줄의 저장이 실패해 보내지 않았습니다: ' + stop), false); continue; }
+        let current;
+        try {
+          current = imwebBulk.priceIn(now, ctx.input.optionId);
+          if (imwebBulk.checkBefore(current, ctx)) { outcomes[i] = { success: true, data: { status: 'UNCHANGED', price: priceOf(current) } }; continue; }
+        } catch (e) { fail(i, e, false); continue; }
+        try { await imwebBulk.sendPrice(scope, id, ctx.input.optionId, ctx.price); sent.push({ i, ctx }); }
+        catch (e) { const info = fail(i, e, true); if (info.blocking || info.stage === 'unknown') stop = info.error; }
+      }
+      // 보낸 줄만 다시 읽어 확인한다(반영이 늦으면 1.5초 뒤 한 번 더). 판단 문구는 verify() 와 같다.
+      let pending = sent, failure = null, seen = null;
+      for (const wait of [0, 1500]) {
+        if (!pending.length) break;
+        if (wait) await sleep(wait);
+        try { seen = await imwebBulk.readPrices(scope, id, need(pending)); failure = null; }
+        catch (e) { failure = e; continue; }
+        pending = pending.filter(({ i, ctx }) => {
+          let got = '';
+          try { got = priceOf(imwebBulk.priceIn(seen, ctx.input.optionId)); } catch { /* 조합이 없어졌으면 다르다 */ }
+          if (!samePrice(got, ctx.price)) return true;
+          outcomes[i] = { success: true, data: { status: 'VERIFIED', price: got } };
+          return false;
+        });
+      }
+      for (const { i, ctx } of pending) {
+        let got = '';
+        try { if (seen) got = priceOf(imwebBulk.priceIn(seen, ctx.input.optionId)); } catch { /* 위와 같음 */ }
+        outcomes[i] = { success: true, data: failure && !seen
+          ? { status: 'CHECK', message: `요청은 보냈지만 재조회에 실패했습니다(${failure.message}). 다시 보내기 전에 현재가를 확인하세요.` }
+          : { status: 'CHECK', price: got, message: `요청은 보냈지만 조회된 판매가(${got || '없음'})가 입력값과 다릅니다. 반영이 늦을 수 있으니 잠시 뒤 현재가를 다시 불러오세요.` } };
+      }
+    }
+    return outcomes;
+  }
   for (const [channel, work] of [['bulk-price-list', list], ['bulk-price-load', load], ['bulk-price-load-many', loadMany], ['bulk-price-save', save],
     ['bulk-images-load', images.load], ['bulk-images-import', images.importImages], ['bulk-images-validate', images.validate], ['bulk-images-save', images.save]]) {
     ipcMain.handle(channel, async (_, input) => {
@@ -331,8 +386,10 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
     },
     save: (job, options) => job.type === 'images' ? images.save(job, options) : save(job),
     // eBay 는 한 요청에 25건을 보낸다. 네이버는 쓰기는 상품마다, 쓰기 뒤 확인을 10건씩 묶는다.
-    groupSize: scope => scope === 'ebay' ? 25 : scope === 'naver' ? NAVER_VERIFY_GROUP : 1,
-    savePrices: (jobs, options) => jobs[0].scope === 'naver' ? saveNaverPrices(jobs, options) : ebay().updatePricesBatch(jobs),
+    // 아임웹은 같은 상품의 줄을 한 번 읽고 한 번 확인한다(saveImwebPrices) — 연속한 줄 IMWEB_SAVE_GROUP 개씩.
+    groupSize: scope => scope === 'ebay' ? 25 : scope === 'naver' ? NAVER_VERIFY_GROUP : isImwebBulkScope(scope) ? IMWEB_SAVE_GROUP : 1,
+    savePrices: (jobs, options) => jobs[0].scope === 'naver' ? saveNaverPrices(jobs, options)
+      : isImwebBulkScope(jobs[0].scope) ? saveImwebPrices(jobs, options) : ebay().updatePricesBatch(jobs),
   });
   ipcMain.handle('bulk-save-batch', async (event, input) => {
     while (writing === 'fx') await idle;

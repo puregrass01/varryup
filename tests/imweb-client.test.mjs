@@ -152,6 +152,26 @@ test('클라이언트: 남은 호출 수가 바닥나기 직전이면 1초 쉰�
   assert.deepEqual(waits, [1000]);
 });
 
+test('클라이언트: 쪽 수를 알면 나머지 쪽은 3개씩 동시에 읽고, 늦게 온 쪽이 있어도 순서는 쪽 번호대로', async () => {
+  let inFlight = 0, most = 0;
+  const impl = async url => {
+    const page = Number(new URL(url).searchParams.get('page'));
+    inFlight++; most = Math.max(most, inFlight);
+    await new Promise(r => setTimeout(r, page === 2 ? 30 : 5));   // 2쪽이 가장 늦게 온다
+    inFlight--;
+    return response(200, { statusCode: 200, data: { totalPage: 7, list: [{ prodNo: page * 10 }, { prodNo: page * 10 + 1 }] } });
+  };
+  const client = createImwebClient(staticSession(), { fetchImpl: impl, sleep: async () => {} });
+  assert.deepEqual((await client.products('uKR')).map(p => p.prodNo), [10, 11, 20, 21, 30, 31, 40, 41, 50, 51, 60, 61, 70, 71]);
+  assert.equal(most, 3, '1쪽 뒤에는 3개씩');
+  // 쪽 수가 없으면 예전처럼 한 쪽씩, 덜 찬 쪽에서 멈춘다.
+  const seq = createImwebClient(staticSession(), { sleep: async () => {}, fetchImpl: async url => {
+    const page = Number(new URL(url).searchParams.get('page'));
+    return response(200, { statusCode: 200, data: { list: Array.from({ length: page < 3 ? 100 : 7 }, (_, i) => ({ prodNo: page * 1000 + i })) } });
+  } });
+  assert.equal((await seq.products('uKR')).length, 207);
+});
+
 test('클라이언트: 목록은 totalPage 까지 이어 읽고, 가격 쓰기는 구역 · 값만 보낸다', async () => {
   const urls = [];
   const bodies = [];

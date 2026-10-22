@@ -3254,18 +3254,18 @@ class EditItemMissingError extends Error {
 }
 
 // 수정 모드에서 현황판에서 켠 몰. tabId 가 있으면 그 탭의 저장 함수(fn)를, card 면 카드의 '적용' 길을 탄다.
-// unavailable: 아임웹은 API 로 옮길 때까지 일괄 수정에서 뺀다(지금 저장은 브라우저 창을 띄워 누른다).
-// API 저장이 생기면 unavailable 만 지우면 된다 — 탭(editItemOf)과 저장 함수는 이미 이어 두었다.
+// unavailable: 일괄 수정에서 빼는 이유. 아임웹 B2B 는 2026-10-05 Open API 저장으로 옮겨 넣었다 — 판매가는 B2B 탭 값 그대로다
+// (B2B 가는 세트·개별·조합마다 달라 좌측 변경 판매가를 넣지 않는다). 게시판 글은 Open API 가 없어 저장할 때 브라우저를 띄운다.
 // currency: 그 몰이 읽는 좌측 변경 판매가 칸. 'market' 은 탭에 불러온 마켓의 통화(아마존 미국 USD · 일본 JPY).
 function bulkEditTargets() {
   const targets = [];
   if (checked.KOREA?.open1) targets.push({ name: '네이버', tabId: 'naverTab', country: 'KOREA', fn: 'registerNaver', currency: 'KRW' });
   if (checked.KOREA?.open2) targets.push({ name: '쿠팡', tabId: 'coupangTab', country: 'KOREA', fn: 'registerCoupang', currency: 'KRW' });
   if (checked.KOREA?.b2b) {
-    targets.push({ name: '아임웹 B2B몰', tabId: 'imwebTab', country: 'KOREA', fn: 'updateImwebB2bProduct', unavailable: 'API 연동 후' });
+    targets.push({ name: '아임웹 B2B몰', tabId: 'imwebTab', country: 'KOREA', fn: 'updateImwebB2bProduct' });
   }
   if (checked.KOREA?.own || checked.USA?.own || checked.JAPAN?.own) {
-    targets.push({ name: '아임웹 자사몰/게시판', tabId: 'imwebBoardTab', country: 'KOREA', fn: 'updateImwebBoardPost', unavailable: 'API 연동 후' });
+    targets.push({ name: '아임웹 자사몰/게시판', tabId: 'imwebBoardTab', country: 'KOREA', fn: 'updateImwebBoardPost', unavailable: '게시판 글은 Open API 가 없어(저장할 때 브라우저를 띄움) 일괄 수정에서 뺍니다' });
   }
   // 아마존 탭은 불러온 마켓 하나만 고친다. country 를 넘기지 않는다 — 넘기면 탭을 열며 마켓을 바꿔서,
   // 불러온 상품과 마켓이 달라져 저장이 거부된다.
@@ -3432,7 +3432,7 @@ async function runBulkEdit() {
     for (const [i, target] of targets.entries()) {
       if (target.unavailable) {
         skipCount++;
-        report.row(`[${target.name}] 일괄 수정은 ${target.unavailable} 지원합니다 — 그 탭의 저장 버튼으로 수정하세요`, 'warn');
+        report.row(`[${target.name}] ${target.unavailable} — 그 탭의 저장 버튼으로 수정하세요`, 'warn');
         continue;
       }
       let result, label = '', priced = null;

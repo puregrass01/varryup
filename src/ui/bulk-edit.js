@@ -248,7 +248,7 @@
       const own = platformId(r); if (own) id.append(el('small', 'be-own-id', own));
       tr.append(id);
       const taxonomy = el('td', '', r.tax.brand); taxonomy.append(el('small', '', r.tax.vehicle + ' / ' + r.tax.model)); tr.append(taxonomy);
-      tr.append(el('td', 'be-price', r.ready ? (r.price === '' ? '미등록' : Number(r.price).toLocaleString('ko-KR') + ' ' + unit) : (r.price !== '' ? r.price + ' (목록)' : '조회 필요')));
+      tr.append(el('td', 'be-price', r.ready ? (r.price === '' ? '미등록' : Number(r.price).toLocaleString('ko-KR') + ' ' + unit) : (r.price !== '' ? (Number.isFinite(Number(r.price)) ? Number(r.price).toLocaleString('ko-KR') + ' ' + unit : r.price) + ' (목록)' : '조회 필요')));
       const priceCell = el('td'), input = el('input'); input.type = 'number'; input.step = unit === 'USD' ? '.01' : '1'; input.min = unit === 'USD' ? '.01' : '1';
       input.value = r.newPrice; input.disabled = busy || !r.ready || r.readonly || r.priceReadonly;
       input.setAttribute('aria-label', '판매가: ' + r.name + (r.variant ? ' / ' + r.variant : ''));
@@ -411,22 +411,27 @@
     }
     tell('ESM 호스팅 이미지 확인 중…');
     const checked = await call('bulk-images-import', { scope, input });
-    // Capture each product's current revision before staging a replacement.
-    const ids = new Set(picked.map(r => r.id)), snapshots = new Map();
+    // 교체를 걸기 전에 상품마다 지금 이미지(revision)를 읽는다. 상품 하나가 실패해도 나머지는 그대로 두고,
+    // 중단을 누르면 다음 상품부터 멈춘다. 지금 이미지를 모르는 상품에는 교체를 걸지 않는다.
+    const ids = new Set(picked.map(r => r.id)), snapshots = new Map(), failed = new Map(), ready = new Set();
     for (const id of ids) {
-      const productRows = rows().filter(r => r.id === id);
-      if (productRows.some(r => !r.imagesReady)) {
-        tell('기존 이미지 확인 중… (' + id + ')');
-        snapshots.set(id, await call('bulk-images-load', { scope, id }));
-      }
+      if (cancel) break;
+      if (rows().filter(r => r.id === id).every(r => r.imagesReady)) { ready.add(id); continue; }
+      tell('기존 이미지 확인 중… (' + (ready.size + failed.size + 1) + '/' + ids.size + ')');
+      try { snapshots.set(id, await call('bulk-images-load', { scope, id })); ready.add(id); }
+      catch (e) { failed.set(id, e.message); if (e.blocking) break; }
     }
     rows().filter(r => ids.has(r.id)).forEach(r => {
+      if (!ready.has(r.id)) { if (failed.has(r.id)) r.imageResult = '기존 이미지 확인 실패 — 교체 안 함: ' + failed.get(r.id); return; }
       const snapshot = snapshots.get(r.id);
       if (snapshot) Object.assign(r, { images: snapshot.images, imageRevision: snapshot.revision, imagesReady: true });
       r.newImages = [...checked.images]; r.imageResult = '이미지 변경 대기';
     });
     state().imageInput = checked.images.join('|'); $('be-image-value').value = state().imageInput;
-    tell(ids.size + '개 상품의 이미지 ' + checked.images.length + '장 불러오기 완료 · ESM ' + checked.verified + '장 확인. 선택 변경 저장을 누르면 반영됩니다.');
+    const skipped = ids.size - ready.size - failed.size;
+    tell(ready.size + '개 상품의 이미지 ' + checked.images.length + '장 불러오기 완료 · ESM ' + checked.verified + '장 확인' +
+      (failed.size ? ' · 기존 이미지 확인 실패 ' + failed.size + '개(교체 안 함, 처리 결과 칸 확인)' : '') +
+      (skipped ? ' · 중단으로 ' + skipped + '개 건너뜀' : '') + '. 선택 변경 저장을 누르면 반영됩니다.');
   }));
   // 보이지 않는 행이 섞였거나 기존가 대비 크게 바뀌는 행(오타 의심)이 있으면 보내기 전에 한 번 묻는다.
   const BIG_CHANGE = 0.3;
@@ -434,17 +439,19 @@
     if (!work.length) return true;
     const visible = new Set(pageRows()), unit = scopes.find(s => s[0] === scope)[2];
     const off = work.filter(x => !visible.has(x.r)).length;
-    const changes = work.map(x => ({ x, rate: Number(x.expectedPrice) > 0 ? Number(x.newPrice) / Number(x.expectedPrice) - 1 : 0 }));
+    // 기존가가 0 인 행(아임웹 추가금 방식 옵션 등)은 몇 %인지 셀 수 없어 큰 변화로 본다 — 예전엔 0% 로 세어 묻지 않았다.
+    const changes = work.map(x => ({ x, rate: Number(x.expectedPrice) > 0 ? Number(x.newPrice) / Number(x.expectedPrice) - 1 : Infinity }));
     const big = changes.filter(c => Math.abs(c.rate) >= BIG_CHANGE);
     if (!off && !big.length) return true;
-    const pct = rate => (rate > 0 ? '+' : '') + Math.round(rate * 100) + '%';
+    const pct = rate => Number.isFinite(rate) ? (rate > 0 ? '+' : '') + Math.round(rate * 100) + '%' : '기존 0에서';
     const money = v => Number(v).toLocaleString('ko-KR') + ' ' + unit;
-    const rates = changes.map(c => c.rate), worst = big.sort((a, b) => Math.abs(b.rate) - Math.abs(a.rate))[0];
+    const rates = changes.map(c => c.rate).filter(Number.isFinite), worst = big.sort((a, b) => Math.abs(b.rate) - Math.abs(a.rate))[0];
     const lines = ['선택 변경 ' + work.length + '행을 저장합니다.'];
     if (off) lines.push('· 지금 보이는 페이지 밖의 행: ' + off + '행');
     if (big.length) lines.push('· 기존가 대비 ' + Math.round(BIG_CHANGE * 100) + '% 이상 바뀌는 행: ' + big.length + '행 (가장 큰 변화: ' +
-      worst.x.r.name + ' ' + money(worst.x.expectedPrice) + ' → ' + money(worst.x.newPrice) + ', ' + pct(worst.rate) + ')');
-    lines.push('· 변화 범위: ' + pct(Math.min(...rates)) + ' ~ ' + pct(Math.max(...rates)), '', '계속할까요?');
+      worst.x.r.name + (worst.x.r.variant ? ' / ' + worst.x.r.variant : '') + ' ' + money(worst.x.expectedPrice) + ' → ' + money(worst.x.newPrice) + ', ' + pct(worst.rate) + ')');
+    if (rates.length) lines.push('· 변화 범위: ' + pct(Math.min(...rates)) + ' ~ ' + pct(Math.max(...rates)));
+    lines.push('', '계속할까요?');
     return window.confirm(lines.join('\n'));
   }
   $('be-save').addEventListener('click', () => run(async () => {
@@ -519,8 +526,8 @@
   $('be-export').addEventListener('click', () => {
     const cell = x => '"' + String(x ?? '').replace(/^[=+@\t\r-]/, "'$&").replaceAll('"', '""') + '"';
     // '상품번호'는 표와 같이 표준 번호(No.101 BSA)다. 몰이 주는 ID 는 '몰 상품ID' 로 따로 둔다.
-    const csv = [['플랫폼', '몰 상품ID', '옵션ID', '상품명', '현재가', '입력가', '통화', '결과', '현재 이미지', '적용 이미지', '이미지 결과', 'SKU', '상품번호'],
-      ...rows().map(r => [scope, r.id, r.optionId, r.name, r.price, r.newPrice, r.currency, r.result, (r.images || []).join('|'), (r.newImages || []).join('|'), r.imageResult, identOf(r).skus || r.sku, identOf(r).all])]
+    const csv = [['플랫폼', '몰 상품ID', '옵션ID', '상품명', '옵션', '현재가', '입력가', '통화', '결과', '현재 이미지', '적용 이미지', '이미지 결과', 'SKU', '상품번호'],
+      ...rows().map(r => [scope, r.id, r.optionId, r.name, r.variant, r.price, r.newPrice, r.currency, r.result, (r.images || []).join('|'), (r.newImages || []).join('|'), r.imageResult, identOf(r).skus || r.sku, identOf(r).all])]
       .map(line => line.map(cell).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }));
     const a = el('a'); a.href = url; a.download = 'bulk-price-' + scope + '-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();

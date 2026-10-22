@@ -7,7 +7,8 @@
   const PRODUCT_BRANDS = [
     ['옵틱글래스', '옵틱글라스', 'opticglass', 'optic glass'],
     ['퓨어글래스', '퓨어글라스', 'pureglass', 'pure glass'],
-    ['스타포쉬', '스타푸쉬', 'starposh', 'star posh']
+    ['스타포쉬', '스타푸쉬', 'starposh', 'star posh', 'スターポッシュ'],
+    ['퓨어그래스', 'puregrass', 'ピュアグラス']
   ];
   const MAKES = [
     ['현대', 'hyundai'], ['기아', 'kia'], ['제네시스', 'genesis'], ['쌍용', 'kgm', 'ssangyong', 'KG 모빌리티'],
@@ -44,13 +45,34 @@
   const aliasesIn = (source, groups) => groups.filter(group => group.some(alias => contains(source, alias))).map(group => group[0]);
   const KNOWN_MODELS = new Set(MODEL_ALIASES.flat().map(fold));
 
+  // 차량 명칭 사전(vehicle_i18n)의 영어 · 일본어 이름도 별칭으로 쓴다 — 아임웹 영문 · 일본 상품명이 번역된 뒤(2026-10-20)
+  // 'ジャガー XJ' · 'Hyundai GENESIS G90' 이 미분류가 되지 않게. 다른 무리가 이미 가진 별칭은 넣지 않는다('혼다 바이크' 가
+  // 'Honda' 를 가져가지 않게). 사전 조회가 가볍지 않아(일본 모드는 일본차 표를 훑는다) 사전 · 카탈로그가 바뀔 때만 다시 만든다.
+  let aliasCache = { key: '', catalog: null, makes: MAKES, models: new Map() };
+  function catalogAliases(catalog) {
+    const list = catalog?.brands?.() || [];
+    const key = list.length + '|' + (catalog?.namesReady?.() ? 1 : 0);
+    if (aliasCache.key === key && aliasCache.catalog === catalog) return aliasCache;
+    const makes = MAKES.map(group => group.slice()), owned = new Set(makes.flat().map(fold));
+    for (const make of new Set([...MAKES.map(group => group[0]), ...list])) {
+      let group = makes.find(g => g.includes(make));
+      if (!group) { group = [make]; makes.push(group); owned.add(fold(make)); }
+      for (const alias of [catalog?.brandEn?.(make), catalog?.brandJa?.(make)]) {
+        if (alias && !owned.has(fold(alias))) { owned.add(fold(alias)); group.push(alias); }
+      }
+    }
+    return (aliasCache = { key, catalog, makes, models: new Map() });
+  }
+  const modelsOf = (cache, catalog, make) => {
+    if (!cache.models.has(make)) cache.models.set(make, (catalog?.modelsOf?.(make) || [])
+      .map(model => [model, catalog.modelEn?.(make, model), catalog.modelJa?.(make, model)].filter(Boolean)));
+    return cache.models.get(make);
+  };
+
   function normalize(item, catalog = window.VUSuggest) {
     const title = text(item.name ?? item.title ?? item.subject);
     const brands = aliasesIn(`${title} ${item.productBrand || item.brandName || item.brand || ''}`, PRODUCT_BRANDS);
-    const makes = MAKES.map(group => group.slice());
-    for (const make of catalog?.brands?.() || []) {
-      if (!makes.some(group => group.includes(make))) makes.push([make]);
-    }
+    const cache = catalogAliases(catalog), makes = cache.makes;
     const makeSource = `${title} ${item.vehicleBrand || item.manufacturer || ''}`;
     let manufacturers = aliasesIn(makeSource, makes);
     // Prefer a more specific make name, e.g. BMW 모토라드 over BMW.
@@ -59,9 +81,9 @@
     // 이미 있는 차종은 Set 으로 거른다. 예전엔 카탈로그 차종마다 모든 별칭을 다시 접어 비교해 1,386행에 1.5초가 걸렸다.
     const known = new Set(KNOWN_MODELS);
     for (const make of manufacturers) {
-      for (const model of catalog?.modelsOf?.(make) || []) {
-        const key = fold(model);
-        if (!known.has(key)) { known.add(key); modelGroups.push([model]); }
+      for (const group of modelsOf(cache, catalog, make)) {
+        const key = fold(group[0]);
+        if (!known.has(key)) { known.add(key); modelGroups.push(group); }
       }
     }
     const modelSource = `${title} ${item.vehicleModel || item.modelName || ''}`;
@@ -82,8 +104,9 @@
     const bike = /오토바이|이륜차|motorcycle|motorbike/i.test(title) || manufacturers.some(make => catalog?.isBikeBrand?.(make) || ['야마하', '스즈키', '가와사키', '두카티', '할리데이비슨', 'KTM', '트라이엄프'].includes(make));
     const vehicle = manufacturers.length ? `${bike ? '오토바이' : '자동차'}(${manufacturers.join(' / ')})` : UNKNOWN;
     let kind = text(item.productType) || UNKNOWN;
-    if (/전동\s*사이드\s*스[텝탭]|electric\s*(side\s*)?step|power\s*running\s*board/i.test(title)) kind = '전동사이드스텝';
-    else if (/와이드\s*미러|광각\s*(사이드\s*)?미러|wide[\s-]*(angle[\s-]*)?(side[\s-]*)?mirror/i.test(title)) kind = '와이드미러';
+    // 영어 · 일본어 상품명(아임웹 영문 · 일본): 'Wide View Side Mirror' · '広角ドアミラー' · 'Power Running Boards' · '電動サイドステップ'
+    if (/전동\s*사이드\s*스[텝탭]|electric\s*(side\s*)?step|running[\s-]*boards?|サイドステップ/i.test(title)) kind = '전동사이드스텝';
+    else if (/와이드\s*미러|광각\s*(사이드\s*)?미러|wide[\s-]*(angle[\s-]*|view[\s-]*)?(side[\s-]*)?mirror|広角|ワイド\s*ミラー/i.test(title)) kind = '와이드미러';
     else if (/사이드\s*미러|side[\s-]*mirror|wing[\s-]*mirror/i.test(title)) kind = '사이드미러';
     return { title, brand: brands.join(' / ') || UNKNOWN, vehicle, model: models.join(' / ') || UNKNOWN, kind, id: text(item.id ?? item.prodNo ?? item.postCode ?? item.sku) };
   }

@@ -23,6 +23,9 @@ export const IMWEB_BULK_SCOPES = {
 };
 export const isImwebBulkScope = scope => Object.hasOwn(IMWEB_BULK_SCOPES, scope);
 const STATUS_TEXT = { SOLDOUT: ' · 품절', HIDDEN: ' · 숨김' };
+// 상품 판매상태(prodStatus). 판매중이 아닌 상품(2026-10-21 본사 55개 nosale)이 판매중과 똑같이 보이지 않게 이름 아래에 적는다.
+const prodStatusText = p => !p.prodStatus || p.prodStatus === 'sale' ? ''
+  : ({ nosale: '숨김(판매 안 함)', soldout: '품절' })[p.prodStatus] || '판매상태 ' + p.prodStatus;
 
 /** clientFor('b2b' | 'head') → createImwebClient(그 사이트 세션). */
 export function createImwebBulk({ clientFor }) {
@@ -45,7 +48,7 @@ export function createImwebBulk({ clientFor }) {
     const { client, unitCode } = await target(scope);
     return (await client.products(unitCode)).map(p => ({
       id: String(p.prodNo), name: String(p.name || ''), price: p.price,
-      image: (p.productImages || [])[0] || '', status: p.prodStatus || '',
+      image: (p.productImages || [])[0] || '', status: p.prodStatus || '', ...(prodStatusText(p) && { variant: prodStatusText(p) }),
     }));
   }
 
@@ -57,33 +60,50 @@ export function createImwebBulk({ clientFor }) {
     const details = await client.optionDetails(id, unitCode);
     const base = { id: String(p.prodNo ?? id), name: String(p.name || ''), image: (p.productImages || [])[0] || '',
       detailImages: extractDetailImages(p.content) };
+    const state = prodStatusText(p) ? ' · ' + prodStatusText(p) : '';
     return [
-      { ...base, optionId: '', variant: details.length ? '기본 판매가 (조합 가격은 아래 줄)' : '기본 판매가', price: p.price },
+      { ...base, optionId: '', variant: (details.length ? '기본 판매가 (조합 가격은 아래 줄)' : '기본 판매가') + state, price: p.price },
       ...details.map(d => ({ ...base, optionId: String(d.optionDetailCode),
         variant: '조합 · ' + optionTextOf(d) + (STATUS_TEXT[d.status] || ''), price: d.price })),
     ];
   }
 
-  async function currentPrice(scope, id, optionId) {
+  /** 한 상품의 지금 가격 — base(기본가) · options(조합 코드 → 가격). 필요한 쪽만 읽는다(일괄 저장이 상품마다 한 번 부른다). */
+  async function readPrices(scope, id, { base = true, options = true } = {}) {
     const { client, unitCode } = await target(scope);
-    if (!optionId) return (await client.product(id, unitCode))?.price;
-    const d = (await client.optionDetails(id, unitCode)).find(x => String(x.optionDetailCode) === String(optionId));
-    if (!d) throw new Error(`조합 ${optionId} 을 찾지 못했습니다 — 옵션이 바뀌었을 수 있습니다. 현재가를 다시 불러오세요.`);
-    return d.price;
+    const out = { base: undefined, options: new Map() };
+    if (base) out.base = (await client.product(id, unitCode))?.price;
+    if (options) for (const d of await client.optionDetails(id, unitCode)) out.options.set(String(d.optionDetailCode), d.price);
+    return out;
+  }
+  /** readPrices 결과에서 한 줄(기본가 또는 조합)의 가격. 조합이 없어졌으면 던진다. */
+  function priceIn(now, optionId) {
+    if (!optionId) return now.base;
+    if (!now.options.has(String(optionId))) throw new Error(`조합 ${optionId} 을 찾지 못했습니다 — 옵션이 바뀌었을 수 있습니다. 현재가를 다시 불러오세요.`);
+    return now.options.get(String(optionId));
+  }
+  const currentPrice = async (scope, id, optionId) => priceIn(await readPrices(scope, id, { base: !optionId, options: !!optionId }), optionId);
+
+  /** 저장 직전에 다시 읽은 값(now)으로 판단: 불러온 값과 다르면 보내지 않고(던짐), 이미 같으면 보내지 않는다(unchanged). */
+  function checkBefore(now, { price, expected }) {
+    if (expected !== '' && expected != null && Number(now) !== Number(expected)) {
+      throw markPreSend(new Error(`불러온 뒤 판매가가 바뀌었습니다(지금 ${now}). 현재가를 다시 불러오세요.`));
+    }
+    return Number(now) === Number(price);
+  }
+  async function sendPrice(scope, id, optionId, price) {
+    const { client, unitCode } = await target(scope);
+    if (optionId) await client.setOptionPrice(id, optionId, unitCode, Number(price));
+    else await client.setPrice(id, unitCode, Number(price));
   }
 
-  /** 저장 직전에 지금 값을 다시 읽는다. 불러온 값과 다르면 보내지 않고, 이미 같은 값이면 보내지 않는다. */
+  /** 한 줄 저장: 저장 직전에 지금 값을 다시 읽어 checkBefore 로 판단한 뒤 보낸다. */
   async function writePrice({ scope, id, optionId, price, expected }) {
     let now;
     try { now = await currentPrice(scope, id, optionId); }
     catch (e) { throw markPreSend(e); }
-    if (expected !== '' && expected != null && Number(now) !== Number(expected)) {
-      throw markPreSend(new Error(`불러온 뒤 판매가가 바뀌었습니다(지금 ${now}). 현재가를 다시 불러오세요.`));
-    }
-    if (Number(now) === Number(price)) return { unchanged: true, salePrice: now };
-    const { client, unitCode } = await target(scope);
-    if (optionId) await client.setOptionPrice(id, optionId, unitCode, Number(price));
-    else await client.setPrice(id, unitCode, Number(price));
+    if (checkBefore(now, { price, expected })) return { unchanged: true, salePrice: now };
+    await sendPrice(scope, id, optionId, price);
     return {};
   }
 
@@ -102,5 +122,5 @@ export function createImwebBulk({ clientFor }) {
       { form: toFormData({ unitCode, description: replaceDetailImages(content, images) }) });
   }
 
-  return { list, load, currentPrice, writePrice, readImages, saveImages };
+  return { list, load, currentPrice, writePrice, readPrices, priceIn, checkBefore, sendPrice, readImages, saveImages };
 }

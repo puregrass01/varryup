@@ -4,7 +4,8 @@
 import { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } from 'electron';
 import { registerBulkPriceIPC } from './bulk_price_ipc.js';
 import { registerFxAutoPriceIPC, FxPriceStore } from './fx_auto_price.js';
-import { loadVehicleNames, buildJpDraft, draftCsv } from './amazon_jp_draft.js';
+import { loadVehicleNames, makeJpDraft, draftCsv, draftTsv } from './amazon_jp_draft.js';
+import { detectUrlText } from './utils/image_text.js';
 import { registerImwebUnitPricesIPC, createOpenApiGateway } from './imweb_unit_prices.js';
 import { registerImwebUnitNamesIPC } from './imweb_unit_names.js';
 import { createImwebSession, createImwebClient } from './platforms/openapi/imweb_client.js';
@@ -1753,21 +1754,21 @@ ipcMain.handle('amazon-refresh-cache', async (event, options = {}) => {
     }
 });
 
-// 아마존 일본 등록용 초안 CSV (amazon_jp_draft.js). 미국 캐시를 읽기만 하고 아마존에는 보내지 않는다.
-// 일본어는 셸과 같은 정규화 사전 경로, 엔화는 환율 자동 변경과 같은 등급 규칙이다.
-ipcMain.handle('amazon-jp-draft', async () => {
+// 아마존 일본 등록 초안 (amazon_jp_draft.js makeJpDraft) — 아마존에는 아무것도 보내지 않는다(읽기만 한다).
+// 상품은 정규화 표(data/amazon_listings.json), 가격·재고·이미지·ASIN 은 미국 실시간 조회, 일본에 이미 있는 SKU 는
+// 일본에 한 건씩 물어 표시, 메인 이미지는 글자 없는 사진(Windows OCR). 결과: 검토용 CSV + 업로드용 TSV(999줄씩).
+ipcMain.handle('amazon-jp-draft', async (event) => {
+    const progress = message => { try { event.sender.send('amazon-jp-draft-progress', message); } catch { /* 창 닫힘 */ } };
     try {
         const amazon = getAmazon();
         amazon.loadConfig();
-        const cache = amazon.getCachedListings('ATVPDKIKX0DER');
-        if (!cache?.items?.length) throw new Error('미국 리스팅 캐시가 없습니다. 아마존 미국으로 전체 목록 동기화를 먼저 실행하세요.');
         const rates = await currencyRatesService.get();
-        const { rows, summary } = buildJpDraft({
-            items: cache.items, names: loadVehicleNames(),
+        const { rows, summary } = await makeJpDraft({
+            amazon, names: loadVehicleNames(), detect: detectUrlText, progress,
             fx: new FxPriceStore(app.getPath('userData')).read(),
             snapshot: rates?.success ? rates.data : null,
         });
-        return { success: true, csv: draftCsv(rows), summary: { ...summary, cacheUpdatedAt: cache.updatedAt || null },
+        return { success: true, csv: draftCsv(rows), tsv: draftTsv(rows), summary,
             rateError: rates?.success ? '' : (rates?.error || '환율을 불러오지 못했습니다.') };
     } catch (error) {
         console.error('[아마존 JP 초안]', error);
@@ -2154,7 +2155,7 @@ ipcMain.handle('imweb-update-group', async (event, data) => {
         return { success: true, message: result };
     } catch (error) {
         console.error(error);
-        return { success: false, error: error.message };
+        return { success: false, error: error.message, partial: !!error.partial };
     }
 });
 

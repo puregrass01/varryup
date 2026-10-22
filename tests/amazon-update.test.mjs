@@ -92,6 +92,19 @@ test('가격·재고 수정 시 통화와 다른 배송채널 등 기존 오퍼 
   ]);
 });
 
+test('비즈니스(B2B) 가격이 먼저 와도 판매가는 일반 고객가(audience ALL)를 읽고 그 오퍼를 고친다', async t => {
+  const listing = existingListing();
+  listing.attributes.purchasable_offer = [
+    { audience: 'B2B', currency: 'USD', marketplace_id: MP, our_price: [{ schedule: [{ value_with_tax: 90 }] }] },
+    { audience: 'ALL', currency: 'USD', marketplace_id: MP, our_price: [{ schedule: [{ value_with_tax: 110 }] }] },
+  ];
+  const { amazon, calls } = setup(t, call => call.method === 'GET' ? ok(listing) : ok({ status: 'ACCEPTED' }));
+  assert.equal((await amazon.loadProductForEdit('SKU-1', MP)).price, 110);
+  await amazon.updateExistingProduct({ sku: 'SKU-1', price: '120', stock: '', marketplaceId: MP });
+  const offers = calls.find(c => c.method === 'PATCH').body.patches.find(p => p.path === '/attributes/purchasable_offer').value;
+  assert.deepEqual(offers.map(o => [o.audience, o.our_price[0].schedule[0].value_with_tax]), [['B2B', 90], ['ALL', 120]]);
+});
+
 test('추가 이미지를 한 장만 보내도 나머지 슬롯과 기존 대표 이미지는 그대로 둔다', async t => {
   const { amazon, calls } = setup(t, call =>
     call.method === 'GET' ? ok(existingListing()) : ok({ status: 'ACCEPTED' }));
@@ -156,4 +169,15 @@ test('신규 등록: 빈 판매가를 89.99 로 채우지 않고 막으며, 재�
 
   await amazon.registerProduct({ sku: 'SKU-NEW', titleEn: 'New Item', price: '10', stock: '0', marketplaceId: MP });
   assert.equal(calls[0].body.attributes.fulfillment_availability[0].quantity, 0);
+});
+
+test('skusOnMarketplace: SKU 마다 묻고 404 는 없음, 200 은 있음 — 검색 API 가 안 돌려주는 오퍼만 있는 SKU 도 잡는다', async t => {
+  const { amazon, calls } = setup(t, call => call.url.includes('/SKU-1?')
+    ? ok({ sku: 'SKU-1', summaries: [], issues: [{ code: '5461' }] })
+    : new Response(JSON.stringify({ errors: [{ code: 'NOT_FOUND', message: 'not found' }] }), { status: 404 }));
+  const found = await amazon.skusOnMarketplace(['SKU-1', 'SKU-2', 'SKU-1'], MP);
+  assert.deepEqual([...found], ['SKU-1']);
+  assert.equal(calls.length, 2, '같은 SKU 는 한 번만 묻는다');
+  const { amazon: denied } = setup(t, () => new Response(JSON.stringify({ errors: [{ code: 'InvalidInput', message: 'Invalid accountId' }] }), { status: 400 }));
+  await assert.rejects(denied.skusOnMarketplace(['A', 'B'], MP), /Invalid accountId|400/);
 });

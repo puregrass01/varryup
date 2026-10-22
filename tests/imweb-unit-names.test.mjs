@@ -31,6 +31,8 @@ test('번역: 차종 칸의 다른 브랜드는 그 사전으로, 브랜드는 �
   assert.match(car('테슬라 테슬라s'), /Optic-glass Tesla Model S .* テスラ Model S /, "'Tesla Tesla Model S' 가 아니다");
   assert.match(car('현대 YF소나타'), /사전에 없는 차종/, "카탈로그 'Sonata' 는 YF 를 잃는다 — 다른 세대와 같은 이름이 된다");
   assert.match(car('BMW MINI 쿠퍼 해치백'), /BMW MINI Cooper Hatchback/, '하위 브랜드 사전에 없으면 카탈로그로 넘어간다');
+  assert.match(car('기아 더 뉴 기아 레이 (bsa버젼)'), /^Optic-glass Kia .*\(BSA\) Wide View Side Mirror .* \/ .*(bsa|BSA).*広角/,
+    'BSA 표시가 번역에서 빠지지 않는다(상품 1038 — 같은 번호의 일반 상품과 가르는 값)');
 });
 
 test('옵션: 단어표에 있는 한국어 그룹명 · 값만 바꾸고, 이미 번역된 값은 두고, 값 코드는 그대로 보낸다', () => {
@@ -39,6 +41,11 @@ test('옵션: 단어표에 있는 한국어 그룹명 · 값만 바꾸고, 이�
   assert.deepEqual(planOptions(groups, 0), [{ optionCode: 'o1', changes: ['구성 선택→Select Option', '운전석→Left', '조수석→Right'],
     body: { name: 'Select Option', optionValueList: [{ optionValueCode: 'v1', optionValueName: '1set' }, { optionValueCode: 'v2', optionValueName: 'Left' }, { optionValueCode: 'v3', optionValueName: 'Right' }] } }]);
   assert.deepEqual(planOptions(groups, 1)[0].body.optionValueList.map(v => v.optionValueName), ['1セット(左右)', '運転席', '助手席']);
+  assert.deepEqual(planOptions([{ code: 'o4', name: '구성 선택', values: [{ code: 'v6', name: '2set' }] }], 1)[0].body.optionValueList,
+    [{ optionValueCode: 'v6', optionValueName: '2セット' }], '2set · 3set 도 일본어로(1set 의 1セット(左右) 와 같은 표기)');
+  // 엑셀로 올린 옵션의 줄바꿈 찌꺼기(2026-10-20 상품 6개)
+  assert.deepEqual(planOptions([{ code: 'o3', name: 'BSA 여부_x000D_', values: [{ code: 'v5', name: 'BSA 있음_x000D_' }] }], 0)[0].body,
+    { name: 'BSA Sensor', optionValueList: [{ optionValueCode: 'v5', optionValueName: 'With BSA' }] });
 });
 
 // 가짜 본사몰: 구역마다 이름 · 옵션. leak 이면 미국 · 일본 PATCH 가 한국 구역까지 바꾼다(그럴 때 되돌리는지 본다).

@@ -60,18 +60,30 @@ export function comboKey(text) {
 const bsaMark = s => (/BSA\s*O/i.test(s) ? 'O' : (/BSA\s*X/i.test(s) ? 'X' : ''));
 export const optionTextOf = d => (d?.optionDetailInfoList || []).map(i => String(i?.optionValue?.optionValueName ?? '')).join(' / ');
 
+// 상세 이미지 = 상세 영역 표시 뒤의 <img>(주석 안의 것은 빼고). 표시 앞은 조견표 · 배너라 건드리지 않는다.
+// 2026-10-21 본사몰 1,644개: 1,578개가 '<!--B .상세페이지-->' 앞에 조견표(조견표 · Compatibility Chart 폴더) + 배너,
+// 뒤에 상세 이미지 4장이고, 모두 주석 처리된 옛 <img> 를 품고 있다. B2B 는 템플릿의 '<!--3. 상세페이지 영역-->'.
+// 표시가 없는 상품(사이드스텝 등 66개 · 게시판 글)은 본문 전체가 대상이다. 둘 다 있으면(본사 상품 3) 뒤의 표시부터.
+const DETAIL_MARKS = ['<!--3. 상세페이지 영역-->', '<!--B .상세페이지-->'];
+function detailTags(html) {
+  const s = String(html || '');
+  const from = Math.max(0, ...DETAIL_MARKS.map(m => { const i = s.indexOf(m); return i < 0 ? 0 : i + m.length; }));
+  const comments = [...s.matchAll(/<!--[\s\S]*?-->/g)].map(m => [m.index, m.index + m[0].length]);
+  return [...s.matchAll(/<img[^>]*src=["']([^"']+)["'][^>]*>/gi)]
+    .filter(m => m.index >= from && !comments.some(([a, b]) => m.index >= a && m.index < b));
+}
+
 export function extractDetailImages(html) {
-  if (!html) return [];
-  return [...String(html).matchAll(/<img[^>]*src=["']([^"']+)["'][^>]*>/gi)].map(m => m[1]);
+  return detailTags(html).map(m => m[1]);
 }
 
 /**
- * 상세설명 HTML 의 이미지만 새 목록으로 바꾼다. 텍스트 · 레이아웃은 두고 기존 <img> 를 순서대로 치환하며,
+ * 상세설명 HTML 의 상세 이미지만 새 목록으로 바꾼다. 텍스트 · 레이아웃은 두고 기존 <img> 를 순서대로 치환하며,
  * 목록이 길면 마지막 자리에 이어 넣고 짧으면 남는 <img> 만 뺀다(태그 속성 · 클래스는 그대로 물려받는다).
  */
 export function replaceDetailImages(html, images) {
   const src = String(html || '');
-  const tags = [...src.matchAll(/<img[^>]*src=["']([^"']+)["'][^>]*>/gi)];
+  const tags = detailTags(src);
   const list = images || [];
   if (!tags.length) return src + list.map(u => `<p style="text-align: center;"><img src="${u}" class="fr-fic fr-dii"></p>`).join('');
   const swapSrc = (tag, url) => tag.replace(/src=["'][^"']+["']/i, `src="${url}"`);
@@ -679,8 +691,8 @@ export function createB2bApi(client, {
   }
 
   async function updateGroup(data) {
-    const results = [];
-    for (const p of (data.products || [])) {
+    const products = data.products || [], results = [];
+    const saveOne = async p => {
       const cur = await loadProduct(p.prodNo);
       const one = { prodNo: p.prodNo };
       if (data.baseKey) one.title = `${String(data.baseKey).trim()} ${suffixOf(cur.title)}`.trim();
@@ -693,7 +705,16 @@ export function createB2bApi(client, {
         });
       }
       if (Array.isArray(p.combos) && p.combos.length) one.combos = p.combos;
-      results.push(await updateProduct(one));
+      return updateProduct(one);
+    };
+    for (const [i, p] of products.entries()) {
+      try { results.push(await saveOne(p)); }
+      catch (e) {
+        // 세트를 저장한 뒤 개별에서 멈추면 세트는 이미 바뀌었다 — 어느 쪽이 됐는지 같이 알린다(일괄 수정은 '일부만 수정').
+        const rest = products.slice(i + 1).map(x => x.prodNo);
+        throw Object.assign(new Error([...results, `상품 ${p.prodNo} 실패: ${e.message}`,
+          ...(rest.length ? [`상품 ${rest.join(', ')} 보내지 않음`] : [])].join(' / ')), { partial: results.length > 0 });
+      }
     }
     return results.join(' / ');
   }

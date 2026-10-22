@@ -101,7 +101,7 @@ function fakeHead(products, { onSave } = {}) {
     list: async () => { calls.push(['list']); return Object.keys(products).map(prodNo => ({ prodNo, name: 'P' + prodNo })); },
     base: prodNo => products[prodNo].priceInfo.map(e => ({ unitCode: e.unitCode, price: e.price })),
     product: async prodNo => { calls.push(['get', prodNo]); return JSON.parse(JSON.stringify(products[prodNo])); },
-    save: async (prodNo, payload) => { calls.push(['patch', prodNo, payload]); apply(products[prodNo], payload); onSave?.(products[prodNo], payload); },
+    save: async (prodNo, payload) => { calls.push(['patch', prodNo, payload]); apply(products[prodNo], payload); onSave?.(products[prodNo], payload); return { sent: 1 }; },
   };
 }
 function fixture(t, head, { clock = () => NOW, rate = { success: true, data: snapshot } } = {}) {
@@ -167,11 +167,11 @@ test('매일 자동 실행(sync)은 읽고 바로 저장하고, 10% 넘게 바�
   assert.deepEqual(head.calls.filter(c => c[0] === 'patch').map(c => c[1]), ['3', '4']);
 });
 
-test('매일 자동 실행: 목록은 시작 · 첫 저장 뒤 · 저장 100개마다 · 끝에만 다시 읽는다 — 바꿀 것이 없으면 시작 한 번', async t => {
+test('매일 자동 실행: 목록은 시작 · 첫 저장 확인 · 끝의 확인에만 다시 읽는다 — 바꿀 것이 없으면 시작 한 번', async t => {
   const head = fakeHead(Object.fromEntries(Array.from({ length: 102 }, (_, i) => [String(100 + i), wideMirror()])));
   const { service } = fixture(t, head);
   assert.equal((await service.sync()).count.saved, 102);
-  assert.equal(head.calls.filter(c => c[0] === 'list').length, 4, '시작 · 첫 저장 뒤 · 101번째 저장 뒤 · 끝');
+  assert.equal(head.calls.filter(c => c[0] === 'list').length, 3, '시작 · 첫 저장 확인 · 다 보낸 뒤 확인');
   head.calls.length = 0;
   assert.equal((await service.sync()).count.unchanged, 102);
   assert.equal(head.calls.filter(c => c[0] === 'list').length, 1);
@@ -203,16 +203,33 @@ test('저장하면서 옵션 가격 방식이 추가금으로 바뀌면 되돌�
   assert.deepEqual(head.calls.filter(c => c[0] === 'patch').map(c => c[1]), ['3', '3'], '되돌리기만 보내고 다음 상품은 보내지 않았다');
 });
 
-test('저장 본문은 저장 직전에 읽은 원본으로 만든다 — 미리보기 뒤 주문으로 줄어든 재고·품절을 되살리지 않는다', async t => {
-  const head = fakeHead({ 3: wideMirror() });
-  const { service } = fixture(t, head);
+test('저장은 미리보기 때 읽은 값으로 바로 보낸다 — 상품마다 다시 읽지 않고, 확인은 첫 건만 바로 · 나머지는 끝에 한 번에', async t => {
+  const head = fakeHead({ 3: wideMirror(), 4: wideMirror(), 5: wideMirror() });
+  const { service, dir } = fixture(t, head);
   await service.preview();
-  const [sold, soldOut] = head.products[3].productOptionInfo.optionDetails;
-  sold.stock = 1; soldOut.stock = 0; soldOut.status = 'SOLDOUT';
+  head.calls.length = 0;
   const result = await service.save();
-  assert.equal(result.count.saved, 1);
-  const patch = head.calls.find(c => c[0] === 'patch')[2];
-  assert.deepEqual(patch.productOptionInfo.optionDetails.map(d => [d.stock, d.status]), [[1, 'SALE'], [0, 'SOLDOUT']]);
+  assert.deepEqual(result.count, { saved: 3, changedSince: 0, failed: 0 });
+  assert.equal(result.stopped, '');
+  // 목록(저장 직전) → 3 저장 → 첫 건 확인(목록 + 3 읽기) → 4·5 저장 → 끝의 확인(목록 + 옵션을 고친 4·5 읽기)
+  assert.deepEqual(head.calls.map(c => c.slice(0, 2)),
+    [['list'], ['patch', '3'], ['list'], ['get', '3'], ['patch', '4'], ['patch', '5'], ['list'], ['get', '4'], ['get', '5']]);
+  const rows = JSON.parse(fs.readFileSync(path.join(dir, 'imweb_unit_prices_rows.json'), 'utf8'));
+  assert.deepEqual(rows.map(r => r.result), ['저장·확인 완료', '저장·확인 완료', '저장·확인 완료']);
+});
+
+test('끝의 확인에서 계획과 다른 상품은 되돌리지 않고 확인 실패로 적는다(나머지는 그대로 저장)', async t => {
+  const head = fakeHead({ 3: wideMirror(), 4: wideMirror() }, {
+    onSave: (d, payload) => { if (d === head?.products?.[4]) d.priceInfo[1].price = 1; },
+  });
+  const { service, dir } = fixture(t, head);
+  await service.preview();
+  const result = await service.save();
+  assert.deepEqual(result.count, { saved: 1, changedSince: 0, failed: 1 });
+  assert.match(result.stopped, /저장 뒤 확인에서 1개가 계획과 다릅니다\(되돌리지 않음\)/);
+  const rows = JSON.parse(fs.readFileSync(path.join(dir, 'imweb_unit_prices_rows.json'), 'utf8'));
+  assert.match(rows[1].result, /^확인 실패\(되돌리지 않음\): USD 판매가 1 \(요청 59\)/);
+  assert.equal(head.calls.filter(c => c[0] === 'patch').length, 2, '되돌리기는 보내지 않는다');
 });
 
 test('한국가가 자리표시 값이면 하한(미국 $1 · 일본 100엔) 아래 환산가라 건너뛰고, 계산 오류는 그 상품만 건너뛴다', async t => {
@@ -359,7 +376,7 @@ test('Open API: 기본가는 목록 값을 다음 목록까지 쓰고, 저장하
   assert.deepEqual(client.calls.filter(c => c[0] === 'get').map(c => c[1]), ['8', '8', '8']);
 });
 
-test('Open API: 저장한 기본가는 목록으로 확인한다 — 첫 저장 바로 뒤에 읽어, 한국 구역까지 바뀌었으면 멈춘다', async t => {
+test('Open API: 첫 저장은 바로 목록·옵션을 다시 읽어 확인한다 — 한국 구역까지 바뀌었으면 멈춘다', async t => {
   // 구역을 잘못 받아 한국 기본가까지 바꾸는 저장을 흉내 낸다(옵션은 저장 직후 다시 읽어 확인하므로 기본가로 만든다).
   const client = fakeClient({ 3: apiMirror(), 4: apiMirror() });
   const setPrice = client.setPrice;
@@ -370,10 +387,11 @@ test('Open API: 저장한 기본가는 목록으로 확인한다 — 첫 저장 
     gateway: () => createOpenApiGateway(client), clock: () => NOW, sleep: async () => {}, log: { log() {}, error() {} } });
   const result = await service.sync();
   assert.deepEqual([result.count.saved, result.count.failed], [0, 1]);
-  assert.match(result.stopped, /목록에서 읽은 기본가가 계획과 달라 멈췄습니다/);
+  assert.match(result.stopped, /첫 저장 결과가 계획과 달라 멈췄습니다/);
   assert.deepEqual([...new Set(client.calls.filter(c => c[0] === 'setPrice').map(c => c[1]))], ['3'], '다음 상품은 보내지 않는다');
   const [row] = JSON.parse(fs.readFileSync(path.join(dir, 'imweb_unit_prices_rows.json'), 'utf8'));
-  assert.match(row.result, /^기본가 확인 실패\(목록\): 한국 판매가가 바뀌었습니다/);
+  // 한국 구역은 이 기능이 보내지 않으므로(국내가는 기준값) 되돌리기도 거부된다 — 사람이 관리자에서 본다.
+  assert.match(row.result, /^확인 실패\(되돌리기 실패: 한국 구역 가격.*\): 한국 판매가가 바뀌었습니다/);
 });
 
 test('Open API: 그 구역에서 팔지 않는 상품(404 · 30006)은 그 구역만 빼고 읽는다', async () => {
@@ -439,4 +457,62 @@ test('Open API: 미리보기 → 저장 → 다시 읽어 확인까지 서비스
   assert.deepEqual([p.uKR.price, p.uUS.price, p.uJP.price], [80000, 59, 9200]);
   assert.deepEqual(p.uUS.options.map(o => o.price), [59, 110]);
   assert.deepEqual(p.uKR.options.map(o => [o.price, o.stock]), [[80000, 3], [150000, 5]], '한국 가격 · 재고는 그대로');
+});
+
+// ── 2026-10-21 검토 반영: bulk fix → check later ──
+
+test('중간에 멈춰도(거부·중단) 그때까지 보낸 상품은 끝의 확인을 한다 — 멈춘 이유와 확인 결과를 같이 알린다', async t => {
+  const head = fakeHead({ 3: wideMirror(), 4: wideMirror(), 5: wideMirror() }, {
+    onSave: (d, payload) => {
+      if (d === head.products[4]) d.priceInfo[1].price = 1;                       // 4 는 저장 뒤 값이 다르다
+      if (d === head.products[5]) throw Object.assign(new Error('거부됨'), { status: 400 });   // 5 는 거부
+    },
+  });
+  const { service, dir } = fixture(t, head);
+  await service.preview();
+  const result = await service.save();
+  assert.match(result.stopped, /저장이 거부돼 멈췄습니다: 거부됨 \/ 저장 뒤 확인에서 1개가 계획과 다릅니다/);
+  const rows = JSON.parse(fs.readFileSync(path.join(dir, 'imweb_unit_prices_rows.json'), 'utf8'));
+  assert.match(rows.find(r => r.prodNo === '4').result, /^확인 실패\(되돌리지 않음\)/, '멈춰도 4 는 확인했다');
+});
+
+test('바로 확인은 쓰기 경로마다 처음 한 번 — 첫 상품이 기본가만 바꿔도 옵션을 처음 바꾸는 상품을 바로 확인하고, 다르면 멈춘다', async () => {
+  const plain = apiMirror();
+  for (const u of ['uKR', 'uUS', 'uJP']) plain[u].options = [];
+  const client = fakeClient({ 2: plain, 3: apiMirror(), 4: apiMirror() });
+  const setOption = client.setOptionPrice;
+  // 옵션 쓰기가 구역을 잘못 받아 한국 옵션가까지 바꾸는 상황을 흉내 낸다
+  client.setOptionPrice = async (no, code, unit, price) => { await setOption(no, code, unit, price); client.store[no].uKR.options.find(o => o.code === code).price = price; };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imweb-unit-path-'));
+  try {
+    const service = createImwebUnitPrices({ rates: async () => ({ success: true, data: snapshot }), dir,
+      gateway: () => createOpenApiGateway(client), clock: () => NOW, log: { log() {}, error() {} } });
+    await service.preview();
+    const result = await service.save();
+    assert.match(result.stopped, /첫 저장 결과가 계획과 달라 멈췄습니다/);
+    assert.equal(client.calls.some(c => c[0].startsWith('set') && c[1] === '4'), false, '옵션 쓰기가 잘못되면 다음 상품(4)은 보내지 않는다');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('미리보기 뒤 그 구역에서 빠진 상품은 바뀐 것으로 보고 보내지 않는다 — 나머지는 계속한다', async t => {
+  const client = fakeClient({ 3: apiMirror(), 4: apiMirror(), 5: apiMirror() });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imweb-unit-gone-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const service = createImwebUnitPrices({ rates: async () => ({ success: true, data: snapshot }), dir,
+    gateway: () => createOpenApiGateway(client), clock: () => NOW, log: { log() {}, error() {} } });
+  await service.preview();
+  delete client.store[4].uJP;
+  const result = await service.save();
+  assert.deepEqual(result.count, { saved: 2, changedSince: 1, failed: 0 });
+  assert.equal(result.stopped, '');
+});
+
+test('Open API: 목록을 읽다 중간에 실패하면 이전 목록을 그대로 둔다', async () => {
+  const client = fakeClient({ 3: apiMirror() });
+  const gw = createOpenApiGateway(client);
+  await gw.list();
+  const products = client.products;
+  client.products = async unit => { if (unit === 'uUS') throw new Error('timeout'); return products(unit); };
+  await assert.rejects(gw.list(), /timeout/);
+  assert.deepEqual(gw.base(3).map(e => e.unitCode), ['uKR', 'uUS', 'uJP'], '한국만 남은 목록으로 바뀌지 않는다');
 });

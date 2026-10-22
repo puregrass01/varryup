@@ -8,7 +8,7 @@ import path from 'node:path';
 
 import {
   createB2bApi, comboKey, baseKeyOf, suffixOf, typeOf, planOptionValues, templateGroups, discountInfoFrom,
-  buildCreateBody, replaceSpecBlock, replaceDetailImages, b2bTitle, planOf
+  buildCreateBody, replaceSpecBlock, replaceDetailImages, extractDetailImages, b2bTitle, planOf
 } from '../src/platforms/openapi/imweb_b2b.js';
 import { toFormFields } from '../src/platforms/openapi/imweb_client.js';
 
@@ -191,6 +191,11 @@ test('조견표 · 상세 이미지 교체: 표시가 없으면 건드리지 않
   assert.ok(html.includes('<!--3. 상세페이지 영역--><p><img src="https://x/d1.jpg">'), '상세페이지 영역은 그대로');
   assert.equal(replaceSpecBlock('<p>표시 없음</p>', { specUrl: 'u', titleBrand: 'a', titleModel: 'b' }), null);
   assert.equal(replaceDetailImages('<p><img src="a"><img src="b"></p>', ['x']), '<p><img src="x"></p>');
+  // 본사몰 상세(2026-10-21 1,578개 모양): 표시 앞 조견표 · 배너와 주석 속 옛 <img> 는 상세 이미지가 아니다.
+  const head = '<p><img src="https://esm/조견표/960_XJ.jpg"></p><p><img src="https://cdn/banner.jpg"></p>' +
+    '<!--<p><img src="https://esm/old.jpg"></p>--><!--B .상세페이지--><p><img src="https://esm/d1.jpg"><img src="https://esm/d2.jpg"></p>';
+  assert.deepEqual(extractDetailImages(head), ['https://esm/d1.jpg', 'https://esm/d2.jpg']);
+  assert.equal(replaceDetailImages(head, ['https://new/n1.jpg']), head.replace('<img src="https://esm/d1.jpg"><img src="https://esm/d2.jpg">', '<img src="https://new/n1.jpg">'));
 });
 
 // ── 등록 ───────────────────────────────────────────────────────────────
@@ -316,13 +321,28 @@ test('상품수정 탭: 상품명 · 판매가 · 상세 이미지 · 조합 가
   const target = cur.combos[0];
   const summary = await api.updateProduct({ prodNo: 803, title: '옵틱글래스 쌍용 렉스턴W 미러 운전석/조수석 [Y111]', price: 85000,
     detailImages: ['https://x/n1.jpg'], combos: [{ optionDetailCode: target.optionDetailCode, displayText: target.displayText, price: 88000, stock: 5 }] });
-  assert.match(summary, /상품 803 수정 완료 — 상품명 .*상세이미지 3 → 1장.*판매가 80000 → 85000원.*옵션 조합 1건/);
+  // 상세 이미지는 '3. 상세페이지 영역' 뒤의 2장이다 — 조견표 이미지는 세지도 바꾸지도 않는다(2026-10-21).
+  assert.match(summary, /상품 803 수정 완료 — 상품명 .*상세이미지 2 → 1장.*판매가 80000 → 85000원.*옵션 조합 1건/);
   const p = client.store.get('803');
+  assert.match(p.content, /<!--2\. 조견표 영역--><p><img src="https:\/\/old\/spec\.jpg"><\/p><!--3\. 상세페이지 영역--><p><img src="https:\/\/x\/n1\.jpg"><\/p>/);
   const d = p.details.find(x => x.optionDetailCode === target.optionDetailCode);
   assert.deepEqual([p.price, d.price, d.stock], [85000, 88000, 5]);
   const stockCall = client.calls.find(c => c[0] === 'PATCH' && c[1].includes(target.optionDetailCode));
   assert.deepEqual(stockCall[2], { unitCode: U, price: 88000, stock: 5 }, '재고는 목표가 아니라 변경량(+5)으로 보낸다');
   await assert.rejects(api.updateProduct({ prodNo: 803 }), /변경할 내용이 없습니다/);
+});
+
+test('묶음 수정: 세트를 저장한 뒤 개별이 실패하면 어느 쪽이 됐는지 알리고 일부만 수정(partial)으로 던진다', async () => {
+  const client = fakeB2b();
+  const api = apiOf(client);
+  const err = await api.updateGroup({ products: [{ prodNo: 803, price: 85000 }, { prodNo: 99999, price: 1 }, { prodNo: 712, price: 2 }] })
+    .then(() => null, e => e);
+  assert.ok(err, '실패해야 한다');
+  assert.equal(err.partial, true);
+  assert.match(err.message, /^상품 803 수정 완료 .* \/ 상품 99999 실패: .* \/ 상품 712 보내지 않음$/);
+  assert.equal(client.store.get('803').price, 85000, '앞 상품은 이미 저장됐다');
+  const first = await api.updateGroup({ products: [{ prodNo: 99999, price: 1 }] }).then(() => null, e => e);
+  assert.equal(first.partial, false, '하나도 저장 안 됐으면 partial 이 아니다');
 });
 
 test('상품수정 탭: 재고 관리를 쓰지 않는 상품(Open API 로 만든 상품)은 재고만 건너뛰고 알리며, 가격은 저장한다', async () => {

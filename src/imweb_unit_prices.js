@@ -13,7 +13,6 @@ import { rateProblem, planPrice, rateInfo } from './utils/fx_pricing.js';
 
 const TARGETS = ['USD', 'JPY'];
 const PLAN_TTL = 30 * 60 * 1000;   // 미리보기 후 30분 안에만 저장한다
-const SETTLE_EVERY = 100;           // 저장 100개마다 목록(한 번에 최대 100개)을 다시 읽어 기본가를 확인한다
 // 새 판매가 하한. 한국가에 자리표시 값(100원 등)이 있으면 $0.07 · 10엔 같은 값이 나온다 — 그런 상품은 저장하지 않는다.
 const MIN_TARGET = { USD: 1, JPY: 100 };
 const clone = value => JSON.parse(JSON.stringify(value ?? null));
@@ -233,9 +232,10 @@ export function createOpenApiGateway(client, { log = () => {} } = {}) {
   }
 
   /** buildPatch · restorePatch 의 본문(옵션 전체를 담은 쓰기 형식)을 구역별 PATCH 로 바꿔 보낸다. 마지막으로 읽은 값과 다른 것만. */
-  async function save(prodNo, payload) {
+  // before: 읽어 둔 값(미리보기 때 읽은 product.raw). 없으면 마지막으로 읽은 값 → 그것도 없으면 지금 읽는다.
+  async function save(prodNo, payload, given = null) {
     const no = String(prodNo);
-    const before = lastRead.get(no) || await product(no);
+    const before = given || lastRead.get(no) || await product(no);
     const krUnit = (await siteUnits())[0].unitCode;
     const curBase = new Map((before.priceInfo || []).map(e => [e.unitCode, Number(e.price)]));
     const curOption = new Map();
@@ -283,16 +283,18 @@ export function createOpenApiGateway(client, { log = () => {} } = {}) {
     },
     async list() {
       const all = await siteUnits();
-      const rows = [];
-      listed.clear();
+      const rows = [], next = new Map();
       for (const u of all) {
         for (const p of await client.products(u.unitCode)) {
           const no = String(p.prodNo);
-          if (!listed.has(no)) listed.set(no, {});
-          listed.get(no)[u.unitCode] = { price: Number(p.price), name: String(p.name || '') };
+          if (!next.has(no)) next.set(no, {});
+          next.get(no)[u.unitCode] = { price: Number(p.price), name: String(p.name || '') };
           if (u === all[0]) rows.push({ prodNo: no, name: String(p.name || '') });
         }
       }
+      // 다 읽은 뒤에만 바꿔 끼운다 — 구역 하나를 읽다 실패하면(시간 초과·429) 한국만 남은 목록으로 되돌리기가 아무것도 안 보냈다.
+      listed.clear();
+      for (const [no, base] of next) listed.set(no, base);
       return rows;
     },
     /** 마지막 목록의 기본가 [{ unitCode, price }] — 저장한 값을 목록으로 확인할 때(호출 없음). */
@@ -305,8 +307,8 @@ export function createOpenApiGateway(client, { log = () => {} } = {}) {
 // ── 미리보기 · 저장 ──────────────────────────────────────────────────────
 
 // gateway() 는 createOpenApiGateway 로 만든 연결을 돌려준다(main_process 가 OAuth 클라이언트를 넣어 준다).
-export function createImwebUnitPrices({ rates, dir, gateway, clock = Date.now,
-  sleep = ms => new Promise(r => setTimeout(r, ms)), notify = () => {}, log = console, pace = 800 }) {
+// 호출 간격은 클라이언트가 남은 호출 수(초당 2회)를 보고 맞춘다 — 여기서 따로 쉬지 않는다.
+export function createImwebUnitPrices({ rates, dir, gateway, clock = Date.now, notify = () => {}, log = console }) {
   let busy = null, plan = null;
   const rowsFile = path.join(dir, 'imweb_unit_prices_rows.json'), sampleFile = path.join(dir, 'imweb_unit_prices_sample.json');
   const progress = running => { try { notify({ running }); } catch { /* 닫히는 창 */ } };
@@ -372,87 +374,113 @@ export function createImwebUnitPrices({ rates, dir, gateway, clock = Date.now,
     };
   }
 
-  // 저장 한 건: now(방금 읽은 값)로 본문을 만들어 보내고 → 옵션을 다시 읽어 확인한다. 다르면 now 로 되돌리고 멈춘다.
-  // 본문을 now 로 만드는 까닭: 옵션 쓰기 형식은 재고·판매상태까지 통째로 담아서, 오래된 원본을 쓰면 그 사이 주문으로
-  // 줄어든 재고·품절이 되살아난다. 기본가는 상품마다 다시 읽지 않고 다음 목록에서 확인한다(settle).
-  async function writeOne(api, product, p, now) {
-    const payload = buildPatch(now, p);
-    try { await api.save(product.prodNo, payload); }
+  // 저장 한 건: 읽어 둔 값(before — 미리보기 또는 방금 읽은 값)과 다른 가격만 구역별로 보낸다. 다시 읽지 않는다 —
+  // 확인은 다 보낸 뒤 한 번에 한다(checkLater · 사용자 2026-10-21 "bulk fix → check later"). 보내다 거부되면
+  // 그 상품에서 앞서 보낸 것을 되돌리고 멈춘다(gateway.save). 재고·판매상태는 보내지 않는다.
+  async function writeOne(api, product, p) {
+    const payload = buildPatch(product, p);
+    try { await api.save(product.prodNo, payload, product.raw); }
     catch (e) { return { result: '저장 실패: ' + e.message, stop: '저장이 거부돼 멈췄습니다: ' + e.message }; }
-    await sleep(pace);
-    let problems;
-    try { problems = checkAfter(normalizeProduct(product.prodNo, await api.product(product.prodNo)), product, p); }
-    catch (e) { problems = ['저장 뒤 다시 읽지 못함: ' + e.message]; }
-    if (problems.length) {
-      let restored = '되돌림';
-      try { await api.save(product.prodNo, restorePatch(now, payload)); } catch (e) { restored = '되돌리기 실패: ' + e.message; }
-      return { result: '확인 실패(' + restored + '): ' + problems.join(' / '),
-        stop: '저장 결과가 계획과 달라 멈췄습니다. 이 상품을 관리자에서 확인하세요: ' + product.name };
-    }
     log.log?.(`[imweb-unit] ${product.prodNo} ${product.name} 저장`);
-    return { result: '저장·확인 완료' };
+    return { result: '저장(확인 전)', payload };
   }
 
-  // 목록을 다시 읽는다(구역마다 한 번에 100개): 앞서 저장한 상품의 기본가를 확인하고, 다음 상품들의 기본가를 새로 한다.
-  // 첫 저장 바로 뒤(구역이 뒤바뀌어 저장되는 것 같은 문제를 한 상품에서 잡는다), 그다음 저장 100개마다, 끝에 한 번 —
-  // 바꿀 것이 없는 날은 목록을 더 읽지 않는다. 다르면 되돌리지 않고 멈춘다(저장하고 몇 분 사이에 사람이 고친 값일 수 있다).
-  const due = (count, pending) => count.saved === 1 || pending.length >= SETTLE_EVERY;
-  async function settle(api, pending, count) {
-    await api.list();
-    let first = '';
-    for (const x of pending.splice(0)) {
-      const problems = baseProblems(api.base(x.row.prodNo), x.p);
-      if (!problems.length) continue;
-      x.row.result = '기본가 확인 실패(목록): ' + problems.join(' / ');
-      count.saved--; count.failed++;
-      first ||= '저장 뒤 목록에서 읽은 기본가가 계획과 달라 멈췄습니다. 이 상품을 관리자에서 확인하세요: ' + x.row.name;
-    }
-    return first;
+  // 바로 확인(기본가 · 옵션 쓰기 경로마다 처음 한 번) — 구역이 뒤바뀌어 저장되는 것 같은 문제를 600개에 퍼뜨리기 전에
+  // 한 상품에서 잡고, 그 상품은 되돌린다. 나머지는 끝에 한 번에 확인한다.
+  async function canary(api, product, p, payload) {
+    let problems;
+    // 기본가는 목록에서 읽으므로 목록부터 새로 한다(한국 구역까지 바뀌었는지 본다).
+    try { await api.list(); problems = checkAfter(normalizeProduct(product.prodNo, await api.product(product.prodNo)), product, p); }
+    catch (e) { problems = ['저장 뒤 다시 읽지 못함: ' + e.message]; }
+    if (!problems.length) return null;
+    let restored = '되돌림';
+    // api.product() 가 방금 읽은 값(계획대로 바뀐 값)에서 원래 값으로 되돌린다.
+    try { if (!(await api.save(product.prodNo, restorePatch(product, payload)))?.sent) restored = '되돌릴 값을 찾지 못함 — 관리자에서 확인'; }
+    catch (e) { restored = '되돌리기 실패: ' + e.message; }
+    return { result: '확인 실패(' + restored + '): ' + problems.join(' / '),
+      stop: '첫 저장 결과가 계획과 달라 멈췄습니다. 이 상품을 관리자에서 확인하세요: ' + product.name };
   }
-  const settleLast = (api, pending, count) => pending.length
-    ? settle(api, pending, count).catch(e => '저장 뒤 목록을 읽지 못해 기본가를 확인하지 못했습니다: ' + e.message) : '';
+
+  // 다 보낸 뒤 한 번에 확인한다: 기본가는 목록 한 번(구역마다 100개씩), 옵션은 옵션을 고친 상품만 다시 읽는다.
+  // 다르면 되돌리지 않고 결과에 적는다(보내고 몇 분 사이에 사람이 고친 값일 수 있다 — 결과 CSV 로 본다).
+  async function checkLater(api, saved, count) {
+    if (!saved.length) return '';
+    progress({ step: 'check', index: 0, total: saved.length, message: '저장한 가격을 목록으로 확인하는 중' });
+    await api.list();
+    const bad = [];
+    for (const [i, x] of saved.entries()) {
+      progress({ step: 'check', index: i + 1, total: saved.length, message: x.product.name });
+      let problems = baseProblems(api.base(x.product.prodNo), x.p);
+      if (!problems.length && x.p.changedCombos) {
+        try { problems = checkAfter(normalizeProduct(x.product.prodNo, await api.product(x.product.prodNo)), x.product, x.p); }
+        catch (e) { problems = ['확인하려고 다시 읽지 못함: ' + e.message]; }
+      }
+      if (problems.length) { x.row.result = '확인 실패(되돌리지 않음): ' + problems.join(' / '); count.saved--; count.failed++; bad.push(x.product.name); }
+      else x.row.result = '저장·확인 완료';
+    }
+    return bad.length ? `저장 뒤 확인에서 ${bad.length}개가 계획과 다릅니다(되돌리지 않음) — 결과 CSV 에서 확인하세요: ` +
+      bad.slice(0, 3).join(', ') + (bad.length > 3 ? ' 외' : '') : '';
+  }
+  const checkLaterSafe = (api, saved, count) =>
+    checkLater(api, saved, count).catch(e => '저장 뒤 확인을 끝내지 못했습니다(가격은 보냈습니다): ' + e.message);
+
+  // 보낸 한 건을 센다. 기본가 · 옵션 쓰기 경로가 처음 쓰이는 상품은 바로 확인하고(많아야 두 번), 나머지는 끝에
+  // 확인할 목록에 넣는다. 멈춰야 하면 이유를 돌려준다. verified: 이번 실행에서 바로 확인을 마친 쓰기 경로.
+  async function afterWrite(api, product, p, w, row, saved, count, verified) {
+    row.result = w.result;
+    if (w.stop) { count.failed++; return w.stop; }
+    count.saved++;
+    if ((p.changedBase && !verified.base) || (p.changedCombos && !verified.combos)) {
+      const bad = await canary(api, product, p, w.payload);
+      if (bad) { row.result = bad.result; count.saved--; count.failed++; return bad.stop; }
+      if (p.changedBase) verified.base = true;
+      if (p.changedCombos) verified.combos = true;
+      row.result = '저장·확인 완료';
+      return '';
+    }
+    saved.push({ row, product, p });
+    return '';
+  }
+  // 멈춘 이유가 있어도 그때까지 보낸 상품은 끝의 확인을 한다 — 확인이 이 한 번에 달려 있다.
+  const finish = async (api, saved, count, stopped) => [stopped, await checkLaterSafe(api, saved, count)].filter(Boolean).join(' / ');
 
   async function save() {
     if (!plan?.changes.length) throw new Error('먼저 미리보기를 실행하세요. 바꿀 가격이 없으면 저장할 것도 없습니다.');
     if (clock() - plan.at > PLAN_TTL) throw new Error('미리보기를 한 지 30분이 지났습니다. 미리보기를 다시 실행하세요.');
     const { api } = await open();
-    const results = [], pending = [], count = { saved: 0, changedSince: 0, failed: 0 }, skipped = plan.skipped;
+    const { changes, skipped } = plan;
+    plan = null;   // 같은 미리보기로 두 번 저장하지 않는다
+    const results = [], saved = [], count = { saved: 0, changedSince: 0, failed: 0 }, verified = {};
     let stopped = '';
     try {
-      await api.list();   // 저장 직전 기본가 — 미리보기 때 읽은 목록은 30분까지 지났을 수 있다
-      for (const [i, { product, plan: p }] of plan.changes.entries()) {
-        progress({ step: 'save', index: i + 1, total: plan.changes.length, message: product.name });
+      // 저장 직전 기본가(목록 한 번). 미리보기 뒤에 기본가가 바뀌었거나 그 구역에서 빠진 상품은 보내지 않는다.
+      // 옵션가는 상품마다 다시 읽지 않는다 — 그 사이 한국 옵션가를 고친 것은 끝의 확인이 적고, 미국·일본 옵션가를
+      // 사람이 고친 것은 계획대로 덮는다(미국·일본은 한국가에서 계산한다 — 매일 자동 실행과 같다).
+      await api.list();
+      for (const [i, { product, plan: p }] of changes.entries()) {
+        progress({ step: 'save', index: i + 1, total: changes.length, message: product.name });
         const row = { prodNo: product.prodNo, name: product.name, result: '' };
         results.push(row);
-        let now;
-        try { now = normalizeProduct(product.prodNo, await api.product(product.prodNo)); }
-        catch (e) { count.failed++; row.result = '조회 실패: ' + e.message; if (e.status === 401 || e.status === 403) { stopped = e.message; break; } continue; }
-        // 미리보기 뒤에 누가 가격을 고쳤으면 보내지 않는다.
-        if (JSON.stringify(now.priceInfo.map(e => [e.unitCode, e.price])) !== JSON.stringify(product.priceInfo.map(e => [e.unitCode, e.price])) ||
-            JSON.stringify(now.combos.map(c => c.prices)) !== JSON.stringify(product.combos.map(c => c.prices))) {
+        const listedNow = new Map(api.base(product.prodNo).map(e => [e.unitCode, e.price]));
+        if (product.priceInfo.some(e => listedNow.get(e.unitCode) !== e.price)) {
           count.changedSince++; row.result = '미리보기 뒤에 가격이 바뀌어 보내지 않음'; continue;
         }
-        const w = await writeOne(api, product, p, now);
-        row.result = w.result;
-        if (w.stop) { count.failed++; stopped = w.stop; break; }
-        count.saved++; pending.push({ row, p });
-        if (due(count, pending) && (stopped = await settle(api, pending, count))) break;
+        if ((stopped = await afterWrite(api, product, p, await writeOne(api, product, p), row, saved, count, verified))) break;
       }
     } finally {
-      plan = null;   // 같은 미리보기로 두 번 저장하지 않는다
-      stopped ||= await settleLast(api, pending, count);
+      stopped = await finish(api, saved, count, stopped);
     }
     writeJson(rowsFile, [...results, ...skipped]);   // 건너뛴 상품과 이유도 남긴다(결과 CSV)
     return { count, stopped, results: results.slice(0, 30) };
   }
 
-  // 매일 자동 실행(fx_auto_price.js): 상품마다 읽고 → 계산하고 → 바로 저장한다(미리보기 → 저장처럼 옵션을 두 번 읽지 않는다).
+  // 매일 자동 실행(fx_auto_price.js): 상품마다 읽고 → 계산하고 → 바로 보낸다. 확인은 끝에 한 번에(첫 건만 바로).
   // 10% 넘게 바뀌는 상품은 아마존·eBay 처럼 건너뛴다(화면의 미리보기로 보고 저장). stop: 다음 상품에서 멈춘다.
   async function sync({ stop = () => false } = {}) {
     const { snapshot, api } = await open();
     const site = await api.units();
     const list = await api.list();
-    const rows = [], pending = [], count = { products: list.length, skipped: 0, unchanged: 0, large: 0, saved: 0, failed: 0 };
+    const rows = [], saved = [], verified = {}, count = { products: list.length, skipped: 0, unchanged: 0, large: 0, saved: 0, failed: 0 };
     let stopped = '';
     try {
       for (const [i, row] of list.entries()) {
@@ -465,14 +493,12 @@ export function createImwebUnitPrices({ rates, dir, gateway, clock = Date.now,
         if (p.skip) { count.skipped++; rows.push({ ...row, result: p.skip }); continue; }
         if (!p.changed) { count.unchanged++; rows.push(planRow(product, p, '이미 같은 가격')); continue; }
         if (p.large) { count.large++; rows.push(planRow(product, p, '10% 넘게 바뀌어 자동 저장 안 함 — 미리보기로 확인 후 저장')); continue; }
-        const w = await writeOne(api, product, p, product), done = planRow(product, p, w.result);
+        const done = planRow(product, p, '');
         rows.push(done);
-        if (w.stop) { count.failed++; stopped = w.stop; break; }
-        count.saved++; pending.push({ row: done, p });
-        if (due(count, pending) && (stopped = await settle(api, pending, count))) break;
+        if ((stopped = await afterWrite(api, product, p, await writeOne(api, product, p), done, saved, count, verified))) break;
       }
     } finally {
-      stopped ||= await settleLast(api, pending, count);
+      stopped = await finish(api, saved, count, stopped);
       writeJson(rowsFile, rows);
     }
     return { count, stopped, rate: rateInfo(snapshot) };

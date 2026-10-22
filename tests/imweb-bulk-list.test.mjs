@@ -117,6 +117,27 @@ test('저장: 불러온 뒤 바뀐 값은 보내지 않고(pre-send), 같은 값
   assert.match(gone.error, /조합 od9 을 찾지 못했습니다/);
 });
 
+test('일괄 저장(선택 변경 저장): 같은 상품의 줄은 한 번 읽어 판단하고 바뀌는 줄만 보낸 뒤 한 번 다시 읽어 확인한다', async () => {
+  const { call, head } = fixture();
+  const reads = [];
+  const { product, optionDetails } = head;
+  head.product = async (no, unit) => { reads.push(['product', unit]); return product(no, unit); };
+  head.optionDetails = async (no, unit) => { reads.push(['options', unit]); return optionDetails(no, unit); };
+  head.store[3].uUS.options[1].price = 90;   // od2 는 불러온 뒤 다른 곳에서 바뀜 → 보내지 않는다
+  const res = await call('bulk-save-batch', { jobId: 'imweb-batch-1', scope: 'imweb-en', jobs: [
+    { type: 'price', id: '3', optionId: '', expectedPrice: '58', newPrice: '59' },
+    { type: 'price', id: '3', optionId: 'od1', expectedPrice: '58', newPrice: '58' },
+    { type: 'price', id: '3', optionId: 'od2', expectedPrice: '84', newPrice: '85.5' },
+  ] });
+  assert.equal(res.success, true, res.error);
+  const r = res.data.results;
+  assert.deepEqual(r.map(x => x.success ? x.data.status : x.stage), ['VERIFIED', 'UNCHANGED', 'pre-send']);
+  assert.match(r[2].error, /불러온 뒤 판매가가 바뀌었습니다\(지금 90\)/);
+  assert.deepEqual(head.calls, [['setPrice', '3', 'uUS', 59]], '바뀌는 기본가만 보냈다');
+  assert.deepEqual(reads, [['product', 'uUS'], ['options', 'uUS'], ['product', 'uUS']], '보내기 전 한 번씩, 확인은 보낸 쪽만');
+  assert.equal(head.store[3].uKR.price, 80000, '한국 구역은 그대로');
+});
+
 test('상세 이미지: 그 구역 상세설명의 이미지를 불러와 바꾸고(자리 유지) 다시 읽어 확인한다', async () => {
   const { call, head } = fixture();
   const loaded = await call('bulk-images-load', { scope: 'imweb-ko', id: '3' });

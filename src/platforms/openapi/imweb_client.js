@@ -162,17 +162,31 @@ export function createImwebClient(session, {
     }
   }
 
-  // 목록형 응답({ data: { list, totalPage } })을 끝까지 읽는다.
-  async function all(path, query, { limit = 100, maxPages = 100 } = {}) {
-    const rows = [];
-    for (let page = 1; page <= maxPages; page++) {
-      const data = (await request('GET', path, { query: { ...query, page, limit } }))?.data || {};
-      const list = Array.isArray(data.list) ? data.list : [];
-      rows.push(...list);
-      const totalPage = Number(data.totalPage);
-      if (Number.isFinite(totalPage) ? page >= totalPage : list.length < limit) return rows;
+  // 목록형 응답({ data: { list, totalPage } })을 끝까지 읽는다. 첫 쪽이 쪽 수를 알려 주면 나머지 쪽은 width 개씩 동시에
+  // 읽는다(본사 1,644개 = 17쪽: 한 쪽씩 8~15초 → 3~5초, 2026-10-21 실측). 버킷이 25라 3개 동시는 제한에 걸리지 않고,
+  // 걸려도 request() 가 429 를 물러났다 다시 보낸다. 순서는 쪽 번호대로 둔다. 쪽 수가 없으면 예전처럼 한 쪽씩.
+  async function all(path, query, { limit = 100, maxPages = 100, width = 3 } = {}) {
+    const page = async n => {
+      const data = (await request('GET', path, { query: { ...query, page: n, limit } }))?.data || {};
+      return { list: Array.isArray(data.list) ? data.list : [], totalPage: Number(data.totalPage) };
+    };
+    const first = await page(1);
+    const tooMany = () => new Error(`${path} 가 ${maxPages}쪽을 넘어 끝까지 읽지 못했습니다.`);
+    if (!Number.isFinite(first.totalPage)) {
+      const rows = [...first.list];
+      for (let n = 1, last = first; last.list.length >= limit; ) {
+        if (++n > maxPages) throw tooMany();
+        last = await page(n); rows.push(...last.list);
+      }
+      return rows;
     }
-    throw new Error(`${path} 가 ${maxPages}쪽을 넘어 끝까지 읽지 못했습니다.`);
+    if (first.totalPage > maxPages) throw tooMany();
+    const pages = [first.list];
+    for (let n = 2; n <= first.totalPage; n += width) {
+      const batch = Array.from({ length: Math.min(width, first.totalPage - n + 1) }, (_, k) => page(n + k));
+      pages.push(...(await Promise.all(batch)).map(p => p.list));
+    }
+    return pages.flat();
   }
 
   return {

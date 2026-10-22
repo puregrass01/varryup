@@ -972,8 +972,8 @@
                         <div class="btn-row">
                             <button type="button" class="btn btn-outline btn-sm" onclick="refreshAmazonCache()" id="amzRefreshCacheBtn">전체 목록 동기화</button>
                             <button type="button" class="btn btn-outline btn-sm" onclick="checkAmazonCache()" id="amzCheckCacheBtn">동기화 상태 확인</button>
-                            <!-- 미국 캐시 → 일본어 초안(엑셀 검토용). 아마존에는 아무것도 보내지 않는다(amazon_jp_draft.js). -->
-                            <button type="button" class="btn btn-outline btn-sm" onclick="exportAmazonJpDraft()" id="amzJpDraftBtn">일본 등록 초안 CSV</button>
+                            <!-- 정규화 표 + 미국 실시간 조회 → 일본어 초안(검토 CSV + 업로드 TSV). 아마존에는 아무것도 보내지 않는다(amazon_jp_draft.js). -->
+                            <button type="button" class="btn btn-outline btn-sm" onclick="exportAmazonJpDraft()" id="amzJpDraftBtn">일본 등록 초안 (CSV·업로드 TSV)</button>
                             <!-- 리포트에 brand 열이 없어서 브랜드는 별도 호출로 채운다 (20건씩 묶음). -->
                             <label style="font-size:12px; cursor:pointer; user-select:none; align-self:center;">
                                 <input type="checkbox" id="amzEnrichBrand" checked> 브랜드까지 채우기 (+15~30초)
@@ -3247,22 +3247,37 @@ Upgrade your driving experience today and enjoy peace of mind with every ride!</
             } finally { if (button) button.disabled = false; }
         }
 
-        // 미국 리스팅 캐시로 일본 등록용 초안 CSV 를 만든다. 빈 칸·확인 필요 열은 엑셀에서 사람이 채운다.
+        // 정규화 표 + 아마존 미국 실시간 조회로 일본 등록 초안을 만든다(아마존에는 보내지 않는다).
+        // 검토용 CSV 하나와 업로드용 TSV(검토 끝난 줄만, 999줄씩)를 내려받는다. 빈 칸·확인 필요 열은 엑셀에서 사람이 채운다.
+        ipcRenderer.on('amazon-jp-draft-progress', (_, message) => {
+            const status = document.getElementById('amzJpDraftStatus');
+            if (status && document.getElementById('amzJpDraftBtn')?.disabled) status.textContent = message;
+        });
+        function downloadText(name, text, type) {
+            const url = URL.createObjectURL(new Blob([text], { type }));
+            const a = document.createElement('a');
+            a.href = url; a.download = name; a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
         async function exportAmazonJpDraft() {
             const button = document.getElementById('amzJpDraftBtn');
             const status = document.getElementById('amzJpDraftStatus');
             if (button) button.disabled = true;
-            if (status) status.textContent = '초안을 만드는 중...';
+            if (status) status.textContent = '초안을 만드는 중... (미국 조회 1~2분 + 이미지 글자 확인 몇 분)';
             try {
                 const result = await ipcRenderer.invoke('amazon-jp-draft');
                 if (!result.success) throw new Error(result.error || '초안 생성 실패');
-                const url = URL.createObjectURL(new Blob([result.csv], { type: 'text/csv;charset=utf-8' }));
-                const a = document.createElement('a');
-                a.href = url; a.download = 'amazon-jp-draft-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                const day = new Date().toISOString().slice(0, 10);
+                downloadText(`amazon-jp-draft-${day}.csv`, result.csv, 'text/csv;charset=utf-8');
+                (result.tsv || []).forEach((text, i, all) =>
+                    downloadText(`amazon-jp-upload-${day}${all.length > 1 ? '-' + (i + 1) : ''}.txt`, text, 'text/tab-separated-values;charset=utf-8'));
                 const s = result.summary;
-                const msg = `일본 초안 ${s.total}건 — 일본어 상품명 ${s.titled}건 · 엔화 가격 ${s.priced}건 · 확인 필요 ${s.needsReview}건`
-                    + (result.rateError ? ` (환율 없음: ${result.rateError})` : '');
+                const msg = `일본 초안 ${s.total}건(부모 SKU ${s.parents}개 제외 · 미국 조회 ${s.live}건) — 일본어 상품명 ${s.titled}건 · 엔화 가격 ${s.priced}건`
+                    + ` · 글자 없는 메인 이미지 ${s.mainImage}건 · 일본에 이미 있음 ${s.onJp}건 · 업로드 파일 ${s.ready}건 · 확인 필요 ${s.needsReview}건`
+                    + (result.rateError ? ` (환율 없음: ${result.rateError})` : '')
+                    + (s.jpError ? ` (일본 조회 실패 — 이미 있는 SKU 를 거르지 못함: ${s.jpError})` : '')
+                    + (s.ocrError ? ` (이미지 글자 확인 실패 — 메인 이미지를 고르지 못함: ${s.ocrError})` : '')
+                    + (s.warrantyMissing ? ' · 필수 보증 내용(保証内容)이 비어 있습니다 — 업로드 전에 채우세요' : '');
                 if (status) status.textContent = msg;
                 addLog('amazon', msg, 'success');
             } catch (error) {
@@ -3607,7 +3622,7 @@ Upgrade your driving experience today and enjoy peace of mind with every ride!</
             const btn = document.getElementById('iwB2bLoadBtn');
             btn.disabled = true;
             const orig = btn.innerHTML;
-            btn.innerHTML = '<span class="loader-sm"></span> 검색 중... (브라우저가 열립니다)';
+            btn.innerHTML = '<span class="loader-sm"></span> 검색 중...';
             
             addLog('imweb', idx ? `[B2B] 상품 번호(idx: ${idx})로 세트+개별 묶음 조회 중...` : `[B2B] 검색 중 (${brand} / ${model} / ${code})...`, 'process');
 

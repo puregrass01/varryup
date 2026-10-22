@@ -140,9 +140,12 @@ test('batch IPC saves Imweb prices through the Open API adapter (no longer catal
   for (const scope of ['imweb-en', 'imweb-ko', 'imweb-jp', 'imweb-b2b']) {
     let price = 100;
     const writes = [];
+    // 일괄 저장은 상품마다 한 번 읽고(readPrices) 판단해(checkBefore) 보낸 뒤(sendPrice) 다시 읽는다(saveImwebPrices).
     const imwebBulk = {
-      writePrice: async ({ scope: s, id, optionId, price: next, expected }) => { writes.push([s, id, optionId, next, expected]); price = Number(next); return {}; },
-      currentPrice: async () => price,
+      readPrices: async () => ({ base: price, options: new Map() }),
+      priceIn: now => now.base,
+      checkBefore: (now, ctx) => Number(now) === Number(ctx.price),
+      sendPrice: async (s, id, optionId, next) => { writes.push([s, id, optionId, next]); price = Number(next); },
     };
     const invoke = ipcFixture({ imwebBulk });
     const result = await invoke('bulk-save-batch', input([job(1)], scope));
