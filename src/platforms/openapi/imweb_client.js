@@ -32,6 +32,10 @@ export function createImwebSession({
 }) {
   let current = null;      // { accessToken, refreshToken, expiresAt, scope, clientId }
   let pending = null;      // 동시에 여러 호출이 만료를 만나도 발급은 한 번만
+  // 아임웹이 refreshToken 을 거부하는 사이트가 있다(30170). 한 번 거부당하면 이 세션에서는
+  // 갱신을 다시 시도하지 않는다 — '갱신 실패 → 새로 발급' 두 번 부르던 것이 한 번으로 준다.
+  // (본사몰은 페이지마다 거부당해 호출이 두 배로 들었고, B2B 는 거부가 없었다. 사이트마다 다르다.)
+  let refreshUsable = true;
 
   function accept(token, clientId) {
     const missing = need.filter(s => !token.scope.includes(s));
@@ -55,13 +59,18 @@ export function createImwebSession({
       throw new Error('아임웹 OAuth Client ID / Secret 이 없습니다. 아임웹 탭 > Open API 키의 OAuth 칸에 저장하세요.');
     }
     // 설정에서 앱이 바뀌었으면 옛 리프레시 토큰은 다른 앱의 것이라 쓰지 않는다.
-    if (current?.refreshToken && current.clientId === clientId) {
+    if (refreshUsable && current?.refreshToken && current.clientId === clientId) {
       try {
         const token = await refreshAccessToken({ clientId, clientSecret, refreshToken: current.refreshToken }, { fetchImpl });
         log('[아임웹 API] 토큰 갱신');
         return accept(token, clientId);
       } catch (error) {
-        log(`[아임웹 API] 토큰 갱신 실패(${error.errorCode || error.status || error.message}) — 새로 발급합니다`);
+        if (String(error.errorCode) === '30170') {
+          refreshUsable = false;
+          log('[아임웹 API] 이 사이트는 토큰 갱신을 받지 않습니다(30170) — 이후로는 바로 발급합니다');
+        } else {
+          log(`[아임웹 API] 토큰 갱신 실패(${error.errorCode || error.status || error.message}) — 새로 발급합니다`);
+        }
       }
     }
     // authorize 는 브라우저 주소로 나가는 요청이라 secret 을 넘기지 않는다(교환 단계에서만 쓴다).

@@ -54,7 +54,7 @@ if (!existsSync(venvPython)) {
         '         server/.venv/Scripts/python.exe -m pip install -r server/requirements.txt\n'
     );
 }
-for (const suite of ['test_proxy', 'test_credentials', 'test_public', 'test_ebay_notify', 'test_request_log', 'test_currency_rates']) {
+for (const suite of ['test_proxy', 'test_credentials', 'test_public', 'test_ebay_notify', 'test_request_log']) {
     run(`Python 테스트 — ${suite}`, python, ['-m', 'unittest', 'discover', '-s', 'tests', '-p', `${suite}.py`]);
 }
 

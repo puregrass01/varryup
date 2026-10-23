@@ -9,13 +9,14 @@ import { detectUrlText } from './utils/image_text.js';
 import { registerImwebUnitPricesIPC, createOpenApiGateway } from './imweb_unit_prices.js';
 import { registerImwebUnitNamesIPC } from './imweb_unit_names.js';
 import { createImwebSession, createImwebClient } from './platforms/openapi/imweb_client.js';
+import { createImwebLock } from './utils/imweb_lock.js';
 import { createB2bApi, B2B_SITE_CODE } from './platforms/openapi/imweb_b2b.js';
 import { createImwebBulk } from './imweb_bulk.js';
 import { englishPrice } from './utils/imweb_currency.js';
 import { registerCurrencyRatesIPC } from './currency_rates_ipc.js';
 import { registerEbayIPC } from './ebay_ipc.js';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import fs from 'fs';
 import { NaverSmartStore } from './platforms/naver_smartstore.js';
 import { NaverProducts } from './platforms/naver_products.js';
@@ -84,10 +85,7 @@ const AI_IS_LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(AI_SERV
 const ADMIN_SERVER_URL = (process.env.ADMIN_SERVER_URL || 'https://admin.veryup-domain.duckdns.org').replace(/\/+$/, '');
 // 로그인 후 발급받은 토큰·직원정보 (메모리에만 보관, 파일로 저장하지 않음)
 let serverAuth = null;
-const currencyRatesService = registerCurrencyRatesIPC({
-    app, ipcMain, baseUrl: ADMIN_SERVER_URL,
-    getToken: () => serverAuth?.token,
-});
+const currencyRatesService = registerCurrencyRatesIPC({ app, ipcMain });
 // 서버에서 받은 "로그인(아이디/비번)" 인증키 (플랫폼별). 브라우저 로그인 자동입력에 쓴다.
 // 메모리에만 보관 → 파일로 안 남김.
 let serverCreds = {};
@@ -196,7 +194,7 @@ if (fs.existsSync(fontPath)) {
 
 /** 지금 살아 있는 앱 창들. */
 function liveWindows() {
-    return [upWindow, seedWindow, launcherWindow]
+    return [upWindow, seedWindow, mapWindow, launcherWindow]
         .filter((w) => w && !w.isDestroyed());
 }
 
@@ -225,6 +223,7 @@ function dialogParent() {
 let launcherWindow;
 let seedWindow;
 let upWindow;
+let mapWindow;
 let browser;
 
 // ── Coupang instance (API-based, no browser needed) ──
@@ -452,9 +451,20 @@ function getBrowserSync() {
     return browser;
 }
 
+// 창 4개가 모두 nodeIntegration 이라, 앱 화면(src/ui) 밖 페이지로 넘어가면 그 페이지가 Node 권한을 얻는다 —
+// 링크나 파일을 창에 끌어다 놓기만 해도 그렇다. 화면 밖으로의 이동과 새 창 열기를 막는다.
+// 외부 페이지는 open-external(shell.openExternal)로만 연다.
+const UI_URL = pathToFileURL(path.join(__dirname, 'ui')).href + '/';
+app.on('web-contents-created', (_, contents) => {
+    const block = e => { if (!String(e.url || '').startsWith(UI_URL)) e.preventDefault(); };
+    contents.on('will-navigate', block);
+    contents.on('will-frame-navigate', block);
+    contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+});
+
 function createLauncher() {
     const win = new BrowserWindow({
-        width: 680, height: 480, resizable: false, frame: false,
+        width: 680, height: 560, resizable: false, frame: false,
         webPreferences: { nodeIntegration: true, contextIsolation: false },
         title: 'VERY UP VER3',
     });
@@ -515,6 +525,18 @@ function createUpWindow(mode = 'new') {
         win.webContents.send('veryup-set-mode', upWindowMode);
     });
     win.on('closed', () => { if (upWindow === win) upWindow = null; closeHiddenLauncherIfLast(); });
+    if (launcherWindow) launcherWindow.hide();
+}
+// 베리맵: 코드표 ↔ 채널 대조. 창이 scripts/verimap_*.mjs 를 자식 프로세스로 띄우므로 nodeIntegration 이 필요하다.
+function createMapWindow() {
+    mapWindow = new BrowserWindow({
+        width: 1100, height: 780, minWidth: 820, minHeight: 600, resizable: true, frame: false,
+        webPreferences: { nodeIntegration: true, contextIsolation: false },
+        title: 'VERY MAP',
+    });
+    mapWindow.loadFile(path.join(__dirname, 'ui/index_verimap.html'));
+    const win = mapWindow;
+    win.on('closed', () => { if (mapWindow === win) mapWindow = null; closeHiddenLauncherIfLast(); });
     if (launcherWindow) launcherWindow.hide();
 }
 function createWindow() { createLauncher(); }
@@ -824,6 +846,7 @@ async function reportAiUsage(endpoint, ms) {
 ipcMain.on('launch-app', (event, appName, mode = 'new') => {
     if (appName === 'seed') createSeedWindow();
     else if (appName === 'up') createUpWindow(mode);
+    else if (appName === 'map') createMapWindow();
 });
 
 ipcMain.handle('veryup-get-mode', () => upWindowMode);
@@ -863,7 +886,9 @@ function setupAutoUpdate() {
     try {
         const { autoUpdater } = electronUpdater;
         autoUpdater.autoDownload = true;
-        autoUpdater.autoInstallOnAppQuit = true;
+        // 설치본에 코드 서명이 없어 electron-updater 가 서명을 검사하지 않는다 → 종료할 때 말없이 깔지 않고,
+        // 사람이 '지금 재시작하여 설치' 를 눌렀을 때만 깐다. 서명을 붙이면(build.win.publisherName) 다시 켜도 된다.
+        autoUpdater.autoInstallOnAppQuit = false;
         // 서버(server/public.py)가 UPDATE_TOKEN 을 켜면 /updates/* 는 X-Update-Token 헤더를 요구한다.
         // 클라이언트가 안 보내면 전 직원 업데이트가 401 로 조용히 끊기고(로그 한 줄만 스쳐 지나감)
         // 새 버전이 영영 안 깔린다 → 양쪽 값이 반드시 같아야 한다.
@@ -894,7 +919,7 @@ function setupAutoUpdate() {
                 cancelId: 1,
                 title: '업데이트 준비 완료',
                 message: `새 버전 ${info?.version} 이 준비되었습니다.`,
-                detail: '지금 재시작하면 업데이트가 적용됩니다. "나중에" 를 누르면 다음 종료 시 자동 설치됩니다.',
+                detail: '지금 재시작하면 업데이트가 적용됩니다. "나중에" 를 누르면 다음 실행 때 다시 묻습니다.',
             });
             if (response === 0) { stopAiServers(); autoUpdater.quitAndInstall(); }
         });
@@ -1103,6 +1128,11 @@ function readImwebOpenApiConfig() {
 }
 // 같은 앱이 두 사이트에 연동돼 있다: 본사몰(기본) · B2B몰(B2B_SITE_CODE). 토큰은 사이트마다 따로다.
 const imwebApiClients = new Map();
+// 베리맵 아임웹 수집기(별도 프로세스)와 토큰을 서로 무효화하지 않게, 요청마다 공용 잠금을 잡는다.
+// 1분 동안 요청이 없으면 놓는다 — 그 사이에 수집기를 돌릴 수 있다(utils/imweb_lock.js).
+const imwebLock = createImwebLock(path.join(app.getPath('userData'), 'imweb_api.lock'), { idleMs: 60_000 });
+const imwebLockedFetch = (url, init) => { imwebLock.acquire(); return fetch(url, init); };
+app.on('before-quit', () => imwebLock.release());
 function getImwebApiClient(siteCode) {
     const cfg = readImwebOpenApiConfig();
     const site = siteCode || cfg.siteCode || IMWEB_SITE_CODE;
@@ -1114,8 +1144,9 @@ function getImwebApiClient(siteCode) {
             redirectUri: cfg.redirectUri || IMWEB_REDIRECT_URI,
             need: ['product:write'],
             log: msg => console.log(msg),
+            fetchImpl: imwebLockedFetch,
         });
-        imwebApiClients.set(site, createImwebClient(session, { log: msg => console.log(msg) }));
+        imwebApiClients.set(site, createImwebClient(session, { log: msg => console.log(msg), fetchImpl: imwebLockedFetch }));
     }
     return imwebApiClients.get(site);
 }
@@ -1161,249 +1192,9 @@ ipcMain.handle('naver-key-config-save', (_, data) => {
     catch (e) { return { success: false, error: e.message }; }
 });
 
-// ── 베리업 통합 상품 검색 및 수정 IPC 핸들러 (Section 8 모드 연동) ──
-ipcMain.handle('veryup-search-product', async (event, { country, platform, searchText, brand, model, code }) => {
-    try {
-        console.log(`[veryup-search-product] country=${country}, platform=${platform}, query=${searchText || code || ''}`);
-        const q = String(searchText || '').trim();
-        const b = String(brand || '').trim();
-        const m = String(model || '').trim();
-        const c = String(code || '').trim();
-
-        // 1. 쿠팡
-        if (platform === '쿠팡') {
-            const coupang = getCoupang();
-            coupang.loadConfig();
-            let rows = [];
-            const searchB = b || q;
-            const searchM = m || q;
-            try {
-                rows = await coupang.searchProductsByName(searchB, searchM);
-            } catch (err) {
-                console.warn('[veryup-search-product] 쿠팡 API 검색 실패/시트 폴백 시도:', err.message);
-                try {
-                    rows = await findProductIdsFromSheet(searchB, searchM);
-                } catch (sheetErr) {
-                    console.warn('[veryup-search-product] 쿠팡 시트 검색 실패:', sheetErr.message);
-                }
-            }
-            const items = (rows || []).map(r => ({
-                id: String(r.id),
-                name: r.name || `쿠팡 상품 ${r.id}`,
-                price: '',
-                stock: '',
-                description: ''
-            }));
-            return { items };
-        }
-
-        // 2. 네이버 스마트스토어
-        if (platform === '네이버') {
-            const naverLog = (msg) => {
-                if (upWindow && !upWindow.isDestroyed()) upWindow.webContents.send('veryup-log', { message: `[네이버] ${msg}`, level: 'info' });
-            };
-            const searchB = b || q;
-            const searchM = m || q;
-            const rows = await naverApiRead('상품 조회', api => api.searchProductsByName(searchB, searchM, {
-                // 실계정은 1,800건이 넘어 첫 조회에 페이지를 여러 번 넘긴다. 진행을 알린다.
-                onProgress: (n, total) => { if (total && n < total) naverLog(`상품 수집 ${n}/${total}`); }
-            }), naverLog);
-            const items = (rows || []).map(r => ({
-                id: String(r.id),
-                name: r.name || `네이버 상품 ${r.id}`,
-                price: '',
-                stock: '',
-                description: ''
-            }));
-            return { items };
-        }
-
-        // 3. B2B몰 (아임웹 B2B)
-        if (platform === 'B2B몰') {
-            const imweb = getImwebEdit();   // Open API — 브라우저 없음
-            imweb.logCallback = (msg) => {
-                if (upWindow && !upWindow.isDestroyed()) upWindow.webContents.send('veryup-log', { message: `[B2B] ${msg}`, level: 'info' });
-            };
-            const groups = await imweb.searchProducts({ brand: b, model: m, code: c || q });
-            const items = [];
-            for (const g of (groups || [])) {
-                for (const it of (g.items || [])) {
-                    items.push({
-                        id: String(it.prodNo),
-                        name: it.name,
-                        price: String(it.price || ''),
-                        stock: '',
-                        description: `[${it.type === 'set' ? '세트' : '개별'}] ${g.baseKey || ''}`
-                    });
-                }
-            }
-            return { items };
-        }
-
-        // 4. 아임웹 (자사몰 / 본사·해외몰)
-        if (platform === '아임웹') {
-            await getBrowser();
-            const lang = country === 'USA' ? 'en' : (country === 'JAPAN' ? 'jp' : 'ko');
-            const boardEdit = getImwebBoardEdit();
-            boardEdit.logCallback = (msg) => {
-                if (upWindow && !upWindow.isDestroyed()) upWindow.webContents.send('veryup-log', { message: `[아임웹] ${msg}`, level: 'info' });
-            };
-            const rows = await boardEdit.searchPosts({
-                brand: b || '옵틱글래스',
-                lang,
-                code: c || q
-            });
-            const items = (rows || []).map(r => ({
-                id: String(r.postCode),
-                name: r.subject,
-                price: '',
-                stock: '',
-                description: `[${country}] 게시판: ${r.boardName || ''}`
-            }));
-            return { items };
-        }
-
-        // 5. 아마존
-        if (platform === '아마존') {
-            const amazon = getAmazon();
-            amazon.loadConfig();
-            const marketplaceId = country === 'JAPAN' ? 'A1VC38T7YXB528' : 'ATVPDKIKX0DER';
-            return { items: await amazon.searchProducts({ marketplaceId, searchText: q, brand: b, model: m, code: c }) };
-        }
-
-        // 6. 이베이
-        // 공통 폼의 한글 차량 브랜드·차종은 영문 SKU·제목과 절대 겹치지 않아 0건이 된다.
-        // 검색 자체는 그대로 두고, 왜 0건인지를 stats.reason 으로 함께 돌려준다.
-        if (platform === '이베이') {
-            const stats = {};
-            const items = await getEbay().searchProducts({ searchText: q, brand: b, model: m, code: c }, stats);
-            return { items, stats };
-        }
-
-        return { items: [] };
-    } catch (error) {
-        console.error('[veryup-search-product] 오류:', error);
-        throw error;
-    }
-});
-
-ipcMain.handle('veryup-update-product', async (event, { country, platform, productId, updateData }) => {
-    try {
-        console.log(`[veryup-update-product] platform=${platform}, productId=${productId}`, updateData);
-        const { name, price, stock, description } = updateData || {};
-
-        // 1. 쿠팡
-        if (platform === '쿠팡') {
-            const coupang = getCoupang();
-            coupang.loadConfig();
-            const prod = await coupang.loadProductForEdit(productId);
-            const payload = {
-                productId,
-                title: name,
-            };
-            if (Array.isArray(prod?.options) && prod.options.length > 0) {
-                payload.options = prod.options.map(opt => ({
-                    ...opt,
-                    salePrice: price ? parseInt(price) : opt.salePrice,
-                    stock: stock ? parseInt(stock) : opt.stock
-                }));
-            }
-            if (description) {
-                const imgMatches = [...description.matchAll(/<img[^>]*src=["']([^"']+)["'][^>]*>/gi)].map(m => m[1]);
-                if (imgMatches.length > 0) {
-                    payload.detailImages = imgMatches.map((url, i) => ({ url, originalWidth: 1000, originalHeight: 1000, isNew: true, index: i }));
-                }
-            }
-            await coupang.updateExistingProduct(payload);
-            return { success: true, message: `쿠팡 상품(ID: ${productId}) 수정 완료` };
-        }
-
-        // 2. 네이버 스마트스토어
-        if (platform === '네이버') {
-            const ss = getNaverProducts();
-            const updatePayload = {
-                originNo: productId,
-                title: name,
-            };
-            if (description) {
-                const imgMatches = [...description.matchAll(/<img[^>]*src=["']([^"']+)["'][^>]*>/gi)].map(m => m[1]);
-                if (imgMatches.length > 0) {
-                    updatePayload.detailImages = imgMatches.map(url => ({ url, isNew: true }));
-                }
-            }
-            const res = await ss.updateProduct(updatePayload);
-            return { success: true, message: `네이버 상품 수정 완료 (${res.verified || ''})` };
-        }
-
-        // 3. B2B몰 (아임웹 B2B)
-        if (platform === 'B2B몰') {
-            const imweb = getImwebEdit();   // Open API — 브라우저 없음
-            const cur = await imweb.loadProduct(productId);
-            const payload = {
-                prodNo: productId,
-                title: name,
-            };
-            if (price) payload.price = parseInt(price) || price;
-            if (stock && Array.isArray(cur.combos)) {
-                payload.combos = cur.combos.map(c => ({ ...c, stock: parseInt(stock) || 0 }));
-            }
-            if (description) {
-                const imgMatches = [...description.matchAll(/<img[^>]*src=["']([^"']+)["'][^>]*>/gi)].map(m => m[1]);
-                if (imgMatches.length > 0) {
-                    payload.detailImages = imgMatches;
-                }
-            }
-            const res = await imweb.updateProduct(payload);
-            return { success: true, message: `B2B 상품 수정 완료 (${res})` };
-        }
-
-        // 4. 아임웹 (자사몰 / 본사·해외몰)
-        if (platform === '아임웹') {
-            await getBrowser();
-            const post = await getImwebBoardEdit().loadPost(productId);
-            const res = await getImwebBoardEdit().updatePost({
-                postCode: productId,
-                subject: name,
-                body: description || post.body,
-                boardCode: post.boardCode
-            });
-            return { success: true, message: `아임웹 게시글 수정 완료 (${res})` };
-        }
-
-        // 5. 아마존
-        if (platform === '아마존') {
-            const amazon = getAmazon();
-            amazon.loadConfig();
-            const marketplaceId = country === 'JAPAN' ? 'A1VC38T7YXB528' : (amazon.config?.marketplaceId || 'ATVPDKIKX0DER');
-            await amazon.updateExistingProduct({
-                sku: productId,
-                title: name,
-                titleEn: name,
-                price: price,
-                stock: stock,
-                description: description,
-                marketplaceId
-            });
-            return { success: true, message: `아마존 상품(SKU: ${productId}) 수정 완료` };
-        }
-
-        // 6. 이베이
-        if (platform === '이베이') {
-            const ebay = getEbay();
-            await ebay.updatePriceQuantity({
-                sku: productId,
-                price: price,
-                quantity: stock ? parseInt(stock) : undefined
-            });
-            return { success: true, message: `이베이 상품(SKU: ${productId}) 가격·재고 수정 완료` };
-        }
-
-        throw new Error(`지원되지 않는 플랫폼입니다: ${platform}`);
-    } catch (error) {
-        console.error('[veryup-update-product] 오류:', error);
-        throw error;
-    }
-});
+// 탭이 없는 몰(라쿠텐·쇼피파이)의 수정 모드 카드가 묻는다(index_up.html searchProduct). 그 몰은 연동이 없어 늘 빈 목록이다.
+// 다른 몰 분기와 카드 수정(veryup-update-product)은 화면이 부를 수 없어 10-23 지웠다 — 그 몰들은 각 탭이 찾고 고친다.
+ipcMain.handle('veryup-search-product', () => ({ items: [] }));
 
 // ESM 이미지 호스팅 폴더 경로 (국가별). KOREA=조견표, 그 외(USA 등)=Compatibility Chart
 function esmBasePath(country, category) {
@@ -1745,7 +1536,7 @@ ipcMain.handle('amazon-refresh-cache', async (event, options = {}) => {
         const result = await amazon.refreshListingsCache({
             marketplaceId: options.marketplaceId,
             enrichBrand: options.enrichBrand !== false,
-            onProgress: p => { try { event.sender.send('amazon-cache-progress', p); } catch (_) {} }
+            onProgress: p => { try { event.senderFrame.send('amazon-cache-progress', p); } catch (_) {} }
         });
         return { success: true, ...result };
     } catch (error) {
@@ -1758,7 +1549,7 @@ ipcMain.handle('amazon-refresh-cache', async (event, options = {}) => {
 // 상품은 정규화 표(data/amazon_listings.json), 가격·재고·이미지·ASIN 은 미국 실시간 조회, 일본에 이미 있는 SKU 는
 // 일본에 한 건씩 물어 표시, 메인 이미지는 글자 없는 사진(Windows OCR). 결과: 검토용 CSV + 업로드용 TSV(999줄씩).
 ipcMain.handle('amazon-jp-draft', async (event) => {
-    const progress = message => { try { event.sender.send('amazon-jp-draft-progress', message); } catch { /* 창 닫힘 */ } };
+    const progress = message => { try { event.senderFrame.send('amazon-jp-draft-progress', message); } catch { /* 창 닫힘 */ } };
     try {
         const amazon = getAmazon();
         amazon.loadConfig();
@@ -2212,7 +2003,8 @@ const PAPAGO_LANGS = new Set(['en','ja','zh-CN','zh-TW','vi','id','th','de','ru'
 function getPapagoCreds() {
     if (serverCreds['papago'] && serverCreds['papago'].clientId) return serverCreds['papago'];
     try {
-        const p = path.join(__dirname, '..', 'data', 'papago.json');
+        // 소스 폴더(data/)에 두면 폴더 사본과 함께 새어 나간다 → 개발 PC 도 userData 에 둔다.
+        const p = path.join(app.getPath('userData'), 'papago.json');
         if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf-8'));
     } catch (e) { console.warn('papago.json 읽기 실패:', e.message); }
     if (process.env.PAPAGO_CLIENT_ID) {
@@ -2224,7 +2016,7 @@ function getPapagoCreds() {
 async function papagoTranslate(text, source, target) {
     const creds = getPapagoCreds();
     if (!creds || !creds.clientId) {
-        throw new Error('파파고 인증키가 없습니다. data/papago.json({clientId,clientSecret}) 또는 관리서버(papago)에 등록하세요.');
+        throw new Error('파파고 인증키가 없습니다. userData 의 papago.json({clientId,clientSecret}) 또는 관리서버(papago)에 등록하세요.');
     }
     const res = await fetch('https://papago.apigw.ntruss.com/nmt/v1/translation', {
         method: 'POST',
@@ -2234,6 +2026,7 @@ async function papagoTranslate(text, source, target) {
             'X-NCP-APIGW-API-KEY': creds.clientSecret,
         },
         body: new URLSearchParams({ source, target, text }).toString(),
+        signal: AbortSignal.timeout(30000),
     });
     if (!res.ok) throw new Error('Papago ' + res.status + ': ' + (await res.text()).slice(0, 200));
     const j = await res.json();
@@ -2243,7 +2036,7 @@ async function papagoTranslate(text, source, target) {
 // MyMemory (무료·키 불필요) — 파파고 미지원 언어(아랍어 등) 주력
 async function myMemoryTranslate(text, source, target) {
     const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent(source)}|${encodeURIComponent(target)}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
     if (!res.ok) throw new Error('MyMemory ' + res.status);
     const j = await res.json();
     const out = j.responseData && j.responseData.translatedText;
@@ -2256,7 +2049,7 @@ async function myMemoryTranslate(text, source, target) {
 // 구글 비공식(무료) — 폴백용. 429(요청과다) 자주 발생하므로 보조로만 사용
 async function googleTranslate(text, source, target) {
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(source)}&tl=${encodeURIComponent(target)}&dt=t&q=${encodeURIComponent(text)}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
     if (!res.ok) throw new Error('Google translate ' + res.status);
     const j = await res.json();
     const out = (j[0] || []).map(seg => seg[0]).join('');
@@ -2429,7 +2222,8 @@ ipcMain.handle('generate-ai-image', async (event, data) => {
                 const _t0 = Date.now();
                 const response = await fetch(endpoint, {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    signal: AbortSignal.timeout(120000)   // AI 서버가 멈추면 5분(undici 기본) 대신 2분 뒤 실패로 끝낸다
                 });
 
                 if (!response.ok) {
@@ -2600,7 +2394,7 @@ ipcMain.handle('generate-ai-image', async (event, data) => {
             ctx.fillText(_passLbl,   labelRightCenterX, labelY + labelH / 2);
         }
 
-        const finalBuffer = canvas.toBuffer('image/jpeg');
+        const finalBuffer = await canvas.encode('jpeg');   // 비동기 인코딩 — 동기 toBuffer 와 같은 바이트, 메인 스레드를 막지 않는다
         
         const outputDir = AI_OUTPUT_DIR;
         if (!fs.existsSync(outputDir)) {
@@ -2609,6 +2403,8 @@ ipcMain.handle('generate-ai-image', async (event, data) => {
         const outputPath = path.join(outputDir, 'latest_generated.jpg');
         fs.writeFileSync(outputPath, finalBuffer);
         try { fs.writeFileSync(path.join(outputDir, 'latest_korea.jpg'), finalBuffer); } catch {}
+        // 새 사진에 지난 차의 조견표 URL 이 따라붙지 않게 한다 — 올리면 esm-upload 가 다시 쓴다.
+        fs.rmSync(path.join(outputDir, 'latest_korea_html.txt'), { force: true });
 
         return { success: true, base64: finalBuffer.toString('base64'), outputPath };
 
@@ -2660,7 +2456,7 @@ async function generateIntlImage({ brand, carClass, no, gen, year, code, include
         fd.append('file', blob, 'mirror.jpg');
         const ep = skipAI ? `${AI_SERVER_URL}/predict_clean` : `${AI_SERVER_URL}/predict`;
         const _t0 = Date.now();
-        const res = await fetch(ep, { method: 'POST', body: fd });
+        const res = await fetch(ep, { method: 'POST', body: fd, signal: AbortSignal.timeout(120000) });
         if (!res.ok) throw new Error('AI server error: ' + res.statusText);
         reportAiUsage(skipAI ? 'predict_clean' : 'predict', Date.now() - _t0);
         const img = await loadImage(Buffer.from(await res.arrayBuffer()));
@@ -2767,11 +2563,12 @@ async function generateIntlImage({ brand, carClass, no, gen, year, code, include
     ctx.fillText(isP ? 'R' : 'L', labelLeftCX,  labelY + labelBoxH / 2);
     ctx.fillText(isP ? 'L' : 'R', labelRightCX, labelY + labelBoxH / 2);
 
-    const finalBuffer = canvas.toBuffer('image/jpeg', { quality: 0.93 });
+    const finalBuffer = await canvas.encode('jpeg');   // 예전 { quality: 0.93 } 인자는 무시돼 기본 품질이었다 — 같은 바이트
     const outputDir = AI_OUTPUT_DIR;
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
     const outputPath = path.join(outputDir, 'latest_generated.jpg');
     fs.writeFileSync(outputPath, finalBuffer);
     try { fs.writeFileSync(path.join(outputDir, 'latest_global.jpg'), finalBuffer); } catch {}
+    fs.rmSync(path.join(outputDir, 'latest_global_html.txt'), { force: true });   // 지난 차의 조견표 URL 을 버린다(위와 같은 이유)
     return { success: true, base64: finalBuffer.toString('base64'), outputPath };
 }

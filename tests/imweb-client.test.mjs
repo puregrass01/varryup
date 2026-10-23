@@ -30,7 +30,7 @@ function fakeImweb({ scope = ['site-info:write', 'product:write'], refreshFails 
       const body = new URLSearchParams(options.body);
       log.push(body.get('grantType'));
       if (body.get('grantType') === 'refresh_token' && refreshFails) {
-        return response(400, { statusCode: 400, error: { errorCode: '30101', message: '토큰이 유효하지 않습니다.' } });
+        return response(400, { statusCode: 400, error: { errorCode: typeof refreshFails === 'string' ? refreshFails : '30101', message: '토큰이 유효하지 않습니다.' } });
       }
       n++;
       return response(200, { statusCode: 200, data: { accessToken: jwt(T0 / 1000 + accessTtlSec, 'a' + n), refreshToken: 'r' + n, scope } });
@@ -76,6 +76,17 @@ test('세션: 만료 5분 전부터는 리프레시 토큰으로 갱신하고, �
   await s2.token();
   assert.deepEqual(failing.log, ['authorize', 'authorization_code', 'refresh_token', 'authorize', 'authorization_code']);
   assert.ok(logs.some(m => m.includes('갱신 실패')));
+});
+
+test('세션: 갱신을 30170 으로 거부하는 사이트는 그 뒤로 갱신을 건너뛰고 바로 발급한다', async () => {
+  const fake = fakeImweb({ refreshFails: '30170' });
+  const session = createImwebSession({ credentials: creds, ...target, fetchImpl: fake.impl, now: () => T0 });
+  await session.token();
+  session.invalidate();
+  await session.token();
+  session.invalidate();
+  await session.token();
+  assert.deepEqual(fake.log, ['authorize', 'authorization_code', 'refresh_token', 'authorize', 'authorization_code', 'authorize', 'authorization_code']);
 });
 
 test('세션: 동시에 여러 호출이 와도 발급은 한 번만', async () => {

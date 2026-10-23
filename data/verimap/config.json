@@ -1,0 +1,19 @@
+{
+  "codeTables": [
+    {
+      "name": "자동차",
+      "enabled": true,
+      "sheetId": "1aJFwiBk0R9eFUTIt5UFX26cxCkZnOoZqQmOyKUYZhWY",
+      "gid": "0",
+      "tab": "시트1"
+    },
+    {
+      "name": "오토바이",
+      "enabled": false,
+      "sheetId": "1cRqsQQDj4A9ZOtQrcBq14-9ySqJZQ5O42lSDniRI5jg",
+      "gid": "0",
+      "tab": "기본"
+    }
+  ],
+  "_메모": "enabled:false 면 건너뛴다. gid 는 시트 URL 의 #gid= 뒤 숫자이고, 틀리면 tab(탭 이름) 으로 한 번 더 시도한다."
+}

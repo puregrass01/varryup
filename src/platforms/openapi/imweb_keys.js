@@ -8,6 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { writeJsonAtomic } from '../../utils/json_file.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,9 +33,6 @@ export function saveConfig(newConfig) {
         if (fs.existsSync(p)) cur = JSON.parse(fs.readFileSync(p, 'utf-8')) || {};
     } catch { cur = {}; }
     const merged = { ...cur, ...newConfig };
-    fs.mkdirSync(path.dirname(p), { recursive: true });
-    const tmp = `${p}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(merged, null, 2), 'utf-8');
-    fs.renameSync(tmp, p);
+    writeJsonAtomic(p, merged, 2);
     return merged;
 }

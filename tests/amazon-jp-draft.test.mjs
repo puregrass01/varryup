@@ -394,3 +394,77 @@ test('makeJpDraft: 부모 SKU 는 빼고, 미국 실시간 값·일본에 이미
   assert.equal(row(broken.rows, 'HY0101N135').mainImage, '');
   assert.doesNotMatch(row(broken.rows, 'HY0101N1351').notes, /일본에 이미 있는 SKU/);
 });
+
+// ── 2026-10-22: 사람이 확인한 지정(overrides) — 아임웹 일본몰 이름 · 메인 이미지 · 검토 결과 ──
+
+const draftWith = (items, overrides) => buildJpDraft({ items: items.map(withImage), names: loadVehicleNames({ names, catalog }), fx, snapshot, overrides });
+const iwName = more => ({ makerJa: 'ヒュンダイ', modelJa: 'ノージャ', confidence: 'high', no: '200', prodNo: 1, ...more });
+
+test('지정이 없거나 다른 SKU 것만 있으면 결과가 그대로다', () => {
+  const items = [{ id: 'HY0101N135', price: '109.32' }, { id: 'HY0201N200', price: '109.32' }, { id: 'ZZ-UNKNOWN', price: '50' }];
+  const base = draft(items).rows;
+  const other = { imwebNames: { X: iwName() }, mainImages: { X: { url: 'u' } }, review: { X: { accept: ['차종'], bsa: true, car: { gen: 'g' } } } };
+  for (const o of [undefined, {}, other]) assert.deepEqual(draftWith(items, o).rows, base);
+});
+
+test('아임웹 일본몰 이름은 사전에 없는 빈칸만 채우고, 확실하지 않거나 한글이면 쓰지 않는다', () => {
+  const r = draftWith([{ id: 'HY0201N200', price: '109.32' }], { imwebNames: { HY0201N200: iwName() } }).rows[0];
+  assert.match(r.title, /^OGWM ヒュンダイ ノージャ 1世代 20- X1用 /);
+  assert.equal(r.source, '카탈로그+아임웹 일본몰');
+  assert.doesNotMatch(r.notes, /차종 일본어 없음/);
+  assert.match(r.notes, /일본어 차종: 아임웹 일본몰 상품 1 No\.200/);
+  assert.equal(r.ready, true);
+  // 사전 값이 있으면 사전이 이긴다 · 브랜드로 시작해도 두 번 쓰지 않는다
+  assert.equal(draftWith([{ id: 'HY0101N135', price: '109.32' }], { imwebNames: { HY0101N135: iwName({ modelJa: 'ダミー' }) } }).rows[0].modelJa, 'グレンジャー');
+  assert.match(draftWith([{ id: 'HY0201N200', price: '1' }], { imwebNames: { HY0201N200: iwName({ modelJa: 'ヒュンダイ ノージャ' }) } }).rows[0].title, /^OGWM ヒュンダイ ノージャ 1世代/);
+  for (const bad of [iwName({ modelJa: '노자' }), iwName({ confidence: 'ambiguous' }), iwName({ confidence: undefined })]) {
+    const x = draftWith([{ id: 'HY0201N200', price: '109.32' }], { imwebNames: { HY0201N200: bad } }).rows[0];
+    assert.equal(x.title, '');
+    assert.match(x.notes, /차종 일본어 없음/);
+  }
+});
+
+test('메인 이미지 지정은 OCR 결과보다 앞서고 출처를 메모에 남긴다', () => {
+  const images = { main: '', others: ['u/a', 'u/b'], checked: [{ url: 'u/a', hasText: true, text: 'FIT' }] };
+  const item = { sku: 'HY0101N135', price: '110', live: true, listing: norm('HY0101N135'), images };
+  assert.equal(draftWith([item]).rows[0].ready, false);
+  const r = draftWith([item], { mainImages: { HY0101N135: { url: 'u/b', source: '미국 메인 렌더' } } }).rows[0];
+  assert.equal(r.mainImage, 'u/b');
+  assert.deepEqual(r.otherImages, ['u/a']);
+  assert.match(r.notes, /메인 이미지: 직접 지정 \(미국 메인 렌더\)/);
+  assert.doesNotMatch(r.notes, /글자 없는 메인/);
+  assert.equal(r.ready, true);
+});
+
+test('검토 accept 는 그 메모만 풀고, 상품명·일본 존재 같은 HARD 메모는 못 푼다', () => {
+  const two = norm('HY0101N135', { vehicles: [{ model: '그랜저', gen: '7세대 22.11~현재', option: 'GN7' }, { model: '그랜저', gen: '6세대', option: 'IG' }] });
+  const item = { sku: 'HY0101N135', price: '110', live: true, listing: two };
+  assert.equal(draftWith([item]).rows[0].ready, false);
+  const r = draftWith([item], { review: { HY0101N135: { accept: ['V2 차량 2개'], note: '검토 ok' } } }).rows[0];
+  assert.match(r.notes, /확인함: V2 차량 2개/);
+  assert.match(r.notes, /확인함: 검토 ok/);
+  assert.equal(r.ready, true);
+  assert.equal(draftWith([item], { review: { OTHER: { accept: ['V2 차량 2개'] } } }).rows[0].ready, false);
+  const onJp = draftWith([{ ...item, listing: norm('HY0101N135'), onJp: true }], { review: { HY0101N135: { accept: ['일본에 이미 있는 SKU', ''] } } }).rows[0];
+  assert.doesNotMatch(onJp.notes, /확인함/);
+  assert.equal(onJp.ready, false);
+});
+
+test('검토 bsa·car 는 제목·BSA 등급 검사에 쓰인다', () => {
+  const item = { sku: 'HY0101N135', price: '109.32', live: true, listing: norm('HY0101N135', { bsa: true }) };
+  assert.match(draftWith([item]).rows[0].notes, /가격 등급\(일반 미러\) 다름/);
+  const plain = draftWith([item], { review: { HY0101N135: { bsa: false } } }).rows[0];
+  assert.doesNotMatch(plain.notes, /다름/);
+  assert.doesNotMatch(plain.title + plain.description, /BSA/);
+  const gen = draftWith([item], { review: { HY0101N135: { bsa: false, car: { gen: '7世代 後期型' } } } }).rows[0];
+  assert.match(gen.title, /グレンジャー 7世代 後期型 22\.11-現在 GN7用/);
+  assert.match(gen.source, /검토 수정/);
+});
+
+test('makeJpDraft 도 지정을 buildJpDraft 까지 넘긴다', async () => {
+  const amazon = { async loadProductsForEdit() { return new Map([['HY0101N135', { asin: 'B0NORM135', price: '110', stock: '1', raw: { attributes: {} } }]]); },
+    async skusOnMarketplace() { return new Set(); } };
+  const { rows } = await makeJpDraft({ amazon, listings: [norm('HY0101N135')], detect: async () => [], names: loadVehicleNames({ names, catalog }), fx, snapshot,
+    overrides: { mainImages: { HY0101N135: { url: 'https://i/pick.jpg' } } } });
+  assert.equal(rows[0].mainImage, 'https://i/pick.jpg');
+});

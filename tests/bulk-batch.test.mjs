@@ -114,10 +114,10 @@ test('shared ESM URLs are inspected once per batch, but checked again in the nex
 
 function ipcFixture(services = {}) {
   const handlers = {};
-  registerBulkPriceIPC({ ipcMain: { handle: (c, f) => { handlers[c] = f; } },
+  const service = registerBulkPriceIPC({ ipcMain: { handle: (c, f) => { handlers[c] = f; } },
     amazon: () => services.amazon, naverProducts: () => services.naver, coupang: () => services.coupang, ebay: () => services.ebay,
     imwebBulk: services.imwebBulk, readCatalog: async () => ({}), log: { error() {} }, sleep: async () => {} });
-  return (c, args) => handlers[c](null, args);
+  return Object.assign((c, args) => handlers[c](null, args), { service });
 }
 test('combined product load returns image revision without a second product lookup on each supported mall', async () => {
   for (const scope of ['naver', 'amazon-us', 'amazon-jp', 'ebay', 'coupang']) {
@@ -129,11 +129,11 @@ test('combined product load returns image revision without a second product look
       offer: { status: 'PUBLISHED', pricingSummary: { price: { currency: 'USD', value: '100' } } } };
     const service = { loadConfig() {}, loadProductForEdit: async () => { lookups++; return product; },
       load: async () => { lookups++; return product; }, api: { getItemInventory: async () => ({ salePrice: 100 }) } };
-    const invoke = ipcFixture({ naver: service, amazon: service, ebay: service, coupang: service });
-    const result = await invoke('bulk-price-load', { scope, id: '1', includeImages: true });
-    assert.equal(result.success, true, scope); assert.equal(lookups, 1, scope);
-    assert.equal(result.data[0].imagesReady, true, scope);
-    assert.equal(result.data[0].imageRevision, productImageState(scope, product).imageRevision, scope);
+    // 1건 현재가 조회(load)는 bulk-price-load-many 가 묶음에서 빠진 상품에 쓴다.
+    const rows = await ipcFixture({ naver: service, amazon: service, ebay: service, coupang: service }).service.load({ scope, id: '1', includeImages: true });
+    assert.equal(lookups, 1, scope);
+    assert.equal(rows[0].imagesReady, true, scope);
+    assert.equal(rows[0].imageRevision, productImageState(scope, product).imageRevision, scope);
   }
 });
 test('batch IPC saves Imweb prices through the Open API adapter (no longer catalog-only)', async () => {

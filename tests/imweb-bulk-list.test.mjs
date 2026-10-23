@@ -58,7 +58,14 @@ function fixture() {
   registerBulkPriceIPC({ ipcMain: { handle: (name, fn) => handlers[name] = fn }, readCatalog: () => structuredClone(catalog),
     imwebBulk: createImwebBulk({ clientFor: site => site === 'b2b' ? b2b : head }),
     inspectImages: async () => true, sleep: async () => {}, log: { error() {} } });
-  return { head, b2b, call: (channel, input) => handlers[channel](null, input) };
+  const call = (channel, input) => handlers[channel](null, input);
+  // 저장은 화면처럼 bulk-save-batch 로 한 건씩 보낸다. 입력 검사 오류는 작업 전체 응답, 저장 결과는 results[0].
+  let jobs = 0;
+  const save = async ({ scope, ...job }, type = 'price') => {
+    const res = await call('bulk-save-batch', { jobId: 'imweb-save-' + (++jobs), scope, jobs: [{ type, ...job }] });
+    return res.success ? res.data.results[0] : res;
+  };
+  return { head, b2b, call, save };
 }
 
 test('목록: 범위마다 그 사이트 · 구역의 실제 상품 — 이름 · 기본 판매가 · 통화', async () => {
@@ -78,41 +85,42 @@ test('목록: 범위마다 그 사이트 · 구역의 실제 상품 — 이름 �
 
 test('현재가: 기본 판매가 한 줄 + 조합마다 한 줄(조합가는 최종가), 숨김 조합은 표시, 이미지 상태 포함', async () => {
   const { call } = fixture();
-  const res = await call('bulk-price-load', { scope: 'imweb-en', id: '3', includeImages: true });
+  const res = await call('bulk-price-load-many', { scope: 'imweb-en', ids: ['3'], includeImages: true });
   assert.equal(res.success, true, res.error);
-  assert.deepEqual(res.data.map(r => [r.optionId, r.price, r.variant]), [
+  const rows = res.data.items[0].rows;
+  assert.deepEqual(rows.map(r => [r.optionId, r.price, r.variant]), [
     ['', '58', '기본 판매가 (조합 가격은 아래 줄)'],
     ['od1', '58', '조합 · No BSA / Left'],
     ['od2', '84', '조합 · With BSA / Left · 숨김'],
   ]);
-  assert.deepEqual(res.data[0].images, ['https://img/e1.jpg']);
-  assert.ok(res.data[0].imageRevision);
-  const jp = await call('bulk-price-load', { scope: 'imweb-jp', id: '3' });
-  assert.deepEqual(jp.data.map(r => [r.optionId, r.variant]), [['', '기본 판매가']], '조합이 없으면 기본 판매가 한 줄');
+  assert.deepEqual(rows[0].images, ['https://img/e1.jpg']);
+  assert.ok(rows[0].imageRevision);
+  const jp = await call('bulk-price-load-many', { scope: 'imweb-jp', ids: ['3'] });
+  assert.deepEqual(jp.data.items[0].rows.map(r => [r.optionId, r.variant]), [['', '기본 판매가']], '조합이 없으면 기본 판매가 한 줄');
 });
 
 test('저장: 기본 판매가 · 조합 가격을 그 구역에만 보내고 다시 읽어 확인한다', async () => {
-  const { call, head } = fixture();
-  const base = await call('bulk-price-save', { scope: 'imweb-en', id: '3', optionId: '', expectedPrice: '58', newPrice: '59' });
+  const { save, head } = fixture();
+  const base = await save({ scope: 'imweb-en', id: '3', optionId: '', expectedPrice: '58', newPrice: '59' });
   assert.deepEqual([base.success, base.data?.status], [true, 'VERIFIED'], base.error);
-  const combo = await call('bulk-price-save', { scope: 'imweb-en', id: '3', optionId: 'od2', expectedPrice: '84', newPrice: '85.5' });
+  const combo = await save({ scope: 'imweb-en', id: '3', optionId: 'od2', expectedPrice: '84', newPrice: '85.5' });
   assert.deepEqual([combo.success, combo.data?.status], [true, 'VERIFIED'], combo.error);
   assert.deepEqual(head.calls, [['setPrice', '3', 'uUS', 59], ['setOption', '3', 'od2', 'uUS', 85.5]]);
   assert.deepEqual([head.store[3].uKR.price, head.store[3].uKR.options[1].price], [80000, 115000], '다른 구역(한국)은 그대로');
-  const b2b = await call('bulk-price-save', { scope: 'imweb-b2b', id: '712', optionId: 'odO', expectedPrice: '170000', newPrice: '175000' });
+  const b2b = await save({ scope: 'imweb-b2b', id: '712', optionId: 'odO', expectedPrice: '170000', newPrice: '175000' });
   assert.deepEqual([b2b.success, b2b.data?.status], [true, 'VERIFIED'], b2b.error);
 });
 
 test('저장: 불러온 뒤 바뀐 값은 보내지 않고(pre-send), 같은 값은 보내지 않는다', async () => {
-  const { call, head } = fixture();
+  const { save, head } = fixture();
   head.store[3].uKR.price = 81000;   // 다른 곳에서 바뀜
-  const stale = await call('bulk-price-save', { scope: 'imweb-ko', id: '3', optionId: '', expectedPrice: '80000', newPrice: '82000' });
+  const stale = await save({ scope: 'imweb-ko', id: '3', optionId: '', expectedPrice: '80000', newPrice: '82000' });
   assert.deepEqual([stale.success, stale.stage], [false, 'pre-send']);
   assert.match(stale.error, /불러온 뒤 판매가가 바뀌었습니다\(지금 81000\)/);
-  const same = await call('bulk-price-save', { scope: 'imweb-ko', id: '3', optionId: 'od1', expectedPrice: '80000', newPrice: '80000' });
+  const same = await save({ scope: 'imweb-ko', id: '3', optionId: 'od1', expectedPrice: '80000', newPrice: '80000' });
   assert.deepEqual([same.success, same.data?.status], [true, 'UNCHANGED']);
   assert.equal(head.calls.length, 0, '아무것도 보내지 않았다');
-  const gone = await call('bulk-price-save', { scope: 'imweb-ko', id: '3', optionId: 'od9', expectedPrice: '1', newPrice: '2' });
+  const gone = await save({ scope: 'imweb-ko', id: '3', optionId: 'od9', expectedPrice: '1', newPrice: '2' });
   assert.deepEqual([gone.success, gone.stage], [false, 'pre-send']);
   assert.match(gone.error, /조합 od9 을 찾지 못했습니다/);
 });
@@ -139,10 +147,10 @@ test('일괄 저장(선택 변경 저장): 같은 상품의 줄은 한 번 읽�
 });
 
 test('상세 이미지: 그 구역 상세설명의 이미지를 불러와 바꾸고(자리 유지) 다시 읽어 확인한다', async () => {
-  const { call, head } = fixture();
+  const { call, save, head } = fixture();
   const loaded = await call('bulk-images-load', { scope: 'imweb-ko', id: '3' });
   assert.deepEqual(loaded.data.images, ['https://img/k1.jpg', 'https://img/k2.jpg']);
-  const saved = await call('bulk-images-save', { scope: 'imweb-ko', id: '3', urls: ['https://ai.esmplus.com/n1.jpg'], expectedRevision: loaded.data.revision });
+  const saved = await save({ scope: 'imweb-ko', id: '3', urls: ['https://ai.esmplus.com/n1.jpg'], expectedRevision: loaded.data.revision }, 'images');
   assert.deepEqual([saved.success, saved.data?.status], [true, 'VERIFIED'], saved.error);
   assert.equal(head.store[3].uKR.content, '<p><img src="https://ai.esmplus.com/n1.jpg"></p>');
   assert.equal(head.store[3].uUS.content, '<p><img src="https://img/e1.jpg"></p>', '다른 구역은 그대로');

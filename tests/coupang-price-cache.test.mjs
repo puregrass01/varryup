@@ -216,7 +216,7 @@ test('쿠팡 목록: 불러온 적 있는 상품은 옵션 행으로 펼치고 �
   assert.deepEqual(Object.keys(store.products(VENDOR)).sort(), ['777'], '삭제된 상품(555)은 캐시에서 뺀다');
 });
 
-// ── 상품 일괄 수정 IPC (bulk-price-list → load → save) ──────────────────────
+// ── 상품 일괄 수정 IPC (bulk-price-list → load-many → save-batch) ──────────────────────
 test('일괄 수정: 쿠팡 목록이 마지막으로 읽은 판매가를 (목록) 행으로 보이고, 불러오기·저장이 그 값을 새로 고친다', async t => {
   const { coupang } = coupangWithStore(t);
   const handlers = {};
@@ -246,8 +246,9 @@ test('일괄 수정: 쿠팡 목록이 마지막으로 읽은 판매가를 (목�
   assert.match(listed.data.note, /불러온 적 있는 상품 1개/);
 
   // 저장하면 캐시도 새 판매가다.
-  const saved = await invoke('bulk-price-save', { scope: 'coupang', id: '777', optionId: '5011', newPrice: '120000', expectedPrice: '115000' });
-  assert.equal(saved.data.status, 'VERIFIED');
+  const saved = await invoke('bulk-save-batch', { jobId: 'coupang-cache-1', scope: 'coupang',
+    jobs: [{ type: 'price', id: '777', optionId: '5011', newPrice: '120000', expectedPrice: '115000' }] });
+  assert.equal(saved.data.results[0].data.status, 'VERIFIED');
   listed = await invoke('bulk-price-list', { scope: 'coupang' });
   assert.equal(listed.data.items[0].price, '120000');
 });

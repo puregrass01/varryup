@@ -44,7 +44,6 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 import config
-from currency_rates import currency_rates
 import db
 import crypto
 import proxy
@@ -1068,26 +1067,6 @@ def api_login(request: Request, username: str = Form(...), password: str = Form(
                             status_code=403)
     token = api_signer.dumps({"uid": user["id"]})
     return {"ok": True, "token": token, "name": user["name"], "role": user["role"]}
-
-
-
-@app.on_event("startup")
-def start_currency_rates():
-    currency_rates.start()
-
-
-@app.on_event("shutdown")
-def stop_currency_rates():
-    currency_rates.stop()
-
-
-@app.get("/api/currency-rates")
-def api_currency_rates(authorization: str = Header(None)):
-    if not _auth_by_token(authorization):
-        return JSONResponse({"ok": False, "error": "로그인이 필요합니다."}, status_code=401)
-    result = currency_rates.get()
-    return JSONResponse(result, status_code=200 if result["ok"] else 503,
-                        headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/credentials")

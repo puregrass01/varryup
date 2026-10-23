@@ -14,6 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describeError } from './utils/api_error.js';
+import { writeJsonAtomic } from './utils/json_file.js';
 import { FX_SCOPES, DEFAULT_TIERS, MIN_CHANGE, MAX_AUTO_CHANGE, TIER_BELOW, TIER_ABOVE,
   rateProblem, fromKrw, findTier, planPrice, normalizeTiers, rateInfo } from './utils/fx_pricing.js';
 
@@ -31,11 +32,7 @@ const PREFETCH = { 'amazon-us': 20, 'amazon-jp': 20, ebay: 4 };
 function readJson(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
 }
-function writeJson(file, data) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file + '.tmp', JSON.stringify(data), 'utf8');
-  fs.renameSync(file + '.tmp', file);
-}
+const writeJson = (file, data) => writeJsonAtomic(file, data, 0);
 
 /** userData/fx_auto_price.json — 켜기·대상·등급표·등급 연결·마지막 실행. 행별 결과는 크므로 따로 둔다. */
 export class FxPriceStore {

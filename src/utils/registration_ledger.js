@@ -17,6 +17,7 @@
 //   행은 지우지 않는다. 삭제가 확인된 행은 supersededAt 만 찍는다(나중에 원인을 따라갈 수 있게).
 import fs from 'node:fs';
 import path from 'node:path';
+import { writeJsonAtomic } from './json_file.js';
 
 export const LEDGER_FILE = 'registration_ledger.json';
 
@@ -53,10 +54,7 @@ export class RegistrationLedger {
   }
 
   _write(doc) {
-    fs.mkdirSync(this.directory, { recursive: true });
-    const tmp = `${this.file}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(doc, null, 2), { mode: 0o600 });
-    fs.renameSync(tmp, this.file);
+    writeJsonAtomic(this.file, doc, 2);
   }
 
   /** 매번 파일을 다시 읽는다 — 다른 창·다른 등록이 방금 쓴 행도 보이게. */

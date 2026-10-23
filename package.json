@@ -66,7 +66,8 @@
       "!**/ebay_config.json",
       "!**/ebay_jobs.json",
       "!**/ebay_listings_cache.json",
-      "!**/*.log"
+      "!**/*.log",
+      "!data/verimap/**"
     ],
     "win": {
       "target": "nsis"

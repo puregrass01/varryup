@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { DEFAULT_IMAGE_HTML, esmImagesFromHtml } from './image_defaults.js';
+import { writeJsonAtomic } from './json_file.js';
 
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp)$/i;
 const LABELS = { domestic: '네이버 · 쿠팡 · 아임웹', amazon: 'Amazon', ebay: 'eBay' };
@@ -68,9 +69,7 @@ export class ImageLibrary {
     return p;
   }
   persist() {
-    fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    fs.writeFileSync(`${this.file}.tmp`, JSON.stringify(this.state, null, 2), 'utf8');
-    fs.renameSync(`${this.file}.tmp`, this.file);
+    writeJsonAtomic(this.file, this.state, 2);
   }
   configure(id, changes) {
     if (this.busy) throw new Error('호스팅 작업이 끝난 뒤 설정을 바꿔주세요.');

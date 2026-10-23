@@ -4,15 +4,10 @@
 //   - 파일명을 ebay_config.json 과 분리해 두 플랫폼이 서로를 덮어쓰지 못하게 한다.
 import fs from 'node:fs';
 import path from 'node:path';
+import { writeJsonAtomic } from '../utils/json_file.js';
 
 const SECRET_FIELDS = ['clientSecret'];
 const CONFIG_FIELDS = ['clientId', 'accountId', 'type'];
-
-function writeJson(file, data) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(`${file}.tmp`, JSON.stringify(data, null, 2), { mode: 0o600 });
-  fs.renameSync(`${file}.tmp`, file);
-}
 
 export class NaverStore {
   constructor(directory, safeStorage) {
@@ -67,7 +62,7 @@ export class NaverStore {
     for (const field of SECRET_FIELDS) {
       if (config[field]) saved[`${field}Encrypted`] = this.safeStorage.encryptString(config[field]).toString('base64');
     }
-    writeJson(this.configPath, saved);
+    writeJsonAtomic(this.configPath, saved);
     return this.publicConfig();
   }
 }

@@ -1,0 +1,11 @@
+{
+  "_설명": "현황 칸을 눌렀을 때 열 주소. {id} 자리에 상품번호(해외몰은 게시물 코드)가 들어간다. 주소가 틀리면 이 파일만 고치면 된다 — 프로그램은 건드릴 필요 없다. 값을 비우면 그 채널은 링크 없이 글자만 보인다.",
+  "_메모": "해외몰은 주소를 대조 때 미리 만들어 둔다(게시판번호+idx). 그래서 틀이 {id} 이고, {id} 자리에 완성된 주소가 들어간다. idx 는 22번(본문 읽기)에서 받으므로, 22번을 안 돌리면 관리자 주소로 대신 열린다.",
+  "쿠팡": "{id}",
+  "스마트스토어": "https://smartstore.naver.com/b-store/products/{id}",
+  "본사몰": "https://optic-glass.co.kr/shop_view?idx={id}",
+  "B2B": "https://bb-store.co.kr/shop_view?idx={id}",
+  "해외몰(미국)": "{id}",
+  "해외몰(일본)": "{id}",
+  "_쿠팡_참고": "쿠팡은 대조 때 구매 페이지 주소를 통째로 만들어 둔다(상품번호+itemId+vendorItemId). 그래서 틀이 {id} 다. 판매자 화면(Wing)으로 바꾸고 싶으면 이 값을 https://wing.coupang.com/tenants/seller-web/vendor-inventory/modify?vendorInventoryId={id}&locale=ko_KR 로 두고, verimap_match.mjs 의 쿠팡 url 만들기를 빼면 된다."
+}

@@ -4,6 +4,7 @@
     --seed-primary: #10b981;
     --seed-glow: rgba(16, 185, 129, 0.35);
     --up-primary: #3b82f6;
+    --map-primary: #8b5cf6;
     --up-glow: rgba(59, 130, 246, 0.35);
     --bg: #080f1e;
     --text: #f1f5f9;
@@ -177,6 +178,12 @@ body {
 .up-card:hover { box-shadow: 0 0 0 1px var(--up-primary), 0 16px 40px rgba(59,130,246,0.25); }
 .up-card:hover::before { opacity: 1; }
 
+/* 맵 카드 — 런처는 680px 고정폭이라 3열이 안 들어간다. 2행을 통째로 쓴다. */
+.map-card { grid-column: 1 / -1; padding: 16px 18px; }
+.map-card::before { background: linear-gradient(135deg, rgba(139,92,246,0.12), transparent); }
+.map-card:hover { box-shadow: 0 0 0 1px var(--map-primary), 0 16px 40px rgba(139,92,246,0.25); }
+.map-card:hover::before { opacity: 1; }
+
 /* ── 아이콘 ── */
 .card-icon {
     flex-shrink: 0;
@@ -189,6 +196,7 @@ body {
 }
 .seed-icon { background: rgba(16,185,129,0.15); color: var(--seed-primary); }
 .up-icon   { background: rgba(59,130,246,0.15);  color: var(--up-primary); }
+.map-icon  { background: rgba(139,92,246,0.15); color: var(--map-primary); }
 
 /* ── 카드 콘텐츠 ── */
 .card-content { flex: 1; }
@@ -229,6 +237,7 @@ body {
 }
 .seed-card:hover .card-arrow { color: var(--seed-primary); opacity: 1; }
 .up-card:hover   .card-arrow { color: var(--up-primary);   opacity: 1; }
+.map-card:hover  .card-arrow { color: var(--map-primary);  opacity: 1; }
 
 /* ── 푸터 ── */
 .launcher-footer {

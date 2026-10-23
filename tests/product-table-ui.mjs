@@ -26,7 +26,6 @@ try {
       if (channel === 'ebay-load-product') return { success: true, data: { sku: data, inventory: { product: { title: 'eBay loaded' } }, offer: { offerId: 'offer', status: 'PUBLISHED', availableQuantity: 0, pricingSummary: { price: { value: '1' } } } } };
       if (channel === 'imweb-search-products') return { success: true, groups: [{ baseKey: names[0], items: [{ name: names[0], prodNo: 501, type: 'set', price: 100 }, { name: names[0], prodNo: 502, type: 'indiv', price: 50 }] }] };
       if (channel === 'imweb-search-posts') return { success: true, rows: [{ postCode: "post/'1", subject: "옵틱글래스 현대 그랜저 '20~23' 와이드미러" }] };
-      if (channel === 'veryup-search-product') return { items: window.testProducts };
       return { success: false, error: 'Offline stub' };
     } } });
   });
@@ -88,15 +87,7 @@ try {
   await page.locator('#iwBoardResultList .vu-product-select').click();
   assert.equal(await page.evaluate(() => calls.find(c => c.channel === 'imweb-load-post').data.postCode), "post/'1");
   assert.equal(await page.evaluate(() => calls.some(c => /update|register|publish/.test(c.channel))), false);
-
-  // The shared shell card also uses the same table without changing its edit payload.
-  await page.goto(pathToFileURL(path.resolve('src/ui/index_up.html')).href);
-  await page.evaluate(() => { setSection8Mode('edit', true); return searchProduct('KOREA', 'open1'); });
-  const shell = page.locator('#card-KOREA-open1');
-  await shell.locator('.vu-product-select').first().click();
-  assert.equal(await shell.locator('input[id$="-edit-name"]').inputValue(), '옵틱글래스 현대 그랜저 IG 광각 사이드 와이드미러');
-  await shell.locator('button[id$="-btn-cancel"]').click();
-  assert.equal(await shell.locator('tr.is-selected').count(), 0);
+  // 셸 카드의 상품 표·수정 폼은 10-23 지웠다(탭이 없는 몰은 메인 검색이 늘 빈 목록이라 닿을 수 없었다).
   assert.deepEqual(errors, []);
   console.log('Product tables: all marketplace selection paths, filters, pagination, original titles and no writes passed.');
 } finally { await browser.close(); }

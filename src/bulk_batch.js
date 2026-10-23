@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { describeError } from './utils/api_error.js';
+import { writeJsonAtomic } from './utils/json_file.js';
 
 // 화면에서 파싱·환산한 변경 목록을 한 번에 받는다. 저장소는 전송 계획과 결과만 기록하며
 // 기존 쇼핑몰 목록 DB를 대체하거나 오래된 상품 본문으로 덮어쓰지 않는다.
@@ -12,10 +13,7 @@ export function createBulkBatch({ directory, validate, save, savePrices, groupSi
   const file = id => directory && path.join(directory, 'bulk_changes', id + '.json');
   function persist(record) {
     if (directory) {
-      const target = file(record.jobId);
-      fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.writeFileSync(target + '.tmp', JSON.stringify(record), { mode: 0o600 });
-      fs.renameSync(target + '.tmp', target);
+      writeJsonAtomic(file(record.jobId), record, 0);
     }
     remembered.set(record.jobId, record);
     if (remembered.size > 10) remembered.delete(remembered.keys().next().value);

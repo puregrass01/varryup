@@ -53,12 +53,12 @@ export function registerEbayIPC({ app, ipcMain, safeStorage, shell, uiDirectory,
   handle('ebay-active-summary', s => s.getActiveListingsSummary());
   handle('ebay-cache-summary', s => s.getCachedListingsSummary());
   handle('ebay-refresh-cache', async (s, _, event) => {
-    return s.refreshActiveListingsCache(p => event.sender.send('ebay-cache-progress', p));
+    return s.refreshActiveListingsCache(p => event.senderFrame?.send('ebay-cache-progress', p));
   });
   handle('ebay-migrate-all', async (s, _, event) => {
-    const listings = await s.getAllActiveListings(p => event.sender.send('ebay-migrate-progress', { stage: 'fetch', ...p }));
+    const listings = await s.getAllActiveListings(p => event.senderFrame?.send('ebay-migrate-progress', { stage: 'fetch', ...p }));
     const ids = listings.map(it => it.itemID).filter(Boolean);
-    return s.migrateListings(ids, p => event.sender.send('ebay-migrate-progress', { stage: 'migrate', ...p }));
+    return s.migrateListings(ids, p => event.senderFrame?.send('ebay-migrate-progress', { stage: 'migrate', ...p }));
   });
   handle('ebay-update', (s, input) => s.updatePriceQuantity(input));
   handle('ebay-update-images', (s, input) => s.updateImages(input));

@@ -6,7 +6,7 @@
 //     EditItemMissingError 로 '상품 없음' 실패가 된다
 //   · 아임웹 B2B 는 Open API 저장이라 같이 돈다(불러온 상품이 없으면 '상품 없음'). 자사몰 게시판은 저장할 때
 //     브라우저를 띄우므로 건너뛴다
-//   · 카드 몰에서 상품을 고르면 카드의 '적용' 과 같은 길로 나간다, 저장 실패는 실패로 센다
+//   · 탭의 저장 실패는 실패로 센다(카드 몰은 고를 상품이 없어 늘 '상품 없음' — 카드 수정 길은 10-23 지웠다)
 //   · 도는 중 모드 전환은 거절, 신규 모드에서는 일괄 수정을 거절
 // IPC 는 가짜다 — 채널마다 정해 둔 답을 주고 무엇이 나갔는지 적어 둔다. 실제 수정은 없다.
 import { chromium } from 'playwright';
@@ -147,27 +147,13 @@ try {
       { running: false, disabled: false });
   }
 
-  // ── 카드 몰에서 상품을 고르면 카드의 '적용' 길로 나간다. 저장 실패는 실패로 센다 ──
+  // ── 탭의 저장 실패는 실패로 센다 ──
   {
-    await page.evaluate(() => {
-      window.__script = {
-        'veryup-search-product': { items: [{ id: 'R-1', name: '라쿠텐 EV3', price: '3000', stock: '2', description: '' }] },
-        'veryup-update-product': { success: true, message: '라쿠텐 반영됨' },
-      };
-      return searchProduct('JAPAN', 'open2');
-    });
-    await page.locator('#card-JAPAN-open2 .vu-product-select').click();
-    await page.locator('#card-JAPAN-open2-edit-name').fill('라쿠텐 EV3 고침');
     await form.evaluate(() => { window.__script['coupang-update'] = { success: false, error: '쿠팡 거부: 옵션 형식 오류' }; });
-    const { card, shellCalls } = await bulk();
-    const sent = shellCalls.filter(([c]) => c === 'veryup-update-product').map(([, a]) => a);
-    assert.equal(sent.length, 1);
-    assert.equal(sent[0].productId, 'R-1');
-    assert.equal(sent[0].updateData.name, '라쿠텐 EV3 고침');
-    assert.ok(card.includes('[라쿠텐 일본 R-1] 수정 완료 — 라쿠텐 반영됨'), card);
+    const { card } = await bulk();
     assert.ok(card.includes(`[쿠팡 ${CPID}] 수정 실패: 쿠팡 거부: 옵션 형식 오류`), card);
     assert.ok(card.includes('다시 확인할 몰: 쿠팡'), card);
-    assert.ok(card.includes('일괄 수정 완료 (성공: 3건, 실패: 3건 · 그중 상품 없음 2건, 건너뜀: 1건)'), card);
+    assert.ok(card.includes('일괄 수정 완료 (성공: 2건, 실패: 4건 · 그중 상품 없음 3건, 건너뜀: 1건)'), card);
   }
 
   // ── 도는 중 모드 전환은 거절한다 ──
@@ -191,7 +177,7 @@ try {
     assert.equal(during.mode, 'edit');
     assert.equal(during.editChecked, true);
     assert.match(during.card, /일괄 수정 중에는 모드를 바꿀 수 없습니다 — 끝난 뒤 바꾸세요\. 도중에 바꾸면 남은 몰이 신규 등록으로 넘어갑니다/);
-    assert.match(await page.locator('#bulk-edit-rows').innerText(), /일괄 수정 완료 \(성공: 4건, 실패: 2건 · 그중 상품 없음 2건, 건너뜀: 1건\)/);
+    assert.match(await page.locator('#bulk-edit-rows').innerText(), /일괄 수정 완료 \(성공: 3건, 실패: 3건 · 그중 상품 없음 3건, 건너뜀: 1건\)/);
   }
 
   // ── 아임웹 B2B: 탭에 불러온 세트·개별 묶음을 탭의 저장(Open API imweb-update-group)으로 보낸다 ──
@@ -223,8 +209,8 @@ try {
     assert.deepEqual(sent.products.map(p => [p.prodNo, Number(p.price), p.combos.map(c => Number(c.price))]),
       [[3240, 150000, [150000]], [3241, 80000, [80000, 75000]]], 'B2B 가격은 탭 값 그대로 — 좌측 변경 판매가를 넣지 않는다');
     assert.ok(card.includes('변경 판매가 (원) 160,000원: 넣은 몰이 없습니다'), card);
-    // 쿠팡은 상품번호가 없어 판매가를 못 넣고 실패, 네이버는 상품 없음.
-    assert.ok(card.includes('일괄 수정 완료 (성공: 4건, 실패: 2건 · 그중 상품 없음 1건, 건너뜀: 1건)'), card);
+    // 쿠팡은 상품번호가 없어 판매가를 못 넣고 실패, 네이버·라쿠텐은 상품 없음.
+    assert.ok(card.includes('일괄 수정 완료 (성공: 3건, 실패: 3건 · 그중 상품 없음 2건, 건너뜀: 1건)'), card);
   }
 
   // ════ 변경 판매가 (원 · USD · 엔) ════
@@ -389,7 +375,7 @@ try {
   }
 
   assert.deepEqual(errors, []);
-  console.log('PASS: 일괄 수정 — 수정 모드 전용 버튼, 상품 없는 몰은 EditItemMissingError, 아임웹 B2B(Open API)·게시판 건너뜀, 카드 몰 적용, 실패 세기, 도중 모드 전환 거절, 변경 판매가(목록·몰별 적용·쿠팡 옵션·BSA·사전 검사·숨은 칸·차 바꾸면 비움)');
+  console.log('PASS: 일괄 수정 — 수정 모드 전용 버튼, 상품 없는 몰은 EditItemMissingError, 아임웹 B2B(Open API)·게시판 건너뜀, 카드 몰은 상품 없음, 실패 세기, 도중 모드 전환 거절, 변경 판매가(목록·몰별 적용·쿠팡 옵션·BSA·사전 검사·숨은 칸·차 바꾸면 비움)');
 } finally {
   await browser.close();
 }

@@ -54,3 +54,13 @@ server/ebay_deletions.jsonl
 server/updates/
 server/currency_rates.json
 server/currency_rates.tmp
+
+# 베리맵 수집 결과·캐시(약 58MB, 버튼으로 다시 만든다)와 개인 설정(verimap_ui.json, 직원 아이디).
+# 다시 만들 수 없는 설정·사전 6개만 추적한다 — docs/베리맵_병합안내.md 1항.
+data/verimap/*
+!data/verimap/config.json
+!data/verimap/model_names.json
+!data/verimap/model_aliases.json
+!data/verimap/part_aliases.json
+!data/verimap/verimap_links.json
+!data/verimap/manual_links.json

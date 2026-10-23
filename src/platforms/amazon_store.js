@@ -1,13 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-
-// src/platforms/ebay_store.js writeJson 과 같은 방식 — tmp 에 쓰고 rename 한다.
-// 쓰는 중에 죽어도 잘린 캐시가 남지 않는다.
-function writeJson(file, data) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(`${file}.tmp`, JSON.stringify(data, null, 2), { mode: 0o600 });
-  fs.renameSync(`${file}.tmp`, file);
-}
+import { JsonCache } from '../utils/json_file.js';
 
 const CACHE_FILE = /^amazon_listings_cache_[A-Z0-9]+\.json$/;
 
@@ -15,6 +8,9 @@ const CACHE_FILE = /^amazon_listings_cache_[A-Z0-9]+\.json$/;
  * 아마존 리스팅 로컬 캐시. 마켓플레이스마다 파일 하나다.
  * 예전에는 한 파일(amazon_listings_cache.json)이라 일본을 동기화하면 미국 목록이 지워졌고,
  * 그 뒤 미국 목록은 API 페이징 상한(1000건)에서 잘렸다.
+ *
+ * 마켓마다 JsonCache 하나 — 한 번 읽으면 메모리에 두고, 상품 수정이 고친 행은 모아서 쓴다(json_file.js).
+ * 파일 모양(들여쓰기 2)은 예전 그대로다.
  *
  * amazon_config.json 은 의도적으로 건드리지 않는다. 그 파일은 Amazon.saveConfig 와
  * main_process.mergeIntoConfig(관리 서버 동기화)가 각각 평문 JSON 으로 쓰고 있어서,
@@ -24,6 +20,7 @@ const CACHE_FILE = /^amazon_listings_cache_[A-Z0-9]+\.json$/;
 export class AmazonStore {
   constructor(directory) {
     this.directory = directory;
+    this.caches = new Map();   // 파일 경로 → JsonCache
     // 예전 한 파일짜리 캐시는 그 안의 마켓 파일로 한 번 옮긴다.
     const legacy = path.join(directory, 'amazon_listings_cache.json');
     try {
@@ -38,21 +35,31 @@ export class AmazonStore {
     return path.join(this.directory, `amazon_listings_cache_${mp}.json`);
   }
 
+  cache(marketplaceId) {
+    const file = this.listingsPath(marketplaceId);
+    if (!this.caches.has(file)) this.caches.set(file, new JsonCache(file, { indent: 2, label: '아마존 목록' }));
+    return this.caches.get(file);
+  }
+
   listingsCache(marketplaceId) {
     try {
-      return JSON.parse(fs.readFileSync(this.listingsPath(marketplaceId), 'utf8'));
+      return this.cache(marketplaceId).read();
     } catch {
       return null; // 없거나 손상된 캐시(잘못된 마켓 ID 포함)는 없는 것으로 친다. 다음 새로고침이 덮어쓴다.
     }
   }
 
+  // 전체 동기화 결과는 바로 쓴다 — 수 분 걸려 받은 목록을 타이머에 맡기지 않는다.
   saveListingsCache(data) {
-    writeJson(this.listingsPath(data?.marketplaceId), data);
+    const cache = this.cache(data?.marketplaceId);
+    cache.set(data);
+    cache.flush();
     return data;
   }
 
-  /** 계정이 바뀌면 모든 마켓의 캐시를 지운다. */
+  /** 계정이 바뀌면 모든 마켓의 캐시를 지운다 — 읽어 둔 것(메모리·남은 쓰기)과 아직 안 읽은 파일 모두. */
   clearListingsCache() {
+    for (const cache of this.caches.values()) cache.clear();
     let names = [];
     try { names = fs.readdirSync(this.directory); } catch { return; }
     for (const name of names) {
@@ -60,7 +67,15 @@ export class AmazonStore {
     }
   }
 
-  /** 상품 수정 후 캐시 행을 제자리에서 고친다. 전체 새로고침 없이 목록이 최신값을 보여주도록. */
+  /** 아직 안 쓴 변경을 지금 쓴다(앱을 끌 때). */
+  flush() {
+    for (const cache of this.caches.values()) cache.flush();
+  }
+
+  /**
+   * 상품 수정 후 캐시 행을 제자리에서 고친다. 전체 새로고침 없이 목록이 최신값을 보여주도록.
+   * 파일은 모아서 쓴다 — refreshListings 는 SKU 마다 부르고, 예전처럼 매번 통째로 쓰면 1.9MB × SKU 수다.
+   */
   updateCachedListing(sku, fields = {}, marketplaceId) {
     const cache = this.listingsCache(marketplaceId);
     if (!cache?.items) return;
@@ -68,9 +83,11 @@ export class AmazonStore {
     for (const item of cache.items) {
       if (item.id !== sku) continue;
       for (const key of ['name', 'price', 'stock', 'description', 'brand', 'asin']) {
-        if (fields[key] !== undefined) { item[key] = String(fields[key] ?? ''); changed = true; }
+        if (fields[key] === undefined) continue;
+        const value = String(fields[key] ?? '');
+        if (item[key] !== value) { item[key] = value; changed = true; }
       }
     }
-    if (changed) writeJson(this.listingsPath(marketplaceId), cache);
+    if (changed) this.cache(marketplaceId).set(cache);
   }
 }

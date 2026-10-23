@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VERY UP VER3 - 베리맵</title>
+    <script src="theme.js"></script>
+    <link rel="stylesheet" href="theme.css">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+    <style>
+        html, body { height: 100%; margin: 0; }
+        body { display:flex; flex-direction:column; background:var(--bg-base); color:var(--text-main);
+               font-family:'Inter',-apple-system,'Malgun Gothic',sans-serif; word-break:keep-all; }
+        .map-header { display:flex; align-items:center; justify-content:space-between; padding:12px 20px;
+            flex-shrink:0; background:rgba(139,92,246,0.08); border-bottom:1px solid rgba(139,92,246,0.22);
+            -webkit-app-region:drag; }
+        .map-header-left { display:flex; align-items:center; gap:12px; -webkit-app-region:no-drag; }
+        .back-btn { display:flex; align-items:center; gap:6px; background:var(--ovl-1); border:1px solid var(--ovl-2);
+            color:var(--text-dim); padding:6px 12px; border-radius:8px; cursor:pointer; font-size:.82rem;
+            transition:all .2s; -webkit-app-region:no-drag; }
+        .back-btn:hover { background:var(--ovl-2); color:var(--text-main); }
+        .map-title { font-family:'Outfit',sans-serif; font-size:1.2rem; font-weight:700; }
+        .map-sub { font-size:.78rem; color:var(--text-muted); }
+        .win-btn { width:28px; height:28px; border-radius:50%; border:none; background:var(--ovl-2);
+            color:var(--text-dim); cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; }
+
+        .tabs { display:flex; gap:4px; padding:10px 20px 0; border-bottom:1px solid var(--border); flex-shrink:0; }
+        .tab { background:transparent; border:1px solid transparent; border-bottom:none; color:var(--text-dim);
+            padding:8px 16px; border-radius:8px 8px 0 0; cursor:pointer; font-size:.85rem; font-weight:600; }
+        .tab.on { background:var(--bg-panel); border-color:var(--border); color:var(--text-main); margin-bottom:-1px; }
+
+        .body { flex:1; overflow:auto; padding:18px 20px; }
+        .pane { display:none; }
+        .pane.on { display:block; }
+
+        .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; }
+        .card { background:var(--bg-panel); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+        .card h3 { margin:0 0 4px; font-size:.92rem; font-weight:700; }
+        .card .hint { margin:0 0 12px; font-size:.76rem; color:var(--text-muted); line-height:1.6; }
+        .runs { display:flex; flex-direction:column; gap:7px; }
+        .run { display:flex; align-items:center; gap:9px; width:100%; text-align:left; cursor:pointer;
+            background:var(--bg-card); border:1px solid var(--border); color:var(--text-main);
+            padding:9px 11px; border-radius:8px; font-size:.82rem; transition:all .15s; }
+        .run:hover:not(:disabled) { border-color:#8b5cf6; background:var(--ovl-1); }
+        .run:disabled { opacity:.45; cursor:not-allowed; }
+        .run .n { font-family:ui-monospace,monospace; font-size:.72rem; color:#8b5cf6; min-width:1.4em; }
+        .run .t { flex:1 1 auto; }
+        .run .w { font-size:.7rem; color:var(--text-muted); white-space:nowrap; }
+
+        .bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+        .btn { background:#8b5cf6; border:none; color:#fff; padding:8px 14px; border-radius:8px;
+            cursor:pointer; font-size:.8rem; font-weight:600; }
+        .btn:hover { background:#7c3aed; }
+        .btn.ghost { background:transparent; border:1px solid var(--border); color:var(--text-dim); }
+        select, input[type=text] { background:var(--bg-input); border:1px solid var(--input-border);
+            color:var(--text-main); padding:7px 9px; border-radius:7px; font-size:.8rem; }
+
+        #log { margin:0; background:var(--bg-input); border:1px solid var(--border); border-radius:8px;
+            padding:12px 14px; min-height:120px; max-height:300px; overflow:auto;
+            font-family:ui-monospace,monospace; font-size:.74rem; line-height:1.65; white-space:pre-wrap;
+            color:var(--text-dim); }
+        .err { color:var(--accent-danger); }
+        .ok { color:var(--accent-success); }
+        .dim { color:var(--text-muted); }
+
+        /* table-layout:fixed 라야 칸 폭이 실제로 지정한 값대로 간다. auto 면 브라우저가
+           내용(긴 상품명)에 맞춰 멋대로 늘려서 max-width 를 무시한다. 폭은 colgroup 에서 준다. */
+        /* 너비는 draw() 가 칸 폭 합계로 px 을 박는다 — fixed 레이아웃이 col 폭을 따르려면 확정값이어야 한다. */
+        table { border-collapse:collapse; table-layout:fixed; font-size:.76rem; }
+        th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--ovl-1);
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; box-sizing:border-box; }
+        thead th { position:sticky; top:0; background:var(--bg-panel); font-weight:700; font-size:.73rem;
+            border-bottom:1px solid var(--border); z-index:1; }
+        td.c { text-align:center; }
+        /* 채널 칸에는 상품명·게시물 제목이 들어가 길다. 폭을 묶고 말줄임으로 자른다 —
+           마우스를 올리면 title 로 전체가 뜨고, 칸을 누르면 펼쳐진다. */
+        td.ch { cursor:default; }
+        td.ch.open { white-space:normal; word-break:break-all; overflow:visible; }
+        td.ch a.plink { color:inherit; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+        td.ch a.plink.mini { font-size:.68rem; padding:0 .25em; opacity:.75; text-decoration:none;
+                             border:1px solid var(--ovl-1); border-radius:3px; }
+        /* 수동 확인 칸은 눌러서 고칠 수 있다는 걸 커서로 알린다. 자동 확정과 색을 달리한다. */
+        td.man { cursor:pointer; }
+        /* 수동 확인은 자동과 같은 초록으로 두고, 끝에 작은 '수동' 꼬리표로만 구분한다. */
+        td .mtag { font-size:.6rem; margin-left:.35em; padding:0 .25em; border-radius:3px;
+                   color:#8b5cf6; border:1px solid #8b5cf644; font-weight:400; vertical-align:middle; }
+        td.no-man { color:#ef4444; }
+        td.editing { white-space:normal; overflow:visible; }
+        /* 머리글 오른쪽 끝을 잡아 끌면 폭이 바뀐다. 두 번 누르면 기본 폭으로.
+           (sticky 도 자리잡기 기준이 되므로 relative 로 덮어쓰지 않는다 — 덮으면 머리글 고정이 풀린다) */
+        thead th .rs { position:absolute; top:0; right:0; width:5px; height:100%;
+                       cursor:col-resize; user-select:none; }
+        thead th .rs:hover { background:var(--map-primary, #8b5cf6); opacity:.5; }
+        .yes { color:var(--accent-success); font-weight:700; }
+        .no  { color:var(--accent-danger); }
+        .wrap-t { max-height:460px; overflow:auto; border:1px solid var(--border); border-radius:8px; background:var(--bg-panel); }
+        .stat { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:14px; }
+        .stat div { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:11px 13px; }
+        .stat .k { font-size:.7rem; color:var(--text-muted); display:block; }
+        .stat .v { font-size:1.35rem; font-weight:700; font-variant-numeric:tabular-nums; }
+    </style>
+</head>
+<body>
+
+<div class="map-header">
+    <div class="map-header-left">
+        <button class="back-btn" onclick="goBack()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            런처로
+        </button>
+        <span class="map-title">베리맵</span>
+        <span class="map-sub">차종 코드표 ↔ 채널 등록 현황 대조</span>
+    </div>
+    <div style="display:flex;gap:6px;-webkit-app-region:no-drag;">
+        <button data-theme-toggle class="win-btn" title="밝게 / 어둡게">🌙</button>
+        <button class="win-btn" title="최소화" onclick="require('electron').ipcRenderer.send('minimize-win')">─</button>
+        <button class="win-btn" title="닫기" style="font-size:15px" onclick="require('electron').ipcRenderer.send('close-win')">✕</button>
+    </div>
+</div>
+
+<div class="tabs">
+    <button class="tab on" data-pane="run">수집 · 대조</button>
+    <button class="tab" data-pane="status">현황</button>
+</div>
+
+<div class="body">
+
+  <div class="pane on" id="pane-run">
+    <div class="grid" id="cards"></div>
+    <div class="bar" style="margin-top:16px">
+        <button class="btn ghost" onclick="clearLog()">로그 지우기</button>
+        <button class="btn ghost" onclick="openFolder()">결과 폴더 열기</button>
+        <span id="running" class="dim" style="font-size:.78rem"></span>
+    </div>
+    <pre id="log">대기 중.</pre>
+    <!-- 실행 중인 프로그램이 아이디·비밀번호를 물어볼 때 여기로 답한다.
+         (.bat 에서는 cmd 창에 직접 쳤지만, 이 창에는 입력 칸이 없어 그대로 멈춰 있었다) -->
+    <div class="bar">
+      <span class="dim" style="font-size:.78rem">직원 계정</span>
+      <input id="acc" type="text" autocomplete="off" spellcheck="false" placeholder="아이디"
+             style="width:9rem;padding:.3rem .45rem;font:inherit">
+      <span id="pwstate" class="dim" style="font-size:.74rem"></span>
+      <button id="pwclear" style="padding:.3rem .6rem;font-size:.74rem">비밀번호 잊기</button>
+    </div>
+    <div class="bar" id="askbar" style="display:none">
+      <span id="askmsg" class="dim" style="font-size:.78rem"></span>
+      <input id="askin" type="text" autocomplete="off" spellcheck="false"
+             style="flex:1;min-width:10rem;padding:.35rem .5rem;font:inherit">
+      <button id="asksend" style="padding:.35rem .8rem">보내기</button>
+    </div>
+  </div>
+
+  <div class="pane" id="pane-status">
+    <div class="bar">
+        <button class="btn" onclick="loadStatus()">현황 불러오기</button>
+        <select id="f-ch"><option value="">채널 전체</option></select>
+        <select id="f-st">
+            <option value="">전체</option>
+            <option value="miss">선택 채널 미등록만</option>
+            <option value="none">어느 채널에도 없음</option>
+            <option value="all">전 채널 등록</option>
+        </select>
+        <input type="text" id="f-q" placeholder="제조사·모델명·부품번호 검색" style="flex:1 1 180px">
+        <span id="cnt" class="dim" style="font-size:.78rem"></span>
+    </div>
+    <div class="stat" id="stat"></div>
+    <div class="wrap-t"><table id="tbl"><colgroup></colgroup><thead></thead><tbody></tbody></table></div>
+  </div>
+
+</div>
+
+<script>
+const { ipcRenderer, shell } = require('electron');
+const { spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+VUTheme.init();
+
+const APP_ROOT = path.resolve(__dirname, '..', '..');
+const DIR = path.join(APP_ROOT, 'data', 'verimap');
+
+function goBack() { ipcRenderer.send('close-app'); }
+const logEl = document.getElementById('log');
+function log(msg, cls) {
+    if (logEl.textContent === '대기 중.') logEl.textContent = '';
+    const s = document.createElement('span');
+    if (cls) s.className = cls;
+    s.textContent = msg.endsWith('\n') ? msg : msg + '\n';
+    logEl.appendChild(s);
+    logEl.scrollTop = logEl.scrollHeight;
+}
+function clearLog() { logEl.textContent = '대기 중.'; }
+function openFolder() { shell.openPath(DIR); }
+
+// ── 실행 목록 — 로직은 스크립트에 있고 화면은 실행만 한다. ──
+const TASKS = [
+  ['기준 코드표', [
+    ['1', '코드표 불러오기 + 정규화', 'node', ['scripts/verimap_load_codetable.mjs'], '몇 초'],
+  ]],
+  ['쿠팡', [
+    ['2', '연결 확인', 'node', ['scripts/verimap_collect_coupang.mjs', '--probe'], '몇 초'],
+    ['3', '목록 전량 + 분포', 'node', ['scripts/verimap_collect_coupang.mjs'], '10초'],
+    ['4', '광각미러 상세 + 재고', 'node', ['scripts/verimap_collect_coupang.mjs', '--detail', '--stock', '--category=78732'], '약 8분'],
+  ]],
+  ['스마트스토어', [
+    ['5', '목록 전량', 'electron', ['scripts/verimap_collect_naver.mjs', '--direct'], '2분'],
+    ['6', '광각미러 상세 전량', 'electron', ['scripts/verimap_collect_naver.mjs', '--direct', '--category=50004061', '--detail'], '약 8분'],
+  ]],
+  ['아임웹 - 본사몰(한국) · B2B', [
+    ['7', '진단 - 키 위치 확인', 'node', ['scripts/verimap_collect_imweb.mjs', '--diag'], '즉시'],
+    ['17', '쇼핑 카테고리 목록', 'node', ['scripts/verimap_collect_imweb.mjs', '--no-server', '--cats'], '즉시'],
+    ['11', '본사몰 상품목록 - 내 차 찾기 ver2 만', 'node', ['scripts/verimap_collect_imweb.mjs', '--no-server', '--cat=내차찾기ver2'], '1분'],
+    ['15', '본사몰 옵션 - 확인필요분', 'node', ['scripts/verimap_collect_imweb.mjs', '--no-server', '--options', '--unit=u2026012071cb0d215bc67'], '약 6분'],
+    ['12', 'B2B몰', 'node', ['scripts/verimap_collect_imweb.mjs', '--site=b2b', '--no-server'], '1분'],
+    ['14', 'B2B 옵션 - 확인필요분', 'node', ['scripts/verimap_collect_imweb.mjs', '--site=b2b', '--no-server', '--options'], '약 6분'],
+  ]],
+  ['해외몰(미국 · 일본)', [
+    ['19', '게시판 구조 확인 - 게시판 3개만', 'node', ['scripts/verimap_collect_imweb_boards.mjs', '--boards-limit=3'], '1분'],
+    ['18', '게시판 등록현황 수집', 'node', ['scripts/verimap_collect_imweb_boards.mjs'], '몇 분'],
+    ['20', '게시물 본문 구조 확인 - 3건만', 'node', ['scripts/verimap_collect_imweb_boards.mjs', '--detail', '--detail-limit=3'], '즉시'],
+    ['22', '게시물 본문 읽기 - 확인필요분만', 'node', ['scripts/verimap_collect_imweb_boards.mjs', '--detail'], '약 5분'],
+    ['23', '게시물 본문 읽기 - 전량 (링크용 idx 포함)', 'node', ['scripts/verimap_collect_imweb_boards.mjs', '--detail-all'], '약 15분'],
+  ]],
+  ['대조', [
+    ['21', '코드표 X 전 채널 대조', 'node', ['scripts/verimap_match.mjs'], '몇 초'],
+  ]],
+];
+
+// Electron 바이너리 — 네이버 수집기만 진짜 Electron 이 필요하다(safeStorage 복호화).
+function electronBin() {
+    for (const p of [path.join(APP_ROOT, 'node_modules', 'electron', 'dist', 'electron.exe'),
+                     path.join(APP_ROOT, 'node_modules', 'electron', 'dist', 'electron')]) {
+        if (fs.existsSync(p)) return p;
+    }
+    return null;
+}
+
+let busy = false;
+function renderCards() {
+    const host = document.getElementById('cards');
+    host.innerHTML = '';
+    const NOTE = {
+      '해외몰(미국 · 일본)':
+        '미국몰·일본몰은 상품 페이지가 아니라 게시물로 운영됩니다. 아임웹 Open API 에는 게시판이 ' +
+        '없어서, 베리업이 글을 올릴 때 쓰는 관리자 세션으로 게시판·게시물 목록을 읽어 옵니다. ' +
+        '엣지 창이 열리고 아임웹 관리자에 로그인합니다.',
+    };
+    for (const [title, rows] of TASKS) {
+        const c = document.createElement('div');
+        c.className = 'card';
+        c.innerHTML = `<h3>${title}</h3>`
+          + (NOTE[title] ? `<p class="hint">${NOTE[title]}</p>` : '')
+          + `<div class="runs"></div>`;
+        const box = c.querySelector('.runs');
+        for (const [n, label, kind, args, when] of rows) {
+            const b = document.createElement('button');
+            b.className = 'run';
+            b.innerHTML = `<span class="n">${n}</span><span class="t">${label}</span><span class="w">${when}</span>`;
+            b.onclick = () => run(kind, args, label);
+            box.appendChild(b);
+        }
+        host.appendChild(c);
+    }
+}
+
+function setBusy(on, label) {
+    busy = on;
+    document.querySelectorAll('.run').forEach(b => { b.disabled = on; });
+    document.getElementById('running').textContent = on ? `실행 중: ${label}` : '';
+}
+
+// ── 직원 계정 ──
+// 아이디는 비밀이 아니므로 파일에 적어 두고, 비밀번호는 창을 연 동안만 메모리에 둔다
+// (디스크에 쓰지 않는다). 둘 다 있으면 자식 프로그램이 아무것도 묻지 않는다.
+const UI_CFG = path.join(DIR, 'verimap_ui.json');
+function loadUiCfg() {
+    try { return JSON.parse(fs.readFileSync(UI_CFG, 'utf8')); } catch (e) { return {}; }
+}
+function saveUiCfg(o) {
+    try { fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(UI_CFG, JSON.stringify(o, null, 2), 'utf8'); }
+    catch (e) { log(`✖ 계정 저장 실패: ${e.message}`, 'err'); }
+}
+let ACCOUNT = String(loadUiCfg().user || '');
+let SESSION_PW = '';
+function pwState() {
+    document.getElementById('pwstate').textContent =
+        SESSION_PW ? '비밀번호 기억 중 (이 창을 닫으면 지워짐)' : '비밀번호는 처음 한 번만 물어봅니다';
+    document.getElementById('pwclear').style.display = SESSION_PW ? '' : 'none';
+}
+
+// ── 실행 중 입력 (아이디 · 비밀번호) ──
+let CURRENT = null;
+const ASK_RE = /(아이디|비밀번호|password|client\s*id|client\s*secret|\(y\/n\)|\[y\/n\]|저장할까요|입력)\s*[:?]?\s*$/i;
+function askShow(msg, hidden) {
+    const bar = document.getElementById('askbar');
+    document.getElementById('askmsg').textContent = msg;
+    const inp = document.getElementById('askin');
+    inp.type = hidden ? 'password' : 'text';
+    inp.value = '';
+    bar.style.display = '';
+    inp.focus();
+}
+function askHide() { document.getElementById('askbar').style.display = 'none'; }
+function askCheck(chunk) {
+    const tail = chunk.split(/\r?\n/).pop().trim();
+    if (!tail || !ASK_RE.test(tail)) return;
+    askShow(tail, /비밀번호|password|secret/i.test(tail));
+}
+function askSend() {
+    const inp = document.getElementById('askin');
+    const v = inp.value;
+    if (!CURRENT || !CURRENT.stdin || CURRENT.stdin.destroyed) { log('✖ 보낼 대상이 없습니다 (이미 끝났습니다).', 'err'); askHide(); return; }
+    CURRENT.stdin.write(v + '\n');
+    if (inp.type === 'password' && v) { SESSION_PW = v; pwState(); }
+    log('  > ' + (inp.type === 'password' ? '*'.repeat(v.length) : v), 'ok');
+    inp.value = '';
+    askHide();
+}
+
+function run(kind, args, label) {
+    if (busy) return;
+    let exe, argv, env = { ...process.env };
+    if (kind === 'electron') {
+        exe = electronBin();
+        if (!exe) { log('✖ Electron 실행 파일을 찾지 못했습니다 (node_modules/electron/dist).', 'err'); return; }
+        argv = args;
+    } else {
+        // 시스템에 node 가 없어도 되게, Electron 을 node 모드로 쓴다.
+        exe = process.execPath;
+        argv = args;
+        env.ELECTRON_RUN_AS_NODE = '1';
+    }
+    if (ACCOUNT) env.VERYUP_USER = ACCOUNT;
+    if (SESSION_PW) env.VERYUP_PW = SESSION_PW;
+    setBusy(true, label);
+    log(`\n▶ ${label}`, 'ok');
+    const ps = spawn(exe, argv, { cwd: APP_ROOT, env });
+    CURRENT = ps;
+    const feed = d => {
+        // 물어보는 줄은 줄바꿈 없이 오므로, 마지막 조각을 보고 입력 칸을 띄운다.
+        askCheck(String(d));
+        String(d).split(/\r?\n/).filter(Boolean).forEach(l => log('  ' + l));
+    };
+    ps.stdout.on('data', feed);
+    ps.stderr.on('data', d => String(d).split(/\r?\n/).filter(Boolean).forEach(l => log('  ' + l, 'err')));
+    ps.on('error', e => { log(`✖ 실행 실패: ${e.message}`, 'err'); askHide(); CURRENT = null; setBusy(false); });
+    ps.on('close', code => {
+        askHide(); CURRENT = null;
+        log(code === 0 ? `✔ 끝났습니다 (${label})` : `✖ 종료 코드 ${code} (${label})`, code === 0 ? 'ok' : 'err');
+        setBusy(false);
+        if (code === 0 && /대조/.test(label)) loadStatus();
+    });
+}
+
+// ── 현황 ──
+function parseCSV(text) {
+    const rows = []; let row = [], cell = '', q = false;
+    text = text.replace(/^﻿/, '');
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (q) { if (c === '"') { if (text[i+1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; continue; }
+        if (c === '"') q = true;
+        else if (c === ',') { row.push(cell); cell = ''; }
+        else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+        else if (c !== '\r') cell += c;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows;
+}
+
+// 칸을 눌렀을 때 열 주소. data/verimap/verimap_links.json 에서 읽는다 — 주소가 바뀌면 그 파일만 고치면 된다.
+let LINKS = new Map();      // '행|채널' → [{id, title}]
+let LINKFMT = {};
+function loadLinks() {
+    LINKS = new Map(); LINKFMT = {};
+    try { LINKFMT = JSON.parse(fs.readFileSync(path.join(DIR, 'verimap_links.json'), 'utf8')); } catch (e) {}
+    const f = path.join(DIR, 'match_링크.csv');
+    if (!fs.existsSync(f)) return;
+    const rows = parseCSV(fs.readFileSync(f, 'utf8')).filter(r => r.some(c => String(c).trim()));
+    const head = rows.shift() || [];
+    const iR = head.indexOf('코드표_행'), iC = head.indexOf('채널'), iI = head.indexOf('상품ID'), iT = head.indexOf('제목');
+    for (const r of rows) {
+        const k = `${r[iR]}|${r[iC]}`;
+        if (!LINKS.has(k)) LINKS.set(k, []);
+        LINKS.get(k).push({ id: r[iI], title: r[iT] || '' });
+    }
+}
+function urlFor(ch, id) {
+    const t = LINKFMT[ch];
+    if (!t || !id) return '';
+    // 틀이 '{id}' 뿐이면 id 자체가 완성된 주소다(해외몰) — 인코딩하면 주소가 깨진다.
+    const u = String(t).trim() === '{id}' ? String(id) : String(t).replace('{id}', encodeURIComponent(id));
+    // 주소가 아닌 값(게시물 코드만 들어온 경우 등)을 넘기면 윈도가 폴더 경로로 알아듣고
+    // 탐색기를 연다. http(s) 로 시작할 때만 링크로 본다.
+    return /^https?:\/\//i.test(u) ? u : '';
+}
+
+// ── 수동 확인 ──
+// 대조가 못 잡았지만 사람이 눈으로 확인한 칸. 대조를 다시 돌려도 지워지지 않게 따로 저장한다.
+// 값이 http 로 시작하면 링크로, 아니면 메모로 쓴다.
+const MANUAL_F = path.join(DIR, 'manual_links.json');
+let MANUAL = {};
+// 사람이 하나씩 확인한 링크라 다시 만들 수 없다. 읽지 못했을 때 빈 목록으로 시작해 저장하면 하나뿐인 사본이
+// 덮여 사라진다 — 그래서 파일이 없을 때만 빈 목록이고, 깨졌으면 옆으로 옮겨 보존하고 다시 불러올 때까지 저장을 막는다.
+// (registration_ledger.js _read 와 같은 생각. 이 창은 ESM src 모듈을 require 하지 못해 여기 둔다.)
+let MANUAL_BROKEN = false;
+function loadManual() {
+    MANUAL = {};
+    MANUAL_BROKEN = false;
+    let raw;
+    try { raw = fs.readFileSync(MANUAL_F, 'utf8'); }
+    catch (e) { if (e.code !== 'ENOENT') manualBroken(e); return; }
+    try {
+        const doc = JSON.parse(raw);
+        if (!doc || typeof doc !== 'object' || Array.isArray(doc)) throw new Error('객체가 아닙니다');
+        MANUAL = doc;
+    } catch (e) { manualBroken(e); return; }
+    // 예전엔 값이 그냥 문자열(링크)이었다 — 지금 형식으로 맞춘다.
+    for (const [k, v] of Object.entries(MANUAL)) {
+        if (typeof v === 'string') MANUAL[k] = { s: 'ok', v };
+    }
+}
+function manualBroken(e) {
+    MANUAL_BROKEN = true;
+    const moved = MANUAL_F + '.corrupt-' + Date.now();
+    let where;
+    try { fs.renameSync(MANUAL_F, moved); where = `${path.basename(moved)} 로 옮겨 두었습니다`; }
+    catch (e2) { where = `옮기지도 못해 그대로 둡니다(${e2.message})`; }
+    log(`✖ 수동 확인 목록 manual_links.json 을 읽지 못했습니다(${e.message}) — ${where}. `
+        + '빈 목록으로 덮어쓰지 않게 저장을 막습니다. 파일을 고쳐 manual_links.json 으로 되돌린 뒤 [현황 불러오기]를 누르세요.', 'err');
+}
+const man = (r, ch) => MANUAL[manKey(r, ch)] || null;
+function saveManual() {
+    if (MANUAL_BROKEN) { log('✖ 수동 확인 목록을 읽지 못한 상태라 저장하지 않았습니다 — 위 안내대로 고친 뒤 [현황 불러오기]를 누르세요.', 'err'); return; }
+    // tmp 에 쓰고 바꿔 끼운다 — 쓰는 중에 창이 닫혀도 잘린 파일이 남지 않는다.
+    try {
+        fs.mkdirSync(DIR, { recursive: true });
+        fs.writeFileSync(MANUAL_F + '.tmp', JSON.stringify(MANUAL, null, 2), 'utf8');
+        fs.renameSync(MANUAL_F + '.tmp', MANUAL_F);
+    }
+    catch (e) { log(`✖ 수동 확인 저장 실패: ${e.message}`, 'err'); }
+}
+// 열쇠를 행 번호로 쓰면 코드표에 행이 끼어들 때 표시가 엉뚱한 차종에 붙는다.
+// 부품번호+모델명+세대 로 묶는다 — 994행 중 987개가 고유하다(부품번호+모델명만이면 967개).
+// 연식은 '~현재' 가 늘어나며 바뀌어서 뺐다.
+const mnorm = v => String(v ?? '').replace(/\s+/g, '').toLowerCase();
+const manKey = (r, ch) => [mnorm(r['부품번호']), mnorm(r['모델명']), mnorm(r['세대']), ch].join('|');
+
+let STATUS = null, CHANS = [];
+function loadStatus() {
+    const f = path.join(DIR, 'match_현황.csv');
+    if (!fs.existsSync(f)) { log('✖ match_현황.csv 가 없습니다 — 먼저 대조를 실행하세요.', 'err'); return; }
+    const rows = parseCSV(fs.readFileSync(f, 'utf8')).filter(r => r.some(c => String(c).trim()));
+    const head = rows.shift();
+    const fixed = ['코드표_행','부품번호','제조사','모델명','세대','연식','등록채널수'];
+    CHANS = head.filter(h => !fixed.includes(h));
+    STATUS = rows.map(r => Object.fromEntries(head.map((h, i) => [h, r[i] ?? ''])));
+    loadLinks();
+    loadManual();
+
+    const sel = document.getElementById('f-ch');
+    sel.innerHTML = '<option value="">채널 전체</option>' + CHANS.map(c => `<option>${c}</option>`).join('');
+
+    const st = document.getElementById('stat');
+    st.innerHTML = `<div><span class="k">코드표 행</span><span class="v">${STATUS.length}</span></div>`
+      + CHANS.map(c => {
+          const n = STATUS.filter(r => r[c]).length;
+          return `<div><span class="k">${c}</span><span class="v">${n}</span><span class="k">미등록 ${STATUS.length - n}</span></div>`;
+        }).join('')
+      + `<div><span class="k">어느 채널에도 없음</span><span class="v">${STATUS.filter(r => Number(r['등록채널수']) === 0).length}</span></div>`;
+    draw();
+    log(`현황 ${STATUS.length}행 / 채널 ${CHANS.length}개 불러옴`, 'ok');
+}
+
+// ── 칸 폭 ──
+// 기본값(px). 사용자가 끌어서 바꾼 값은 verimap_ui.json 의 colw 에 남아 다음에도 그대로 쓴다.
+const COLW_DEFAULT = { '코드표_행': 44, '부품번호': 72, '제조사': 70, '모델명': 110,
+                       '세대': 62, '연식': 88, '등록채널수': 40 };
+const COLW_CHANNEL = 140;
+let COLW = (loadUiCfg().colw) || {};
+function colWidth(c) {
+    const v = Number(COLW[c]);
+    if (Number.isFinite(v) && v >= 24) return Math.round(v);
+    return COLW_DEFAULT[c] ?? COLW_CHANNEL;
+}
+function saveColW() {
+    const cfg = loadUiCfg(); cfg.colw = COLW; saveUiCfg(cfg);
+}
+function bindResize() {
+    const cols = document.querySelectorAll('#tbl colgroup col');
+    document.querySelectorAll('#tbl thead .rs').forEach(h => {
+        h.addEventListener('mousedown', e => {
+            e.preventDefault(); e.stopPropagation();
+            const th = h.parentElement;
+            const i = Number(th.dataset.i), name = th.dataset.col;
+            const startX = e.clientX, startW = cols[i].getBoundingClientRect().width || colWidth(name);
+            const tbl = document.getElementById('tbl');
+            const startTotal = parseFloat(tbl.style.width) || tbl.getBoundingClientRect().width;
+            const move = ev => {
+                const w = Math.max(28, Math.round(startW + (ev.clientX - startX)));
+                cols[i].style.width = w + 'px';
+                tbl.style.width = Math.round(startTotal + (w - startW)) + 'px';
+                COLW[name] = w;
+            };
+            const up = () => {
+                document.removeEventListener('mousemove', move);
+                document.removeEventListener('mouseup', up);
+                document.body.style.cursor = '';
+                saveColW();
+            };
+            document.addEventListener('mousemove', move);
+            document.addEventListener('mouseup', up);
+            document.body.style.cursor = 'col-resize';
+        });
+        // 경계를 두 번 누르면 그 칸만 기본 폭으로 되돌린다.
+        h.addEventListener('dblclick', e => {
+            e.preventDefault(); e.stopPropagation();
+            delete COLW[h.parentElement.dataset.col];
+            saveColW(); draw();
+        });
+    });
+}
+
+const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function draw() {
+    if (!STATUS) return;
+    const ch = document.getElementById('f-ch').value;
+    const mode = document.getElementById('f-st').value;
+    const q = document.getElementById('f-q').value.trim().toLowerCase();
+    let rows = STATUS;
+    // 수동 확인한 칸은 '등록된 것' 으로 친다 — 사람이 눈으로 본 쪽이 맞다.
+    const has = (r, c) => {
+        const m = man(r, c);
+        if (m) return m.s === 'ok';
+        return Boolean(r[c]);
+    };
+    const cnt = r => CHANS.filter(c => has(r, c)).length;
+    if (mode === 'miss') rows = rows.filter(r => ch ? !has(r, ch) : cnt(r) < CHANS.length);
+    else if (mode === 'none') rows = rows.filter(r => cnt(r) === 0);
+    else if (mode === 'all') rows = rows.filter(r => cnt(r) === CHANS.length);
+    if (q) rows = rows.filter(r => ['제조사','모델명','부품번호','세대','연식'].some(k => String(r[k]).toLowerCase().includes(q)));
+
+    const cols = ['코드표_행','부품번호','제조사','모델명','세대','연식', ...CHANS, '등록채널수'];
+    // table-layout:fixed 는 표 너비가 확정일 때만 col 폭을 따른다. width:max-content 처럼
+    // 자동이면 브라우저가 auto 계산으로 되돌아가 긴 내용(모델명)에 맞춰 칸을 벌려 버린다.
+    const total = cols.reduce((a, c) => a + colWidth(c), 0);
+    const tbl = document.getElementById('tbl');
+    tbl.style.width = total + 'px';
+    tbl.querySelector('colgroup').innerHTML =
+        cols.map(c => `<col style="width:${colWidth(c)}px">`).join('');
+    // 머리글 오른쪽 끝을 끌면 폭이 바뀐다. 바꾼 값은 verimap_ui.json 에 남는다.
+    document.querySelector('#tbl thead').innerHTML = '<tr>' + cols.map((c, i) =>
+        `<th title="${esc(c)}" data-i="${i}" data-col="${esc(c)}">${esc(c)}<span class="rs"></span></th>`).join('') + '</tr>';
+    bindResize();
+    const body = rows.slice(0, 1200).map(r => '<tr>' + cols.map(c => {
+        if (CHANS.includes(c)) return channelCell(r, c);
+        if (c === '등록채널수') {
+            const n = CHANS.filter(x => {
+                const m = man(r, x);
+                return m ? m.s === 'ok' : Boolean(r[x]);
+            }).length;
+            // 이름을 man 으로 두면 바로 위에서 쓰는 수동확인 함수 man() 을 가려 버린다.
+            const manDiff = n - Number(r['등록채널수'] || 0);
+            return `<td title="자동 ${r['등록채널수']} + 수동 ${manDiff}">${n}</td>`;
+        }
+        const t = r[c] ?? '';
+        return `<td title="${esc(t)}">${esc(t)}</td>`;
+    }).join('') + '</tr>').join('');
+    document.querySelector('#tbl tbody').innerHTML = body;
+    // 링크는 기본 브라우저로 연다. 링크가 없는 칸은 눌러서 펼쳤다 접었다 한다.
+    document.querySelectorAll('#tbl a.plink').forEach(a =>
+        a.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); shell.openExternal(a.dataset.u); }));
+    // 빈 칸은 한 번 눌러 바로 입력, 내용이 있는 칸은 한 번 = 펼치기 / 두 번 = 수동 표시 고치기.
+    document.querySelectorAll('#tbl td.man').forEach(td => {
+        const empty = td.classList.contains('no') && !MANUAL[td.dataset.key];
+        td.addEventListener('click', e => {
+            if (e.target.tagName === 'A' || td.classList.contains('editing')) return;
+            if (empty) editManual(td); else td.classList.toggle('open');
+        });
+        td.addEventListener('dblclick', e => {
+            if (e.target.tagName === 'A') return;
+            td.classList.remove('open');
+            editManual(td);
+        });
+    });
+    document.getElementById('cnt').textContent =
+        `${rows.length}행${rows.length > 1200 ? ' (1200행까지 표시)' : ''}`;
+}
+
+/**
+ * 채널 칸 하나. 자동 대조 결과 위에 사람이 손으로 덮어쓴 값(MANUAL)이 있으면 그쪽을 따른다 —
+ * 'no' 는 "자동으로는 잡혔지만 실제로는 누락" (잘못 올라간 상품이 걸린 경우),
+ * 'ok' 는 "자동으로는 못 잡았지만 실제로는 등록돼 있음".
+ */
+/** 수동 입력값을 주소와 제목으로 가른다. '제목 | 링크', '링크', '메모' 모두 받는다. */
+function splitManual(v) {
+    const raw = String(v ?? '').trim();
+    const m = raw.match(/https?:\/\/\S+/i);
+    if (!m) return { url: '', label: raw };
+    const url = m[0];
+    const label = (raw.slice(0, m.index) + ' ' + raw.slice(m.index + url.length))
+        .replace(/[|·\-–—]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return { url, label };
+}
+
+function channelCell(r, c) {
+    const row = r['코드표_행'];
+    const auto = r[c] || '';
+    const m = man(r, c);
+    const at = ` data-key="${esc(manKey(r, c))}" data-ch="${esc(c)}" data-row="${esc(row)}"`;
+
+    if (m && m.s === 'no') {
+        const memo = m.v ? ` — ${m.v}` : '';
+        return `<td class="ch man no-man"${at} title="수동: 누락으로 표시${esc(memo)}${auto ? ' (자동: ' + esc(auto) + ')' : ''}">누락(수동)${m.v ? ' ' + esc(m.v) : ''}</td>`;
+    }
+    if (!auto) {
+        if (!m) return `<td class="c no man"${at} title="눌러서 직접 확인 입력">·</td>`;
+        // 자동으로 잡힌 칸과 같아 보이게 — 초록 글씨에 제목. 값에서 주소와 제목을 갈라 쓴다.
+        // '제목 | 링크' 로 적으면 제목이 보이고, 주소만 적으면 코드표 모델명을 제목 대신 쓴다.
+        const { url, label } = splitManual(m.v);
+        const text = label || r['모델명'] || '수동 확인';
+        const inner = url
+            ? `<a href="#" class="plink" data-u="${esc(url)}">${esc(text)}</a>`
+            : esc(text);
+        return `<td class="ch yes man"${at} title="수동 확인 — ${esc(m.v || '')}">${inner}<span class="mtag">수동</span></td>`;
+    }
+    const hits = (LINKS.get(`${row}|${c}`) || []).filter(h => urlFor(c, h.id));
+    const mark = m && m.s === 'ok' ? ' ✓' : '';
+    if (!hits.length) return `<td class="ch yes man"${at} title="${esc(auto)}">${esc(auto)}${mark}</td>`;
+    const main = `<a href="#" class="plink" data-u="${esc(urlFor(c, hits[0].id))}" title="${esc(auto)}">${esc(auto)}</a>`;
+    const more = hits.slice(1).map((h, i) =>
+        ` <a href="#" class="plink mini" data-u="${esc(urlFor(c, h.id))}" title="${esc(h.title)}">${i + 2}</a>`).join('');
+    return `<td class="ch yes man"${at}>${main}${more}${mark}</td>`;
+}
+
+// 칸 자리에서 바로 고친다 — 일렉트론 창에서는 prompt() 가 막혀 있어 입력칸을 심는다.
+function editManual(td) {
+    if (td.querySelector('input')) return;
+    const row = td.dataset.row, ch = td.dataset.ch, key = td.dataset.key;
+    const cur = MANUAL[key] || null;
+    td.classList.add('editing');
+    td.innerHTML = '';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.value = cur ? (cur.v || '') : '';
+    inp.placeholder = '제목 | 링크  (또는 링크만, 또는 메모만)';
+    inp.style.cssText = 'width:100%;font:inherit;padding:1px 3px';
+    const btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;gap:3px;margin-top:3px';
+    const mk = (text, title, fn) => {
+        const b = document.createElement('button');
+        b.textContent = text; b.title = title;
+        b.style.cssText = 'font-size:.66rem;padding:1px 5px;cursor:pointer';
+        b.onmousedown = e => { e.preventDefault(); };   // blur 로 먼저 닫히지 않게
+        b.onclick = fn;
+        return b;
+    };
+    const apply = state => {
+        const v = inp.value.trim();
+        if (state === null) { delete MANUAL[key]; log(`수동 표시 지움: ${ch} / 코드표 ${row}행`, 'dim'); }
+        else {
+            MANUAL[key] = { s: state, v };
+            log(`수동 ${state === 'ok' ? '등록' : '누락'} 표시: ${ch} / 코드표 ${row}행${v ? ' — ' + v : ''}`, 'dim');
+        }
+        saveManual();
+        draw();
+    };
+    btns.append(
+        mk('등록', '실제로는 등록돼 있다고 표시 (링크를 넣으면 눌러서 열림)', () => apply('ok')),
+        mk('누락', '자동으로는 잡혔지만 실제로는 누락이라고 표시', () => apply('no')),
+        mk('지우기', '수동 표시를 없애고 자동 결과로 되돌린다', () => apply(null)),
+    );
+    td.append(inp, btns);
+    inp.focus();
+    inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter') apply('ok');
+        else if (e.key === 'Escape') draw();
+    });
+}
+
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+    document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + t.dataset.pane));
+    if (t.dataset.pane === 'status' && !STATUS) loadStatus();
+});
+['f-ch','f-st','f-q'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener(id === 'f-q' ? 'input' : 'change', draw);
+});
+
+const accEl = document.getElementById('acc');
+accEl.value = ACCOUNT;
+accEl.addEventListener('change', () => {
+    ACCOUNT = accEl.value.trim();
+    const cfg = loadUiCfg(); cfg.user = ACCOUNT; saveUiCfg(cfg);
+    log(ACCOUNT ? `직원 계정 아이디를 기억합니다: ${ACCOUNT}` : '직원 계정 아이디를 지웠습니다.', 'dim');
+});
+document.getElementById('pwclear').onclick = () => { SESSION_PW = ''; pwState(); log('비밀번호를 잊었습니다.', 'dim'); };
+pwState();
+
+document.getElementById('asksend').onclick = askSend;
+document.getElementById('askin').addEventListener('keydown', e => { if (e.key === 'Enter') askSend(); });
+
+renderCards();
+log(`작업 폴더: ${APP_ROOT}`, 'dim');
+if (fs.existsSync(path.join(DIR, 'match_현황.csv'))) log('이전 대조 결과가 있습니다 — 현황 탭에서 볼 수 있습니다.', 'dim');
+</script>
+</body>
+</html>

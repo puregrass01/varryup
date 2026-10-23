@@ -3,6 +3,7 @@ import { markPreSend } from '../utils/api_error.js';
 import { amazonImageUrls, parseImageUrls, sameImages } from '../utils/bulk_images.js';
 import { matchesProduct } from './product_search.js';
 import { amazonSkuOf, amazonMarketplaceOf } from '../utils/duplicate_guard.js';
+import { writeJsonAtomic } from '../utils/json_file.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -282,15 +283,8 @@ export class Amazon {
 
     const merged = cleanAmazonConfig({ ...current, ...newConfig });
 
-    const dir = path.dirname(this.configPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
     // tmp → rename 으로 원자적으로 쓴다. 쓰다가 죽어도 기존 설정이 잘린 채 남지 않는다.
-    // (같은 저장소의 src/platforms/ebay_store.js writeJson 과 같은 방식)
-    const tmp = `${this.configPath}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(merged, null, 2), 'utf-8');
-    fs.renameSync(tmp, this.configPath);
+    writeJsonAtomic(this.configPath, merged);
 
     this.config = merged;
     this.api = null; // 인스턴스 재생성 대기

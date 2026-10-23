@@ -116,6 +116,22 @@
                     <div class="card-arrow">→</div>
                 </button>
 
+                <!-- 베리맵 카드 -->
+                <button class="app-card map-card" onclick="launchMap()">
+                    <div class="card-icon map-icon">
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <polygon points="1 6 8 3 16 6 23 3 23 18 16 21 8 18 1 21 1 6"/>
+                            <line x1="8" y1="3" x2="8" y2="18"/>
+                            <line x1="16" y1="6" x2="16" y2="21"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <h2>베리맵</h2>
+                        <p>차종 코드표 ↔ 채널 등록 현황 대조</p>
+                    </div>
+                    <div class="card-arrow">→</div>
+                </button>
+
             </div>
 
             <p class="launcher-footer">VERY UP VER3 &nbsp;·&nbsp; Optic Glass Commerce Automation</p>
@@ -199,6 +215,9 @@
 
         function launchSeed() {
             ipcRenderer.send('launch-app', 'seed');
+        }
+        function launchMap() {
+            ipcRenderer.send('launch-app', 'map');
         }
         function launchUp() {
             ipcRenderer.send('launch-app', 'up');

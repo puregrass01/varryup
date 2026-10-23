@@ -2,6 +2,7 @@ import { CoupangAPI } from './coupang_api.js';
 import { markPreSend } from '../utils/api_error.js';
 import { extractNaverDetailImages, replaceNaverDetailImages } from './naver_products.js';
 import { parseImageUrls } from '../utils/bulk_images.js';
+import { writeJsonAtomic } from '../utils/json_file.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -228,7 +229,7 @@ export class Coupang {
    * @returns {{ items: object[], cached: number }} cached: 옵션·판매가를 펼친 상품 수
    */
   async listForPriceEdit() {
-    const products = await this.fetchAllProducts(true);
+    const products = await this.fetchAllProducts();
     const known = this.store && this.config?.vendorId ? this.store.products(this.config.vendorId) : {};
     // 쿠팡 목록에 없는 상품(삭제됨)은 캐시에서 뺀다 — 목록은 전체를 다 읽었을 때만 돌아온다(fetchAllProducts).
     this._cache((store, vendorId) => store.keepOnly(vendorId, products.map(p => p.id)));
@@ -260,7 +261,7 @@ export class Coupang {
     } else {
       this.config = newConfig;
     }
-    fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2), 'utf-8');
+    writeJsonAtomic(this.configPath, this.config, 2);   // secretKey 가 들어 있다 — 쓰다 꺼져도 잘린 파일이 남지 않게
     console.log('쿠팡 설정 저장 완료:', this.configPath);
 
     if (this.config.vendorId && this.config.accessKey && this.config.secretKey) {

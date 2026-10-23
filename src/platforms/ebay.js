@@ -525,7 +525,6 @@ export class Ebay {
       for (const field of ['sku', 'locale', 'inventoryItemGroupKeys']) delete payload[field];
       payload.product = { ...payload.product, imageUrls: urls };
       await api.request('PUT', `/sell/inventory/v1/inventory_item/${encodeURIComponent(current.sku)}`, payload);
-      this.store.updateCachedListing?.(current.sku, { image: urls[0] });
       return { status: 'UPDATED' };
     });
   }

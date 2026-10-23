@@ -57,7 +57,7 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
   async function list({ scope, query = '' }) {
     currency(scope);
     let items = [], note = '', truncated = false;
-    if (scope === 'naver') items = (await naverAPI().allProducts({ force: true })).map(p => ({
+    if (scope === 'naver') items = (await naverAPI().allProducts()).map(p => ({
       ...p, price: p.salePrice, image: p.representativeImage }));
     else if (scope === 'coupang') {
       // 쿠팡 목록 API 에는 옵션ID·판매가가 없다(공식 문서). 이 PC 에서 불러온 적 있는 상품만 그때 읽은 판매가를
@@ -354,28 +354,25 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
     }
     return outcomes;
   }
-  for (const [channel, work] of [['bulk-price-list', list], ['bulk-price-load', load], ['bulk-price-load-many', loadMany], ['bulk-price-save', save],
-    ['bulk-images-load', images.load], ['bulk-images-import', images.importImages], ['bulk-images-validate', images.validate], ['bulk-images-save', images.save]]) {
+  // 조회 전용 채널. 저장은 bulk-save-batch 하나로만 한다(1건 저장 채널은 화면이 쓰지 않아 10-23 제거).
+  for (const [channel, work] of [['bulk-price-list', list], ['bulk-price-load-many', loadMany],
+    ['bulk-images-load', images.load], ['bulk-images-import', images.importImages]]) {
     ipcMain.handle(channel, async (_, input) => {
-      const mutation = channel === 'bulk-price-save' || channel === 'bulk-images-save';
       while (writing === 'fx') await idle;
       if (writing) return { success: false, error: '가격 저장 중입니다. 완료 후 다시 시도하세요.', kind: 'BUSY', stage: 'pre-send' };
-      if (mutation) hold('ui');
       try {
         let data = await work(input);
         if (channel === 'bulk-price-list') data = { ...data, items: await withIdentity(data.items) };
-        else if (channel === 'bulk-price-load') data = await withIdentity(data);
         else if (channel === 'bulk-price-load-many') for (const item of data.items) if (item.rows) item.rows = await withIdentity(item.rows);
         return { success: true, data };
       }
       catch (e) {
-        // 화면에는 종류·반영 여부까지 넘기고, 원인 추적용으로 메인 로그에도 남긴다.
-        const info = describeError(e, mutation ? { sent: !!e?.sent } : {});
+        // 화면에는 종류까지 넘기고, 원인 추적용으로 메인 로그에도 남긴다.
+        const info = describeError(e);
         const target = [input?.scope, input?.id, input?.optionId].filter(Boolean).join('/');
-        log.error?.(`[bulk-price] ${channel} ${target} → ${info.kind}${info.status ? ' ' + info.status : ''}${info.stage ? ' ' + info.stage : ''}: ${info.error}`);
+        log.error?.(`[bulk-price] ${channel} ${target} → ${info.kind}${info.status ? ' ' + info.status : ''}: ${info.error}`);
         return { success: false, ...info };
       }
-      finally { if (mutation) free(); }
     });
   }
   const batch = createBulkBatch({ directory,

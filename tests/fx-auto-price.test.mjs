@@ -339,6 +339,7 @@ test('저장 잠금: 자동 변경은 화면 저장이 끝난 뒤 저장하고, 
   const amazon = {
     loadConfig() {},
     async loadProductForEdit(sku) { return { price: prices[sku], title: sku }; },
+    async loadProductsForEdit(skus) { return new Map(skus.map(sku => [sku, { price: prices[sku], title: sku }])); },
     async updateExistingProduct({ sku, price }) { order.push('write ' + sku); if (sku === 'A') await gate; prices[sku] = price; return { status: 'ACCEPTED' }; },
   };
   const service = registerBulkPriceIPC({
@@ -346,24 +347,25 @@ test('저장 잠금: 자동 변경은 화면 저장이 끝난 뒤 저장하고, 
     naverAPI: () => ({}), naverProducts: () => ({}), coupang: () => ({}), amazon: () => amazon, ebay: () => ({}),
     imweb: async () => ({}), board: async () => ({}), rates: async () => ({ data: {} }), log: { error() {} }, sleep: async () => {},
   });
-  const ui = handlers['bulk-price-save'](null, { scope: 'amazon-us', id: 'A', newPrice: '110.61', expectedPrice: '109.32' });
+  const ui = handlers['bulk-save-batch'](null, { jobId: 'fx-lock-test', scope: 'amazon-us',
+    jobs: [{ type: 'price', id: 'A', newPrice: '110.61', expectedPrice: '109.32' }] });
   await new Promise(r => setImmediate(r));
   const fx = service.exclusive(() => { order.push('fx start'); return service.save({ scope: 'amazon-us', id: 'B', newPrice: '110.61', expectedPrice: '109.32' }); });
   await new Promise(r => setImmediate(r));
   assert.deepEqual(order, ['write A'], '화면 저장이 끝나기 전에는 시작하지 않는다');
   openGate();
-  assert.equal((await ui).data.status, 'ACCEPTED');
+  assert.equal((await ui).data.results[0].data.status, 'ACCEPTED');
   assert.equal((await fx).status, 'ACCEPTED');
   assert.deepEqual(order, ['write A', 'fx start', 'write B']);
 
   let release; const hold = new Promise(r => { release = r; });
   const busy = service.exclusive(() => hold);
-  const read = handlers['bulk-price-load'](null, { scope: 'amazon-us', id: 'A' });
+  const read = handlers['bulk-price-load-many'](null, { scope: 'amazon-us', ids: ['A'] });
   release();
   await busy;
   const loaded = await read;
   assert.equal(loaded.success, true, loaded.error);
-  assert.equal(loaded.data[0].price, '110.61');
+  assert.equal(loaded.data.items[0].rows[0].price, '110.61');
 });
 
 test('후보 현재가는 아마존 한 요청 20건까지 묶어 미리 읽고, 목록가로 걸러진 상품·묶음에서 빠진 상품만 따로 다룬다', async t => {

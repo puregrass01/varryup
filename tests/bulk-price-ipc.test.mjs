@@ -74,7 +74,14 @@ function ipcFixture(services) {
     log: { error: m => logs.push(m) }, sleep: async () => {},
   });
   const invoke = (channel, input) => handlers[channel](null, input);
-  return { invoke, logs };
+  // 1건 저장도 화면처럼 bulk-save-batch 로 보낸다. 입력 검사 오류는 작업 전체 응답, 저장 결과는 results[0].
+  const save = async input => {
+    const res = await invoke('bulk-save-batch', { jobId: 'bulk-ipc-test', scope: input.scope, jobs: [{ type: 'price', ...input }] });
+    if (!res.success) return res;
+    const { index, ...outcome } = res.data.results[0];
+    return outcome;
+  };
+  return { invoke, save, logs };
 }
 
 function fakeCoupang({ inventory = { 555: 10000 }, change } = {}) {
@@ -102,9 +109,9 @@ function fakeCoupang({ inventory = { 555: 10000 }, change } = {}) {
 test('쿠팡 현재가: 옵션ID 별 가격 API 값을 쓰고, 옵션ID 가 없는 옵션은 읽기 전용으로 표시한다', async () => {
   const { service } = fakeCoupang();
   const { invoke } = ipcFixture({ coupang: service });
-  const res = await invoke('bulk-price-load', { scope: 'coupang', id: '777' });
+  const res = await invoke('bulk-price-load-many', { scope: 'coupang', ids: ['777'] });
   assert.equal(res.success, true);
-  const [a, b] = res.data;
+  const [a, b] = res.data.items[0].rows;
   assert.deepEqual([a.optionId, a.price, a.ready, !!a.readonly], ['555', '10000', true, false], '판매가는 seller-products(9000)가 아니라 inventories(10000)');
   assert.deepEqual([b.ready, b.readonly], [false, true]);
   assert.match(b.result, /승인완료 전/);
@@ -124,8 +131,8 @@ test('아마존 목록: API 페이징이 1000건에서 잘리면 안내와 trunc
 
 test('쿠팡 저장: 아이템별 가격 변경 경로로 보내고 가격 API 로 다시 읽어 확인한다', async () => {
   const { service, calls } = fakeCoupang();
-  const { invoke } = ipcFixture({ coupang: service });
-  const res = await invoke('bulk-price-save', { scope: 'coupang', id: '777', optionId: '555', newPrice: '12000', expectedPrice: '10000' });
+  const { save } = ipcFixture({ coupang: service });
+  const res = await save({ scope: 'coupang', id: '777', optionId: '555', newPrice: '12000', expectedPrice: '10000' });
   assert.deepEqual(res, { success: true, data: { status: 'VERIFIED', price: '12000' } });
   assert.deepEqual(calls.map(c => c[0]), ['change', 'inventory'], '저장 전 전체 상품 조회(load)를 다시 하지 않는다');
   assert.deepEqual(calls[0][1], { vendorItemId: '555', salePrice: '12000', expectedPrice: '10000' });
@@ -133,15 +140,15 @@ test('쿠팡 저장: 아이템별 가격 변경 경로로 보내고 가격 API �
 
 test('쿠팡 저장: 10원 단위가 아니면 보내지 않는다', async () => {
   const { service, calls } = fakeCoupang();
-  const { invoke } = ipcFixture({ coupang: service });
-  const res = await invoke('bulk-price-save', { scope: 'coupang', id: '777', optionId: '555', newPrice: '12345', expectedPrice: '10000' });
+  const { save } = ipcFixture({ coupang: service });
+  const res = await save({ scope: 'coupang', id: '777', optionId: '555', newPrice: '12345', expectedPrice: '10000' });
   assert.equal(res.success, false);
   assert.equal(res.stage, 'pre-send');
   assert.match(res.error, /10원 단위/);
   assert.equal(calls.length, 0);
 });
 
-test('저장 오류는 종류와 반영 여부를 함께 넘기고 메인 로그에 남긴다', async () => {
+test('저장 오류는 종류와 반영 여부를 함께 넘긴다', async () => {
   const cases = [
     [() => { throw markPreSend(new Error('쿠팡 현재 판매가가 조회 이후 변경됐습니다.')); }, { stage: 'pre-send', kind: 'ERROR', blocking: false }],
     [() => { throw apiError('쿠팡 응답 시간 초과', { timeout: true }); }, { stage: 'unknown', kind: 'TIMEOUT', blocking: false }],
@@ -151,25 +158,26 @@ test('저장 오류는 종류와 반영 여부를 함께 넘기고 메인 로그
   ];
   for (const [change, expected] of cases) {
     const { service } = fakeCoupang({ change });
-    const { invoke, logs } = ipcFixture({ coupang: service });
-    const res = await invoke('bulk-price-save', { scope: 'coupang', id: '777', optionId: '555', newPrice: '12000', expectedPrice: '10000' });
+    const { save } = ipcFixture({ coupang: service });
+    const res = await save({ scope: 'coupang', id: '777', optionId: '555', newPrice: '12000', expectedPrice: '10000' });
     assert.equal(res.success, false);
     assert.deepEqual({ stage: res.stage, kind: res.kind, blocking: res.blocking }, expected, res.error);
-    assert.match(logs[0], /\[bulk-price\] bulk-price-save coupang\/777\/555 →/);
   }
 });
 
 test('조회 오류에는 반영 여부(stage)를 붙이지 않는다', async () => {
   const service = { loadConfig() {}, loadProductForEdit: async () => { throw apiError('서버 프록시 오류 (HTTP 401)', { status: 401, proxyError: true }); } };
   const { invoke } = ipcFixture({ coupang: service });
-  const res = await invoke('bulk-price-load', { scope: 'coupang', id: '777' });
-  assert.deepEqual([res.success, res.kind, res.blocking, res.stage], [false, 'STAFF_AUTH', true, undefined]);
+  const res = await invoke('bulk-price-load-many', { scope: 'coupang', ids: ['777'] });
+  const [item] = res.data.items;
+  assert.deepEqual([res.success, item.kind, item.blocking, item.stage], [true, 'STAFF_AUTH', true, undefined]);
+  assert.equal(res.data.blocked, item.error, '인증 오류면 뒤 상품은 읽지 않는다');
 });
 
 test('쓰기 뒤 조회 가격이 다르면 한 번 더 읽고, 그래도 다르면 CHECK 로 알린다', async () => {
   const { service, calls } = fakeCoupang({ change: () => ({ unchanged: false, salePrice: 12000 }) });
-  const { invoke } = ipcFixture({ coupang: service });
-  const res = await invoke('bulk-price-save', { scope: 'coupang', id: '777', optionId: '555', newPrice: '12000', expectedPrice: '10000' });
+  const { save } = ipcFixture({ coupang: service });
+  const res = await save({ scope: 'coupang', id: '777', optionId: '555', newPrice: '12000', expectedPrice: '10000' });
   assert.equal(res.data.status, 'CHECK');
   assert.match(res.data.message, /10000/);
   assert.equal(calls.filter(c => c[0] === 'inventory').length, 2);
@@ -177,8 +185,8 @@ test('쓰기 뒤 조회 가격이 다르면 한 번 더 읽고, 그래도 다르
 
 test('이미 같은 가격이면 UNCHANGED 이고 확인 조회를 하지 않는다', async () => {
   const { service, calls } = fakeCoupang({ change: () => ({ unchanged: true, salePrice: 12000 }) });
-  const { invoke } = ipcFixture({ coupang: service });
-  const res = await invoke('bulk-price-save', { scope: 'coupang', id: '777', optionId: '555', newPrice: '12000', expectedPrice: '10000' });
+  const { save } = ipcFixture({ coupang: service });
+  const res = await save({ scope: 'coupang', id: '777', optionId: '555', newPrice: '12000', expectedPrice: '10000' });
   assert.deepEqual(res.data, { status: 'UNCHANGED', price: '12000' });
   assert.equal(calls.filter(c => c[0] === 'inventory').length, 0);
 });
@@ -396,8 +404,8 @@ test('네이버 일괄 저장: 행당 GET 2회 + PUT 1회', async () => {
     searchProducts: async () => ({ contents: [] }),
     invalidateProducts() {},
   };
-  const { invoke } = ipcFixture({ naverProducts: new NaverProducts(api) });
-  const res = await invoke('bulk-price-save', { scope: 'naver', id: '123', newPrice: '12000', expectedPrice: '10000' });
+  const { save } = ipcFixture({ naverProducts: new NaverProducts(api), naverAPI: api });
+  const res = await save({ scope: 'naver', id: '123', newPrice: '12000', expectedPrice: '10000' });
   assert.deepEqual(res.data, { status: 'VERIFIED', price: '12000' });
   assert.deepEqual(calls, ['GET', 'PUT', 'GET']);
 });

@@ -38,6 +38,8 @@ function setup(t, handler) {
     return handler(call);
   });
   const store = new AmazonStore(dir);
+  // 수정이 남긴 쓰기(1초 뒤)가 지운 임시 폴더를 다시 만들지 않게 타이머까지 거둔다.
+  t.after(() => store.clearListingsCache());
   const amazon = new Amazon(file, store);
   amazon.loadConfig();
   return { amazon, store, calls, dir };

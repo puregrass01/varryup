@@ -10,6 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { rateProblem, planPrice, rateInfo } from './utils/fx_pricing.js';
+import { writeJsonAtomic } from './utils/json_file.js';
 
 const TARGETS = ['USD', 'JPY'];
 const PLAN_TTL = 30 * 60 * 1000;   // 미리보기 후 30분 안에만 저장한다
@@ -312,7 +313,7 @@ export function createImwebUnitPrices({ rates, dir, gateway, clock = Date.now, n
   let busy = null, plan = null;
   const rowsFile = path.join(dir, 'imweb_unit_prices_rows.json'), sampleFile = path.join(dir, 'imweb_unit_prices_sample.json');
   const progress = running => { try { notify({ running }); } catch { /* 닫히는 창 */ } };
-  const writeJson = (file, data) => { try { fs.writeFileSync(file, JSON.stringify(data, null, 1), 'utf8'); } catch (e) { log.error?.('[imweb-unit] 저장 실패: ' + e.message); } };
+  const writeJson = (file, data) => { try { writeJsonAtomic(file, data, 1); } catch (e) { log.error?.('[imweb-unit] 저장 실패: ' + e.message); } };
 
   async function open() {
     const got = await rates();

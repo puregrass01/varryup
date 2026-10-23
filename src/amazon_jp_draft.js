@@ -228,6 +228,11 @@ export async function pickMainImages(list, detect, onRound = () => {}) {
   return new Map(state.map(s => [s.sku, { main: s.main, others: s.urls.filter(u => u !== s.main).slice(0, 8), checked: s.checked }]));
 }
 
+// 업로드를 막지 않는 메모. 기존 리스팅 수정(onJp) 경로를 고르는 스크립트는 행의 blocking 배열을 쓴다.
+const NON_BLOCKING = /한글 메모 뺌|^차량코드 없음\(카탈로그 행에 안 이어짐\)$|^일본어 차종: 아임웹 일본몰|^메인 이미지: 직접 지정|^확인함: /;
+// 사람이 확인해도 풀 수 없는 메모(review.accept 로 못 푼다). 일본에 이미 있는 SKU 는 초안(신규) 업로드가 받지 않는다.
+const HARD_NOTE = /^상품명 \d+자|^상품명에 한글|^미국 리스팅 없음|^엔화 가격|^일본에 이미 있는 SKU/;
+
 // V2 차량의 세대 칸은 연식을 품는다('1세대 11.03~19.03', '1세대 전기형 05.06~07.05', '3세대').
 const isComplete = car => !!(car && (car.brand || car.makerInModel) && car.model);
 // 4자리 연도('2001~2004')·일 단위('22.11.14~')·'2018 .04 ~' 도 받고, 숫자 한가운데서 자르지 않는다.
@@ -251,8 +256,15 @@ const chassisTokens = s => new Set(flat(s).toUpperCase().split(/[\s/,()]+/).filt
  * @param names    loadVehicleNames() 결과 { vu, dict, catalog }
  * @param fx       FxPriceStore.read() — { tiers, assignments }
  * @param snapshot 환율(currency-rates-get 의 data). 없으면 엔화 칸을 비운다.
+ * @param overrides 사람이 확인한 SKU 별 지정(없으면 동작 그대로 — 2026-10-22 업로드 제외분 정리):
+ *   imwebNames[sku] = { makerJa, modelJa, confidence, prodNo, no } — 아임웹 일본몰 상품명. confidence 'high' 이고 한글이 없을 때만,
+ *                     사전으로 브랜드·차종을 못 찾은 SKU 의 빈칸만 채운다(세대·연식·코드는 기존 경로 값).
+ *   mainImages[sku] = { url, source } — 사람이 본 글자 없는 메인 이미지(OCR 판정보다 앞선다).
+ *   review[sku]     = { accept: [메모 앞부분], car?: {brand,model,gen,year,code}, bsa?: boolean, note?: string } — 검토 결과.
+ *                     accept 한 메모는 '확인함: ' 을 붙여 막지 않는다(HARD 메모는 못 푼다). 가격 등급은 fx.assignments 로 준다.
  */
-export function buildJpDraft({ items, names, fx, snapshot }) {
+export function buildJpDraft({ items, names, fx, snapshot, overrides = {} }) {
+  const { imwebNames = {}, mainImages = {}, review = {} } = overrides;
   const { vu, dict, catalog } = names;
   const variantsBySku = new Map();
   // 미국 SKU 는 아마존 SKU 다 — 이베이 SKU(v.skus)와 다른 차가 있어 아마존 쪽(v.amazonSkus)을 먼저 본다.
@@ -339,13 +351,23 @@ export function buildJpDraft({ items, names, fx, snapshot }) {
     };
     const all = [v2 && fromV2, variants.length && fromCatalog, n && fromNormalized, listing && fromListing].filter(Boolean).map(f => f());
     const tries = all.filter(t => !t.conflict);
-    const picked = tries.find(t => isComplete(t.car)) || tries[0];
+    let picked = tries.find(t => isComplete(t.car)) || tries[0];
+    // 사전에 일본어가 없을 때만 아임웹 일본몰 상품명(확실한 매칭)으로 브랜드·차종 빈칸을 채운다 — 사전 값이 있으면 사전이 이긴다.
+    const iw = imwebNames[sku];
+    if (picked && !isComplete(picked.car) && iw?.confidence === 'high' && iw.modelJa && !hasHangul(`${iw.makerJa}${iw.modelJa}`)) {
+      const filled = { ...picked.car, brand: picked.car.brand || iw.makerJa || '', model: picked.car.model || iw.modelJa };
+      if (isComplete(filled)) picked = { source: `${picked.source}+아임웹 일본몰`, car: filled,
+        notes: [...picked.notes.filter(x => !/^(브랜드|차종) 일본어 (없음|후보 여러 개)/.test(x)), `일본어 차종: 아임웹 일본몰 상품 ${iw.prodNo ?? ''} No.${iw.no ?? ''}`] };
+    }
     if (!isComplete(picked?.car)) for (const t of all) if (t.conflict) notes.push(...t.notes);
-    const car = picked?.car || null, source = picked?.source || '';
+    const rv = review[sku] || {};
+    const car = picked?.car || rv.car ? { ...picked?.car, ...rv.car } : null;
+    const source = [picked?.source, rv.car && '검토 수정'].filter(Boolean).join('+');
     notes.push(...(picked ? picked.notes : ['차량을 찾지 못한 SKU — 제목·불릿을 직접 입력']));
+    if (rv.note) notes.push('확인함: ' + rv.note);
 
-    // BSA·품번은 정규화 표가 정본이다. 표에 없는 SKU 만 예전처럼 이베이 표·미국 상품명에서 읽는다.
-    const bsa = n ? !!n.bsa : !!listing?.bsa;
+    // BSA·품번은 정규화 표가 정본이다. 표에 없는 SKU 만 예전처럼 이베이 표·미국 상품명에서 읽는다. 검토가 BSA 를 고쳤으면 그 값.
+    const bsa = typeof rv.bsa === 'boolean' ? rv.bsa : n ? !!n.bsa : !!listing?.bsa;
     const complete = isComplete(car);
     const usd = String(item.price ?? '').trim();
     if (item.live === false) notes.push('미국 리스팅 없음(실시간 조회)');
@@ -357,7 +379,9 @@ export function buildJpDraft({ items, names, fx, snapshot }) {
     if (p.error) notes.push(`엔화 가격: ${p.error}`);
     else if (n && /BSA/i.test(p.tier.label || '') !== bsa) notes.push(`BSA 여부(${bsa ? 'O' : 'X'})와 가격 등급(${p.tier.label || p.tier.id}) 다름`);
 
-    const img = item.images || null;
+    const pick = mainImages[sku]?.url, own = item.images || null;
+    const img = pick ? { main: pick, others: [own?.main, ...(own?.others || [])].filter(u => u && u !== pick).slice(0, 8), checked: own?.checked || [] } : own;
+    if (pick) notes.push('메인 이미지: 직접 지정' + (mainImages[sku].source ? ` (${mainImages[sku].source})` : ''));
     if (!img?.main) notes.push(img?.checked?.length ? '글자 없는 메인 이미지 없음 — 직접 고르기' : '이미지 없음');
     const car2 = complete ? carText(car) : '';
 
@@ -397,10 +421,13 @@ export function buildJpDraft({ items, names, fx, snapshot }) {
     if (hasHangul(title)) notes.push('상품명에 한글이 남음');
     // 업로드 TSV 에 넣는 줄: 제목·엔화·메인 이미지가 있고, 실시간 조회에 있었고, 확인 필요 메모가 없다
     // (제목 겹침·길이·한글·ASIN·BSA/등급·여러 차량·일본에 이미 있음·정규화 표 Issues 모두 메모로 남는다).
-    // 지어내지 않은 것을 덜어낸 정보성 메모(한글 메모 뺌·차량코드 없음)는 막지 않는다.
-    const blocking = notes.filter(x => !/한글 메모 뺌|^차량코드 없음\(카탈로그 행에 안 이어짐\)$/.test(x));
+    // 지어내지 않은 것을 덜어낸 정보성 메모(한글 메모 뺌·차량코드 없음)와 사람이 확인·지정한 메모는 막지 않는다.
+    const ok = (review[row.sku]?.accept || []).filter(Boolean);
+    const shown = notes.map(x => !HARD_NOTE.test(x) && ok.some(p => x.startsWith(p)) ? '확인함: ' + x : x);
+    const blocking = shown.filter(x => !NON_BLOCKING.test(x));
     const ready = !!(title && row.jpy && row.mainImage && row.live && !blocking.length);
-    return { ...row, title, titleLength: title ? chars(title) : '', ready, notes: notes.join(' / ') };
+    // blocking 은 배열로도 준다 — 메모 안에 ' / ' 가 있어 notes 문자열을 다시 쪼개면 조각이 막는 메모처럼 보인다.
+    return { ...row, title, titleLength: title ? chars(title) : '', ready, blocking, notes: shown.join(' / ') };
   });
 
   const summary = {
@@ -511,7 +538,7 @@ const US_MARKET = 'ATVPDKIKX0DER', JP_MARKET = 'A1VC38T7YXB528';
  * @param amazon  Amazon 인스턴스(loadConfig 된 것)
  * @param detect  urls → [{ url, hasText, text, error? }] (utils/image_text.js detectUrlText)
  */
-export async function makeJpDraft({ amazon, names, fx, snapshot, detect, listings = loadAmazonListings(), progress = () => {} }) {
+export async function makeJpDraft({ amazon, names, fx, snapshot, detect, listings = loadAmazonListings(), overrides, progress = () => {} }) {
   const parents = new Set(listings.map(l => l.parentSku).filter(Boolean));
   const children = listings.filter(l => !parents.has(l.sku));   // 부모 SKU 는 판매 단위가 아니라 초안에 넣지 않는다
   const skus = children.map(l => l.sku);
@@ -545,6 +572,6 @@ export async function makeJpDraft({ amazon, names, fx, snapshot, detect, listing
       productType: p?.raw?.summaries?.find(s => s.marketplaceId === US_MARKET)?.productType || '', images: images.get(l.sku),
       onJp: onJp ? onJp.has(l.sku) : undefined };
   });
-  const { rows, summary } = buildJpDraft({ items, names, fx, snapshot });
+  const { rows, summary } = buildJpDraft({ items, names, fx, snapshot, overrides });
   return { rows, summary: { ...summary, parents: parents.size, live: live.size, jpError, ocrError } };
 }

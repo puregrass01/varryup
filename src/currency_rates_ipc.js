@@ -3,13 +3,13 @@ import { CurrencyRatesClient } from './utils/currency_rates.js';
 
 // Register synchronously before opening windows. Delay client setup until invocation
 // so a cache/path initialization failure returns a response, never a missing handler.
-export function registerCurrencyRatesIPC({ app, ipcMain, baseUrl, getToken,
+export function registerCurrencyRatesIPC({ app, ipcMain,
   createClient = options => new CurrencyRatesClient(options) }) {
   let client;
   const get = async () => {
     try {
       client ||= createClient({
-        cachePath: path.join(app.getPath('userData'), 'currency_rates.json'), baseUrl, getToken,
+        cachePath: path.join(app.getPath('userData'), 'currency_rates.json'),
       });
       return await client.get();
     } catch {

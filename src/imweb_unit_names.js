@@ -10,6 +10,7 @@ import path from 'node:path';
 import { loadVehicleNames, reverseLookup, untag } from './amazon_jp_draft.js';
 import { toFormData } from './platforms/openapi/imweb_client.js';
 import { hasBsa } from './utils/duplicate_guard.js';
+import { writeJsonAtomic } from './utils/json_file.js';
 
 const TARGETS = { USD: 0, JPY: 1 };    // 구역 통화 → 단어표의 [영어, 일본어] 자리
 const PLAN_TTL = 30 * 60 * 1000;
@@ -138,7 +139,7 @@ export function createImwebUnitNames({ client, dir, names = () => loadVehicleNam
   let busy = false, plan = null;
   const rowsFile = path.join(dir, 'imweb_unit_names_rows.json');
   const progress = running => { try { notify({ running }); } catch { /* 닫히는 창 */ } };
-  const writeRows = rows => { try { fs.writeFileSync(rowsFile, JSON.stringify(rows, null, 1), 'utf8'); } catch (e) { log.error?.('[imweb-names] 저장 실패: ' + e.message); } };
+  const writeRows = rows => { try { writeJsonAtomic(rowsFile, rows, 1); } catch (e) { log.error?.('[imweb-names] 저장 실패: ' + e.message); } };
 
   async function units(api) {
     const list = (await api.siteInfo())?.unitList || [];

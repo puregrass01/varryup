@@ -1,23 +1,7 @@
-import fs from 'node:fs';
 import path from 'node:path';
-
-// src/platforms/amazon_store.js 와 같은 방식 — tmp 에 쓰고 rename 한다.
-// 쓰는 중에 죽어도 잘린 캐시가 남지 않는다. 들여쓰기는 하지 않는다 — 아마존·eBay 캐시는 동기화 때 한 번
-// 쓰지만 이 파일은 불러오는 동안 계속 쓰여서, 들여쓰면 크기(1.4MB → 0.9MB)와 쓰는 시간만 는다.
-function writeJson(file, data) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(`${file}.tmp`, JSON.stringify(data), { mode: 0o600 });
-  fs.renameSync(`${file}.tmp`, file);
-}
+import { JsonCache } from '../utils/json_file.js';
 
 const clone = value => JSON.parse(JSON.stringify(value));
-
-// 파일은 모아서 쓴다. 판매가 하나 알 때마다 통째로 쓰면(2026-10-01 실측: 상품 587개·옵션 6,444개 = 1.4MB,
-// 1회 약 11ms) 전체 현재가 불러오기 한 번에 7천 번 가까이 써서 메인 프로세스가 40초 가까이 멈추고 디스크에
-// 5GB 가 넘게 쓰였다. 값은 메모리에서 바로 바뀌고(읽는 쪽은 메모리를 본다), 파일은 조용해진 뒤 1초에, 계속
-// 바뀌어도 5초마다 한 번 쓴다. 앱을 끌 때는 남은 것을 바로 쓴다(main_process before-quit → flush).
-const FLUSH_IDLE_MS = 1000;
-const FLUSH_MAX_MS = 5000;
 
 /**
  * 쿠팡 옵션 판매가 로컬 캐시 — 상품 일괄 수정 목록에 '마지막으로 읽은 판매가' 를 보여 준다.
@@ -38,22 +22,17 @@ const FLUSH_MAX_MS = 5000;
 export class CoupangStore {
   constructor(directory) {
     this.pricesPath = path.join(directory, 'coupang_prices_cache.json');
-    this.data = undefined;   // 한 번 읽으면 메모리에 둔다 — 가격 조회마다 파일을 다시 읽지 않는다
-    this.dirty = false;      // 메모리에만 있고 아직 파일에 안 쓴 변경이 있다
-    this.idleTimer = null;
-    this.maxTimer = null;
+    // 한 번 읽으면 메모리에 두고(가격 조회마다 파일을 다시 읽지 않는다) 파일은 모아서 쓴다(json_file.js).
+    // 들여쓰지 않는다 — 불러오는 동안 계속 쓰이는 파일이라 들여쓰면 크기(1.4MB → 0.9MB)와 쓰는 시간만 는다.
+    this.cache = new JsonCache(this.pricesPath, { indent: 0, label: '쿠팡 판매가' });
   }
 
   read() {
-    if (this.data !== undefined) return this.data;
     let data = null;
-    try {
-      if (fs.existsSync(this.pricesPath)) data = JSON.parse(fs.readFileSync(this.pricesPath, 'utf8'));
-    } catch {
-      data = null;   // 손상된 캐시는 없는 것으로 친다. 다음 저장이 덮어쓴다.
-    }
-    this.data = data && typeof data === 'object' && data.products && typeof data.products === 'object' ? data : null;
-    return this.data;
+    try { data = this.cache.read(); } catch { /* 손상된 캐시는 없는 것으로 친다. 다음 저장이 덮어쓴다. */ }
+    if (data && typeof data === 'object' && data.products && typeof data.products === 'object') return data;
+    this.cache.data = null;   // 깨졌거나 모양이 틀린 것도 '없음' 으로 기억한다 — 부를 때마다 다시 읽지 않는다
+    return null;
   }
 
   /** 이 판매자의 상품별 캐시(복사본). 다른 판매자 것이거나 없으면 빈 객체. */
@@ -67,39 +46,12 @@ export class CoupangStore {
     const data = current && current.vendorId === String(vendorId) ? current : { vendorId: String(vendorId), products: {} };
     if (mutate(data.products, new Date().toISOString()) === false) return false;
     data.updatedAt = new Date().toISOString();
-    this.data = data;
-    this.scheduleFlush();
+    this.cache.set(data);
     return true;
   }
 
-  // 조용해지면 1초 뒤, 계속 바뀌어도 처음 바뀐 뒤 5초 안에는 쓴다. 타이머가 앱(테스트) 종료를 붙잡지 않게 unref.
-  scheduleFlush() {
-    this.dirty = true;
-    if (this.idleTimer) clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => this.flush(), FLUSH_IDLE_MS);
-    this.idleTimer.unref?.();
-    if (!this.maxTimer) {
-      this.maxTimer = setTimeout(() => this.flush(), FLUSH_MAX_MS);
-      this.maxTimer.unref?.();
-    }
-  }
-
-  /** 아직 안 쓴 변경을 지금 파일에 쓴다. 쓸 것이 없으면 아무것도 하지 않는다. 실패하면 다음 변경 때 다시 쓴다. */
-  flush() {
-    if (this.idleTimer) clearTimeout(this.idleTimer);
-    if (this.maxTimer) clearTimeout(this.maxTimer);
-    this.idleTimer = this.maxTimer = null;
-    if (!this.dirty || !this.data) return false;
-    this.dirty = false;
-    try {
-      writeJson(this.pricesPath, this.data);
-      return true;
-    } catch (e) {
-      this.dirty = true;
-      console.warn('[쿠팡] 판매가 캐시 파일 저장 실패(다음 변경 때 다시 씀):', e.message);
-      return false;
-    }
-  }
+  /** 아직 안 쓴 변경을 지금 파일에 쓴다(앱을 끌 때). 쓸 것이 없으면 false. 실패하면 다음 변경 때 다시 쓴다. */
+  flush() { return this.cache.flush(); }
 
   /**
    * 상품 조회로 알게 된 옵션 구성. 같은 옵션ID 에 모아 둔 판매가는 이어 간다 — 상품 조회 응답의 판매가는

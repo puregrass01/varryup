@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import path from 'node:path';
+import { writeJsonAtomic } from './json_file.js';
 
 export const DAY = 86400000;
 export const REFRESH = 60 * 60 * 1000;   // 받은 환율은 1시간 동안 다시 받지 않는다
@@ -59,8 +59,8 @@ export async function fetchYahooRates({ fetchImpl = fetch, clock = Date.now } = 
 }
 
 export class CurrencyRatesClient {
-  constructor({ cachePath, baseUrl, getToken, fetchImpl = fetch, clock = Date.now, direct = fetchYahooRates }) {
-    Object.assign(this, { cachePath, baseUrl, getToken, fetchImpl, clock, direct });
+  constructor({ cachePath, fetchImpl = fetch, clock = Date.now, direct = fetchYahooRates }) {
+    Object.assign(this, { cachePath, fetchImpl, clock, direct });
     this.pending = null;
     this.cache = null;
     this.failure = '';
@@ -78,31 +78,16 @@ export class CurrencyRatesClient {
     return this.pending;
   }
 
-  // 앱이 직접 받고, 안 되면 관리 서버(배포돼 있고 로그인했을 때), 그래도 안 되면 저장해 둔 값을 쓴다.
+  // 앱이 직접 받고, 안 되면 저장해 둔 값을 쓴다. (관리 서버 환율은 운영에 배포된 적이 없어 404 였다 — 2026-10-23 지움.)
   async load() {
     const now = this.clock();
     if (now < this.nextFetch) return this.result(this.failure || undefined, !!this.failure);
-    let direct;
     try { return this.commit(await this.direct({ fetchImpl: this.fetchImpl, clock: this.clock }), now); }
-    catch (error) { direct = error; }
-    try { return this.commit(await this.fromServer(), now); }
-    catch (server) {
+    catch (error) {
       this.nextFetch = now + RETRY;
-      this.failure = '환율을 새로 받지 못했습니다: ' + direct.message + (this.getToken() ? ' · 관리 서버: ' + server.message : '');
+      this.failure = '환율을 새로 받지 못했습니다: ' + error.message;
       return this.result(this.failure, true);
     }
-  }
-
-  async fromServer() {
-    const token = this.getToken();
-    if (!token) throw new Error('서버 로그인이 필요합니다.');
-    const response = await this.fetchImpl(this.baseUrl.replace(/\/+$/, '') + '/api/currency-rates', {
-      headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(35000),
-    });
-    if (!response.ok) throw new Error('환율 서버 응답 오류 (HTTP ' + response.status + ')');
-    const data = await response.json();
-    if (!data.ok) throw new Error('환율 데이터가 올바르지 않습니다.');
-    return data;
   }
 
   // 올바른 값만 받아들인다. 틀린 응답은 던져서 다음 경로로 넘기고, 저장해 둔 값을 덮어쓰지 않는다.
@@ -115,9 +100,7 @@ export class CurrencyRatesClient {
     this.failure = '';
     this.nextFetch = now + (this.cache.stale ? RETRY : REFRESH);
     try {
-      fs.mkdirSync(path.dirname(this.cachePath), { recursive: true });
-      fs.writeFileSync(this.cachePath + '.tmp', JSON.stringify(this.cache), 'utf8');
-      fs.renameSync(this.cachePath + '.tmp', this.cachePath);
+      writeJsonAtomic(this.cachePath, this.cache, 0);
     } catch {
       return this.result('환율은 조회했지만 로컬 캐시를 저장하지 못했습니다.');
     }

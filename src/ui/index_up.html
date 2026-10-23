@@ -757,79 +757,6 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .search-results { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
-
-    .result-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 8px;
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      background: var(--bg-input);
-      cursor: pointer;
-      transition: border-color var(--transition), background var(--transition);
-    }
-    .result-item:hover { border-color: var(--accent); background: rgba(59,130,246,0.06); }
-    .result-item.selected { border-color: var(--accent); background: rgba(59,130,246,0.1); }
-
-    .result-item .result-thumb {
-      width: 36px; height: 36px;
-      object-fit: cover;
-      border-radius: 3px;
-      background: var(--bg-card);
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-    }
-    .result-item .result-info { flex: 1; }
-    .result-item .result-name {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text-primary);
-    }
-    .result-item .result-id { font-size: 10px; color: var(--text-muted); }
-
-    .edit-form {
-      margin-top: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 7px;
-      padding-top: 10px;
-      border-top: 1px solid var(--border);
-    }
-    .edit-form .field input, .edit-form .field textarea {
-      font-size: 12px;
-    }
-    .edit-form-actions {
-      display: flex;
-      gap: 6px;
-      justify-content: flex-end;
-      margin-top: 4px;
-    }
-
-    .btn-sm {
-      padding: 5px 12px;
-      border-radius: var(--radius);
-      font-size: 12px;
-      cursor: pointer;
-      border: 1px solid transparent;
-      transition: all var(--transition);
-    }
-    .btn-primary {
-      background: var(--accent);
-      color: #fff;
-    }
-    .btn-primary:hover { background: var(--accent-hover); }
-    .btn-ghost {
-      background: transparent;
-      border-color: var(--border);
-      color: var(--text-secondary);
-    }
-    .btn-ghost:hover { border-color: var(--text-secondary); color: var(--text-primary); }
-
     .no-results {
       text-align: center;
       color: var(--text-muted);
@@ -1242,15 +1169,6 @@ const ipc = (() => {
     invoke: async (ch, ...args) => {
       console.log('[IPC invoke]', ch, ...args);
       await new Promise(r => setTimeout(r, 800));
-      // 검색 결과 더미 데이터 반환 (개발용)
-      if (ch === 'veryup-search-product') {
-        return {
-          items: [
-            { id: 'PROD-001', name: '샘플 상품 A', price: '29000', stock: '100', description: '샘플 설명 A' },
-            { id: 'PROD-002', name: '샘플 상품 B', price: '45000', stock: '50',  description: '샘플 설명 B' },
-          ]
-        };
-      }
       return { ok: true, stub: true };
     },
     on: (ch, fn) => {},
@@ -1941,7 +1859,7 @@ async function searchProduct(country, type) {
     const result = await ipc.invoke('veryup-search-product', {
       country, platform: plat.name, searchText, brand, model: carModel, code: code || no
     });
-    renderSearchResult(cardId, country, type, plat, result);
+    renderSearchResult(cardId);
     const count = (result && result.items) ? result.items.length : 0;
     addLog(`[${country} ${plat.name}] 검색 완료 (${count}건)`, count > 0 ? 'ok' : 'warn');
   } catch (err) {
@@ -1953,131 +1871,20 @@ async function searchProduct(country, type) {
   }
 }
 
-function renderSearchResult(cardId, country, type, plat, result) {
+// 카드는 탭이 없는 몰(라쿠텐·쇼피파이)만 쓴다. 메인에 그 몰의 검색·수정이 없어 결과는 늘 비어 있고(veryup-search-product),
+// 일괄 수정은 이 '결과 없음' 을 보고 그 몰을 '상품 없음' 으로 센다(requireEditItem).
+// 예전의 상품 표 · 수정 폼 · 적용(veryup-update-product)은 결과가 없어 닿을 수 없었다 — 10-23 지웠다.
+function renderSearchResult(cardId) {
   const body = document.getElementById(`${cardId}-body`);
   const status = document.getElementById(`${cardId}-status`);
   if (!body) return;
-  cardEdits.delete(cardId);   // 결과를 다시 그리면 고른 상품·수정 폼도 사라진다
-
-  const items = (result && Array.isArray(result.items)) ? result.items : [];
-
-  if (status) status.textContent = items.length > 0 ? `${items.length}개 검색됨` : '결과 없음';
-
-  if (items.length === 0) {
-    // 플랫폼이 0건 사유를 알려주면(현재 eBay) 그대로 보여준다.
-    const reason = result?.stats?.reason;
-    body.innerHTML = `<div class="no-results">${escHtml(reason || '검색 결과가 없습니다.')}</div>`;
-    return;
-  }
-
-  const resultsEl = document.createElement('div');
-  resultsEl.className = 'search-results';
-
-  const selection = VUProductTable.render(resultsEl, items, {
-    caption: `${plat.name} 상품 검색 결과`, currency: country === 'USA' ? 'USD' : (country === 'JAPAN' ? 'JPY' : 'KRW'),
-    onSelect: item => showEditForm(body, resultsEl, cardId, country, type, plat, item)
-  });
-  resultsEl.clearSelection = selection.clearSelection;
-
-  body.innerHTML = '';
-  body.appendChild(resultsEl);
-}
-
-// 탭이 없는 몰(라쿠텐·쇼피파이) 카드에서 지금 고른 상품. cardId → { country, plat, item, updateData() }.
-// 카드의 '적용' 버튼과 일괄 수정이 같은 값을 같은 길(applyCardEdit)로 보낸다.
-const cardEdits = new Map();
-
-// 카드에서 고른 상품을 저장한다. 실패하면 던진다(메인 프로세스 핸들러가 던진다).
-function applyCardEdit({ country, plat, item, updateData }) {
-  return ipc.invoke('veryup-update-product', {
-    country, platform: plat.name, productId: item.id, updateData: updateData(),
-  });
-}
-
-function showEditForm(body, resultsEl, cardId, country, type, plat, item) {
-  // 기존 edit-form 제거
-  const old = body.querySelector('.edit-form');
-  if (old) old.remove();
-
-  const form = document.createElement('div');
-  form.className = 'edit-form';
-  form.innerHTML = `
-    <div class="field">
-      <label>상품명</label>
-      <input type="text" id="${cardId}-edit-name"
-        value="${escHtmlAttr(item.name || '')}" placeholder="수정할 상품명" />
-    </div>
-    <div class="field">
-      <label>가격</label>
-      <input type="text" id="${cardId}-edit-price"
-        value="${escHtmlAttr(String(item.price || ''))}" placeholder="수정할 가격" />
-    </div>
-    <div class="field">
-      <label>재고</label>
-      <input type="text" id="${cardId}-edit-stock"
-        value="${escHtmlAttr(String(item.stock || ''))}" placeholder="재고 수량" />
-    </div>
-    <div class="field">
-      <label>설명</label>
-      <textarea id="${cardId}-edit-desc" placeholder="수정할 설명">${escHtml(item.description || '')}</textarea>
-    </div>
-    <div class="edit-form-actions">
-      <button class="btn-sm btn-ghost" id="${cardId}-btn-cancel">취소</button>
-      <button class="btn-sm btn-primary" id="${cardId}-btn-apply">✔ 적용</button>
-    </div>
-  `;
-  body.appendChild(form);
-  const edit = {
-    country, plat, item,
-    updateData: () => ({
-      name:        document.getElementById(`${cardId}-edit-name`).value,
-      price:       document.getElementById(`${cardId}-edit-price`).value,
-      stock:       document.getElementById(`${cardId}-edit-stock`).value,
-      description: document.getElementById(`${cardId}-edit-desc`).value,
-    }),
-  };
-  cardEdits.set(cardId, edit);
-
-  // 취소
-  document.getElementById(`${cardId}-btn-cancel`).addEventListener('click', () => {
-    form.remove();
-    if (cardEdits.get(cardId) === edit) cardEdits.delete(cardId);
-    resultsEl.clearSelection?.();
-  });
-
-  // 적용
-  document.getElementById(`${cardId}-btn-apply`).addEventListener('click', async () => {
-    const applyBtn = document.getElementById(`${cardId}-btn-apply`);
-    applyBtn.disabled = true;
-    applyBtn.textContent = '적용 중...';
-
-    try {
-      const res = await applyCardEdit(edit);
-      applyBtn.textContent = '✔ 완료';
-      applyBtn.style.background = 'var(--accent-success)';
-      addLog(`[${country} ${plat.name}] ${(res && res.message) || '수정 완료'}`, 'ok');
-      setTimeout(() => {
-        applyBtn.textContent = '✔ 적용';
-        applyBtn.style.background = '';
-        applyBtn.disabled = false;
-      }, 2000);
-    } catch(err) {
-      applyBtn.textContent = '❌ 실패';
-      applyBtn.style.background = 'var(--accent-danger)';
-      addLog(`[${country} ${plat.name}] 수정 실패: ${err.message}`, 'error');
-      setTimeout(() => {
-        applyBtn.textContent = '✔ 적용';
-        applyBtn.style.background = '';
-        applyBtn.disabled = false;
-      }, 2500);
-    }
-  });
+  if (status) status.textContent = '결과 없음';
+  body.innerHTML = '<div class="no-results">검색 결과가 없습니다.</div>';
 }
 
 function removeCard(country, type) {
   const card = document.getElementById(`card-${country}-${type}`);
   if (card) card.remove();
-  cardEdits.delete(`card-${country}-${type}`);
 }
 
 /* ══════════════════════════════════════════════
@@ -2766,9 +2573,6 @@ function escHtml(str) {
     .replace(/"/g,  '&quot;')
     .replace(/'/g,  '&#39;');
 }
-function escHtmlAttr(str) {
-  return escHtml(str);
-}
 
 function uncheckAllAndClearCards() {
   Object.keys(checked).forEach(country => {
@@ -2782,7 +2586,6 @@ function uncheckAllAndClearCards() {
   updateLangFields();
   updateMallFields();
   cardArea.innerHTML = '';
-  cardEdits.clear();
   const frame = $('form-frame');
   if (frame) frame.style.display = 'none';
   updateEmptyState();
@@ -3253,7 +3056,7 @@ class EditItemMissingError extends Error {
   }
 }
 
-// 수정 모드에서 현황판에서 켠 몰. tabId 가 있으면 그 탭의 저장 함수(fn)를, card 면 카드의 '적용' 길을 탄다.
+// 수정 모드에서 현황판에서 켠 몰. tabId 가 있으면 그 탭의 저장 함수(fn)를 탄다. card 는 탭이 없는 몰 — 고를 상품이 없어 늘 '상품 없음'.
 // unavailable: 일괄 수정에서 빼는 이유. 아임웹 B2B 는 2026-10-05 Open API 저장으로 옮겨 넣었다 — 판매가는 B2B 탭 값 그대로다
 // (B2B 가는 세트·개별·조합마다 달라 좌측 변경 판매가를 넣지 않는다). 게시판 글은 Open API 가 없어 저장할 때 브라우저를 띄운다.
 // currency: 그 몰이 읽는 좌측 변경 판매가 칸. 'market' 은 탭에 불러온 마켓의 통화(아마존 미국 USD · 일본 JPY).
@@ -3285,9 +3088,6 @@ function bulkEditTargets() {
 // 수정할 상품을 돌려준다. 없으면 던진다 — 일괄 수정은 이 예외로 그 몰을 '상품 없음' 으로 센다.
 function requireEditItem(target, win) {
   if (target.card) {
-    const edit = cardEdits.get(target.card);
-    // 카드를 다시 그리거나 지웠으면 폼도 없다 — 기억만 남은 상품은 고를 수 없다.
-    if (edit && document.getElementById(`${target.card}-edit-name`)) return { id: edit.item.id, name: edit.item.name, edit };
     const status = document.getElementById(`${target.card}-status`)?.textContent || '';
     throw new EditItemMissingError(/결과 없음|오류/.test(status)
       ? `수정할 상품이 없습니다 — 검색 결과가 없습니다(${status})`
@@ -3439,8 +3239,7 @@ async function runBulkEdit() {
       try {
         let item, run;
         if (target.card) {
-          item = requireEditItem(target);
-          run = () => applyCardEdit(item.edit).then(res => ({ ok: true, message: res && res.message }));
+          requireEditItem(target);   // 카드 몰은 고를 상품이 없다 — 늘 EditItemMissingError 로 던진다
         } else {
           openPlatformTab(target.tabId, target.country);
           const win = await waitForFormFunction(target.fn, bulkTiming.frameMs);
@@ -3460,7 +3259,7 @@ async function runBulkEdit() {
         }
         label = label || [item.id, item.market].filter(Boolean).join(' · ');
         addLog(`[${target.name}] ${label ? `${label} ` : ''}${target.what || '수정 저장'} 요청 전송 중...`, 'info');
-        // 저장 함수는 던지지 않기로 했지만, 던져도(폼 스크립트 오류·카드 몰 IPC 오류) 실패로 세고 다음 몰로 간다.
+        // 저장 함수는 던지지 않기로 했지만, 던져도(폼 스크립트 오류 등) 실패로 세고 다음 몰로 간다.
         const raw = await withBulkTimeout(Promise.resolve().then(run), bulkTiming.stepMs);
         result = { ...readBulkResult(raw, '수정'), message: raw && raw.message };
       } catch (err) {
