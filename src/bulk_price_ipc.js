@@ -73,12 +73,12 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
       // 캐시가 없으면 API 페이징이 1000건에서 조용히 끊긴다. 일부만 보이는 목록을 전체처럼 쓰지 않게 알린다.
       truncated = !!stats.truncated;
       note = truncated
-        ? `주의: 아마존 목록이 ${stats.scanned}/${stats.total}건에서 잘렸습니다(API 1000건 한도). [전체 목록 동기화]를 먼저 실행하세요.`
-        : stats.reason || '아마존 전체 목록은 기존 상품 탭의 목록 동기화로 갱신할 수 있습니다.';
+        ? `주의: 아마존 목록이 ${stats.scanned}/${stats.total}건에서 잘렸습니다(API 1000건 한도). 위의 [전체 목록 동기화]를 먼저 실행하세요.`
+        : stats.reason || '이후 올린 상품이 안 보이면 위의 [전체 목록 동기화]로 아마존 전체 목록을 갱신하세요.';
     } else if (scope === 'ebay') {
       const stats = {};
       items = await ebay().searchProducts({ searchText: query }, stats);
-      note = stats.reason || '';
+      note = stats.reason || '이후 올린 상품이 안 보이면 위의 [전체 목록 동기화]로 eBay 전체 목록을 갱신하세요.';
     } else if (isImwebBulkScope(scope)) {
       items = await imwebBulk.list(scope);
       note = '아임웹 Open API · 목록의 가격은 기본 판매가입니다. 현재가를 불러오면 조합(옵션)별 가격이 줄마다 나옵니다.';
@@ -160,7 +160,7 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
   /**
    * 여러 상품의 현재가를 몰이 한 요청에 허용하는 만큼 묶어 읽는다. 네이버 목록 조회 100건, 아마존 20건.
    * 묶음 조회가 없는 쿠팡(옵션별 가격 API)·eBay(SKU별 Offer)는 지금처럼 1건씩 읽고, 묶음에서 빠진 상품도 1건 조회로 확인한다.
-   * 네이버 묶음 결과에는 상세 이미지가 없다 — 이미지는 '이미지 불러오기'에서 그 상품만 조회한다.
+   * 네이버 묶음 결과에는 상세 이미지가 없다 — 이미지는 '이미지 적용'에서 그 상품만 조회한다.
    * @returns {{ items: Array<{id, rows}|{id, error, kind, blocking}>, blocked: string }} blocked 면 그 뒤 상품은 items 에 없다.
    */
   async function loadMany({ scope, ids, includeImages = false, images = {} } = {}) {

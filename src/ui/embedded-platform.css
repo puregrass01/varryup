@@ -24,7 +24,6 @@
 .embedded-platform #naverTab > .panel-header,
 .embedded-platform #imwebTab > .panel-header,
 .embedded-platform #imwebBoardTab > .panel-header,
-.embedded-platform #esmTab > .panel-header,
 .embedded-platform #coupangTab > .panel-header,
 .embedded-platform #amazonTab > .panel-header {
     display: none !important;

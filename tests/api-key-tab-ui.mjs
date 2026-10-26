@@ -30,6 +30,11 @@ try {
       if (channel === 'imweb-load-openapi-config') return { success: true, configured: true, config: { clientId: 'fixture-imweb' } };
       if (channel === 'ebay-load-config') return { success: true, data: {
         environment: 'sandbox', clientId: 'fixture-ebay', hasClientSecret: true, hasRefreshToken: true } };
+      // 일괄 화면 폭 검사용 목록: 긴 상품명·SKU, 사진 6장(아직 이미지 목록을 안 읽은 행).
+      if (channel === 'bulk-price-list') return { success: true, data: { note: '', items: Array.from({ length: 6 }, (_, i) => ({
+        scope: data.scope, id: 'OGWM-9X-00MM-L1IN-' + i, price: '110', ready: false,
+        name: 'Optic-Glass Heated Mirror Glass Replacement Wide Angle View Car Mirror, Exterior Side View Accessories Left Right Side ' + i,
+        images: ['a', 'b', 'c', 'd', 'e', 'f'].map(x => 'https://images.example/' + x + '.jpg') })) } };
       return { success: false };
     } } });
   });
@@ -89,6 +94,55 @@ try {
   assert.equal(await frame.locator('#amzClientSecret').getAttribute('type'), 'password');
   await page.waitForTimeout(600); // Let the existing sidebar view transition finish before visual capture.
   await page.screenshot({ path: 'scratch/api-key-fixed.png' });
+
+  // 앱은 접힌 채(?panels=collapsed, 창 400px)로 뜬다. API KEY·상품 일괄 수정을 누르면 셸 패널부터 편다.
+  {
+    const shell = await context.newPage();
+    shell.on('pageerror', e => errors.push(e.message));
+    await shell.setViewportSize({ width: 1200, height: 800 });
+    await shell.route('https://images.example/**', route => route.fulfill({ contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="300" height="300" fill="#cbd5e1"/></svg>' }));
+    await shell.goto(pathToFileURL(path.resolve('src/ui/index_up.html')).href + '?panels=collapsed');
+    assert.equal(await shell.evaluate(() => panelsCollapsed()), true, '접힌 채로 시작');
+    await shell.locator('[data-workspace="api"]').click();
+    await shell.frameLocator('#form-frame').locator('#apiKeysTab').waitFor({ state: 'visible' });
+    assert.equal(await shell.evaluate(() => panelsCollapsed()), false, 'API KEY 진입 시 패널을 편다');
+    assert.equal(await shell.locator('#section8').isVisible(), true);
+    // 다시 접은 뒤 상품 일괄 수정으로 와도 편다.
+    await shell.evaluate(() => setPanels(false, { resize: false }));
+    await shell.locator('[data-workspace="bulk"]').click();
+    assert.equal(await shell.evaluate(() => panelsCollapsed()), false, '상품 일괄 수정 진입 시 패널을 편다');
+    assert.equal(await shell.locator('#bulk-edit-workspace').isVisible(), true);
+
+    // 1200x800: 필터 레일(약 180px) + 표. 페이지 가로 스크롤이 없어야 하고 표도 칸 안에 들어가야 한다.
+    await shell.locator('#be-platforms [data-scope="amazon-us"]').click();
+    await shell.locator('#be-list').click();
+    await shell.locator('#be-body tr').nth(5).waitFor();
+    await shell.waitForFunction(() => [...document.querySelectorAll('#be-body img')].every(i => i.complete));
+    const widths = await shell.evaluate(() => {
+      const w = sel => Math.round(document.querySelector(sel).getBoundingClientRect().width);
+      const scroll = document.querySelector('.be-scroll'), doc = document.documentElement, table = document.querySelector('.be-table');
+      // 표가 줄어들 수 있는 최소 폭. 테스트 Chrome 은 스크롤바를 숨기므로, 실제 창의 세로 스크롤바(17px)는 따로 뺀다.
+      table.style.width = '1px'; table.style.minWidth = '0';
+      const minTable = Math.round(table.getBoundingClientRect().width);
+      table.style.width = table.style.minWidth = '';
+      return { pageScroll: doc.scrollWidth, pageClient: doc.clientWidth, workspace: w('#bulk-edit-workspace'), rail: w('#be-filters'),
+        tableBox: scroll.clientWidth, table: w('.be-table'), minTable, photo: w('th.be-photo-column'),
+        columns: [...document.querySelectorAll('.be-table thead th')].map(th => Math.round(th.getBoundingClientRect().width)),
+        railStack: [...document.querySelectorAll('#be-filters > label')].map(l => l.firstChild.textContent.trim()),
+        railTop: document.querySelector('#be-filters > label input')?.id };
+    });
+    console.log('1200x800 일괄 화면 폭:', JSON.stringify(widths));
+    await shell.screenshot({ path: 'scratch/bulk-rail-1200x800.png' });
+    assert.ok(widths.pageScroll <= widths.pageClient, '페이지 가로 스크롤 없음');
+    assert.ok(widths.table <= widths.tableBox, '표가 칸 안에 들어간다');
+    assert.ok(widths.minTable <= widths.tableBox - 17, '세로 스크롤바가 있어도 표가 칸 안에 들어간다');
+    assert.ok(widths.rail >= 170 && widths.rail <= 190, '레일 약 180px');
+    assert.ok(widths.photo >= 190 && widths.photo <= 210, '사진 열 약 200px');
+    assert.equal(widths.railTop, 'be-search', '표 안 검색이 레일 맨 위');
+    assert.deepEqual(widths.railStack, ['표 안에서 검색', '브랜드', '차량·제조사', '차종', '상품 종류', '가격']);
+    await shell.close();
+  }
   assert.deepEqual(errors, []);
   assert.equal(await page.evaluate(() => window.calls.some(c => /save|register|update|publish/.test(c))), false);
   console.log('API KEY regression passed: parent-only IPC, first load, all five saved configs, selected mall, bulk mall, delayed pane callbacks, unsaved values, no writes.');

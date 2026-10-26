@@ -70,6 +70,13 @@ for (const [name, body] of [['깨진 JSON', '{"a": {"s": "ok", "v": "https://x"'
     assert.equal(fs.existsSync(m.file), false, '저장을 거부한다');
     assert.match(m.logs.at(-1).msg, /^✖ .*저장하지 않았습니다/);
 
+    // 되돌리지 않은 채 다시 불러와도(대조가 끝나면 자동으로 다시 부른다) 옮겨 둔 사본이 남아 있으면 계속 막는다
+    m.loadManual();
+    assert.equal(m.broken(), true);
+    assert.match(m.logs.at(-1).msg, /^✖ 깨져서 옮겨 둔 수동 확인 목록이 남아 있습니다/);
+    m.saveManual();
+    assert.equal(fs.existsSync(m.file), false, '새 파일을 만들지 않는다 — 나중에 되돌린 사본이 덮어쓴다');
+
     // 고쳐서 되돌리고 다시 불러오면 정상으로 돌아온다
     fs.renameSync(path.join(dir, moved[0]), m.file);
     fs.writeFileSync(m.file, JSON.stringify({ a: { s: 'ok', v: 'https://x' } }));

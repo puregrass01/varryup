@@ -127,6 +127,18 @@ test('아마존 목록: API 페이징이 1000건에서 잘리면 안내와 trunc
   assert.equal(res.success, true);
   assert.equal(res.data.truncated, true);
   assert.match(res.data.note, /1000\/1386건에서 잘렸습니다/);
+  assert.match(res.data.note, /위의 \[전체 목록 동기화\]/);
+});
+
+test('아마존·eBay 목록 안내는 일괄 화면의 [전체 목록 동기화] 버튼을 가리킨다(예전: 기존 상품 탭)', async () => {
+  const amazon = { loadConfig() {}, async searchProducts(query, stats) { Object.assign(stats, { source: 'cache' }); return []; } };
+  const ebay = { async searchProducts() { return [{ id: 'E1', name: 'Mirror', price: '10' }]; } };
+  const { invoke } = ipcFixture({ amazon, ebay });
+  for (const scope of ['amazon-us', 'amazon-jp', 'ebay']) {
+    const res = await invoke('bulk-price-list', { scope });
+    assert.match(res.data.note, /위의 \[전체 목록 동기화\]/, scope);
+    assert.doesNotMatch(res.data.note, /기존 상품 탭/, scope);
+  }
 });
 
 test('쿠팡 저장: 아이템별 가격 변경 경로로 보내고 가격 API 로 다시 읽어 확인한다', async () => {

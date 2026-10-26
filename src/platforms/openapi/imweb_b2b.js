@@ -353,13 +353,26 @@ export function createB2bApi(client, {
     await patchDetail(prodNo, { images: [added[added.length - 1]] });
   }
 
-  /** 옵션 값 맞추기(이름 바꾸기 · 빠진 값 숨기기). 추가가 필요하면 아무것도 바꾸지 않고 던진다. */
-  async function applyOptionValues(prodNo, group, wantNames, details) {
-    const plan = planOptionValues(group.values, wantNames);
-    if (plan.add.length) {
-      throw new Error(`옵션 "${group.name}"에 값 ${plan.add.map(v => `"${v}"`).join(', ')} 을 추가해야 합니다 — 아임웹 Open API 는 `
+  /** 옵션 값 추가는 Open API 로 못 한다 — 계획에 추가가 있으면 던진다. 쓰기 전에 부른다. */
+  function rejectOptionAdds(group, wantNames) {
+    const add = planOptionValues(group.values, wantNames).add;
+    if (add.length) {
+      throw new Error(`옵션 "${group.name}"에 값 ${add.map(v => `"${v}"`).join(', ')} 을 추가해야 합니다 — 아임웹 Open API 는 `
         + '옵션 값을 추가하지 못합니다. 관리자에서 값을 추가한 뒤 다시 실행하세요.');
     }
+  }
+  /** 상품수정 탭의 optionValues([{optionCode, values}]) 전체를 cur 기준으로 미리 확인한다. */
+  function rejectOptionValueAdds(cur, optionValues) {
+    for (const g of optionValues || []) {
+      const group = cur.optionGroups.find(x => x.optionCode === g.optionCode);
+      if (group) rejectOptionAdds(group, g.values);
+    }
+  }
+
+  /** 옵션 값 맞추기(이름 바꾸기 · 빠진 값 숨기기). 추가가 필요하면 아무것도 바꾸지 않고 던진다. */
+  async function applyOptionValues(prodNo, group, wantNames, details) {
+    rejectOptionAdds(group, wantNames);
+    const plan = planOptionValues(group.values, wantNames);
     const done = [];
     if (plan.renames.length) {
       const names = new Map(plan.renames.map(r => [r.valueCode, r.to]));
@@ -640,6 +653,8 @@ export function createB2bApi(client, {
     if (!Object.keys(fields).length && (wantPrice === null || wantPrice === cur.price) && !wantValues && !wantCombos) {
       throw new Error('변경할 내용이 없습니다.');
     }
+    // 예전에는 상세·판매가를 먼저 쓰고 옵션 값 추가에서 던져 일부만 바뀐 채 '실패'였다 — 쓰기 전에 거부한다.
+    if (wantValues) rejectOptionValueAdds(cur, data.optionValues);
 
     if (Object.keys(fields).length) { await patchDetail(prodNo, fields); invalidateRows(); }
     if (wantPrice !== null && wantPrice !== cur.price) { await setPrice(prodNo, wantPrice); done.push(`판매가 ${cur.price} → ${wantPrice}원`); }
@@ -692,7 +707,7 @@ export function createB2bApi(client, {
 
   async function updateGroup(data) {
     const products = data.products || [], results = [];
-    const saveOne = async p => {
+    const planOne = async p => {
       const cur = await loadProduct(p.prodNo);
       const one = { prodNo: p.prodNo };
       if (data.baseKey) one.title = `${String(data.baseKey).trim()} ${suffixOf(cur.title)}`.trim();
@@ -703,16 +718,23 @@ export function createB2bApi(client, {
           const shared = data.sharedGroups.find(s => s.name === g.name);
           return { optionCode: g.optionCode, values: shared ? shared.values.slice() : g.values.map(v => v.valueName) };
         });
+        rejectOptionValueAdds(cur, one.optionValues);
       }
       if (Array.isArray(p.combos) && p.combos.length) one.combos = p.combos;
-      return updateProduct(one);
+      return one;
     };
-    for (const [i, p] of products.entries()) {
-      try { results.push(await saveOne(p)); }
+    // 전부 먼저 읽고 확인한다 — 세트는 되고 개별에서 옵션 값 추가로 막히면 세트만 바뀐 채 남았다.
+    const plans = [];
+    for (const p of products) {
+      try { plans.push(await planOne(p)); }
+      catch (e) { throw Object.assign(new Error(`상품 ${p.prodNo} 실패: ${e.message} — 어느 상품도 저장하지 않았습니다`), { partial: false }); }
+    }
+    for (const [i, one] of plans.entries()) {
+      try { results.push(await updateProduct(one)); }
       catch (e) {
         // 세트를 저장한 뒤 개별에서 멈추면 세트는 이미 바뀌었다 — 어느 쪽이 됐는지 같이 알린다(일괄 수정은 '일부만 수정').
         const rest = products.slice(i + 1).map(x => x.prodNo);
-        throw Object.assign(new Error([...results, `상품 ${p.prodNo} 실패: ${e.message}`,
+        throw Object.assign(new Error([...results, `상품 ${one.prodNo} 실패: ${e.message}`,
           ...(rest.length ? [`상품 ${rest.join(', ')} 보내지 않음`] : [])].join(' / ')), { partial: results.length > 0 });
       }
     }

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { localPathKey } from './utils/file_url.js';
 import { Ebay } from './platforms/ebay.js';
 import { EbayStore } from './platforms/ebay_store.js';
 
@@ -23,10 +23,11 @@ export function registerEbayIPC({ app, ipcMain, safeStorage, shell, uiDirectory,
   //   죽은 화면처럼 보이지만, index_up.html:675 가 **iframe 으로 이 파일을 불러** 등록 폼으로 쓴다
   //   (src 를 JS 로 넣기 때문에 정적 검색에 걸리지 않는다). 빼면 그 iframe 에서 오는 eBay 요청이
   //   전부 "허용되지 않은 eBay 요청입니다" 로 막힌다.
-  const trustedUrls = new Set(['index.html', 'index_up.html'].map(file => pathToFileURL(path.join(uiDirectory, file)).href));
+  // URL 문자열이 아니라 파일 경로로 비교한다(드라이브 문자 대소문자 · 인코딩 차이 — utils/file_url.js).
+  const trustedPaths = new Set(['index.html', 'index_up.html'].map(file => path.normalize(path.join(uiDirectory, file)).toLowerCase()));
   const handle = (channel, work) => ipcMain.handle(channel, async (event, data) => {
     try {
-      if (!trustedUrls.has(event.senderFrame?.url?.split(/[?#]/)[0])) throw new Error('허용되지 않은 eBay 요청입니다.');
+      if (!trustedPaths.has(localPathKey(event.senderFrame?.url))) throw new Error('허용되지 않은 eBay 요청입니다.');
       return { success: true, data: await work(getService(), data, event) };
     } catch (error) {
       // 중복 등록 예외(ebay.js saveDraft/publish)는 다른 채널처럼 duplicate·existing 을 함께 싣는다.

@@ -9,13 +9,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { CoupangStore } from '../src/platforms/coupang_store.js';
+import { CoupangStore as RealCoupangStore } from '../src/platforms/coupang_store.js';
 import { Coupang } from '../src/platforms/coupang.js';
 import { registerBulkPriceIPC } from '../src/bulk_price_ipc.js';
 
+// 판매가 캐시는 1초 뒤에 모아서 쓴다. 테스트가 지운 임시 폴더를 남은 타이머가 %TEMP% 에 다시 만들지 않게 지우기 전에 멈춘다.
+const stores = [];
+class CoupangStore extends RealCoupangStore { constructor(dir) { super(dir); stores.push(this); } }
+
 function tmpDir(t, prefix = 'coupang-cache-') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => { for (const s of stores.splice(0)) s.cache.stopTimers(); fs.rmSync(dir, { recursive: true, force: true }); });
   return dir;
 }
 

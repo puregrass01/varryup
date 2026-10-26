@@ -48,6 +48,14 @@ export class JsonCache {
     }
   }
 
+  /** 지금 쓰고 메모리에 둔다. 못 쓰면 던지고 메모리도 그대로다 — 전체 동기화처럼 결과가 꼭 디스크에 닿아야 할 때. */
+  save(data) {
+    writeJsonAtomic(this.file, data, this.indent);
+    this.stopTimers();
+    this.data = data;
+    this.dirty = false;
+  }
+
   /** 아직 안 쓴 변경을 지금 쓴다. 쓸 것이 없으면 false. 실패하면 다음 변경(또는 flush) 때 다시 쓴다. */
   flush() {
     this.stopTimers();

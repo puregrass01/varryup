@@ -86,3 +86,17 @@ test('EbayStore: 지운 뒤 생긴 파일(깨진 것 포함)은 다시 읽는다
   fs.writeFileSync(store.listingsPath, '{ broken');
   assert.throws(() => store.listingsCache(), SyntaxError);
 });
+
+// 전체 동기화 결과를 못 쓰면 던진다(2026-10-23 전과 같다) — 조용히 경고만 하면 화면은 '동기화 완료' 인데 파일은 옛 목록이고,
+// 다시 켜면 옛 목록(중복 검사 근거 포함)으로 돌아간다. 메모리도 옛 값 그대로 — 파일과 어긋나지 않는다.
+test('목록 캐시: 전체 동기화 결과를 쓰지 못하면 던지고 메모리도 그대로다', t => {
+  const amazon = new AmazonStore(tmpDir(t)), ebay = new EbayStore(tmpDir(t), mockEncryption);
+  amazon.saveListingsCache({ sellerId: 'S', marketplaceId: MP, total: 1, items: [row('SKU-1', '10')] });
+  ebay.saveListingsCache({ environment: 'sandbox', total: 1, items: [row('SKU-1', '10.00')] });
+  t.mock.method(fs, 'renameSync', () => { throw new Error('EPERM'); });
+  assert.throws(() => amazon.saveListingsCache({ sellerId: 'S', marketplaceId: MP, total: 1, items: [row('SKU-1', '20')] }), /EPERM/);
+  assert.throws(() => ebay.saveListingsCache({ environment: 'sandbox', total: 1, items: [row('SKU-1', '20.00')] }), /EPERM/);
+  assert.equal(amazon.listingsCache(MP).items[0].price, '10');
+  assert.equal(ebay.listingsCache().items[0].price, '10.00');
+  assert.equal(ebay.flush(), false, '남은 쓰기도 없다');
+});

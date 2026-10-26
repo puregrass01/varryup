@@ -115,6 +115,8 @@
   const log = (message, type = 'system') => {
     const entry = document.createElement('div'); entry.className = `log-entry ${type}`; entry.textContent = `[${new Date().toLocaleTimeString('ko-KR')}] ${message}`;
     $('ebLog').append(entry); $('ebLog').scrollTop = $('ebLog').scrollHeight;
+    // #ebLog 는 셸에서 숨는다 — 줄마다 셸 로그로도 넘긴다('[eBay] ' 머리말, 단계 유지).
+    window.forwardLogToShell?.('ebay', message, type);
   };
   const call = async (channel, data) => {
     const result = await window.invokeWithImages(ipc, `ebay-${channel}`, data);

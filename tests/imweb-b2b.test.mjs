@@ -334,15 +334,44 @@ test('상품수정 탭: 상품명 · 판매가 · 상세 이미지 · 조합 가
 
 test('묶음 수정: 세트를 저장한 뒤 개별이 실패하면 어느 쪽이 됐는지 알리고 일부만 수정(partial)으로 던진다', async () => {
   const client = fakeB2b();
+  client.store.set('900', { ...client.store.get('803'), prodNo: 900 });
+  const setPrice = client.setPrice;
+  client.setPrice = async (no, ...rest) => { if (String(no) === '712') throw new Error('판매가 거부'); return setPrice(no, ...rest); };
   const api = apiOf(client);
-  const err = await api.updateGroup({ products: [{ prodNo: 803, price: 85000 }, { prodNo: 99999, price: 1 }, { prodNo: 712, price: 2 }] })
+  const err = await api.updateGroup({ products: [{ prodNo: 803, price: 85000 }, { prodNo: 712, price: 2 }, { prodNo: 900, price: 3 }] })
     .then(() => null, e => e);
   assert.ok(err, '실패해야 한다');
   assert.equal(err.partial, true);
-  assert.match(err.message, /^상품 803 수정 완료 .* \/ 상품 99999 실패: .* \/ 상품 712 보내지 않음$/);
+  assert.match(err.message, /^상품 803 수정 완료 .* \/ 상품 712 실패: 판매가 거부 \/ 상품 900 보내지 않음$/);
   assert.equal(client.store.get('803').price, 85000, '앞 상품은 이미 저장됐다');
-  const first = await api.updateGroup({ products: [{ prodNo: 99999, price: 1 }] }).then(() => null, e => e);
+  // 읽기 단계에서 막히면(없는 상품) 앞 상품도 쓰지 않는다.
+  const first = await api.updateGroup({ products: [{ prodNo: 803, price: 86000 }, { prodNo: 99999, price: 1 }] }).then(() => null, e => e);
   assert.equal(first.partial, false, '하나도 저장 안 됐으면 partial 이 아니다');
+  assert.match(first.message, /^상품 99999 실패: .* — 어느 상품도 저장하지 않았습니다$/);
+  assert.equal(client.store.get('803').price, 85000);
+});
+
+test('묶음 수정: 옵션 값을 추가해야 하면(Open API 불가) 어느 상품에도 쓰기 전에 거부한다', async () => {
+  const client = fakeB2b();
+  const yr = client.store.get('803').groups.find(g => g.name === '연식');
+  yr.values = [yr.values[1]];   // 개별은 BSA O 하나뿐 — 세트 기준 공통 값(X · O)에 맞추려면 X 를 추가해야 한다
+  const api = apiOf(client);
+  const set = await api.loadProduct(712);
+  const writes = () => client.calls.filter(c => !['list', 'get', 'details', 'GET'].includes(c[0]));
+  const err = await api.updateGroup({ baseKey: '옵틱글래스 쌍용 렉스턴W 새이름', detailImages: ['https://x/n1.jpg'],
+    sharedGroups: set.optionGroups.map(g => ({ name: g.name, values: g.values.map(v => v.valueName) })),
+    products: [{ prodNo: 712, price: 151000 }, { prodNo: 803, price: 81000 }] }).then(() => null, e => e);
+  assert.ok(err, '실패해야 한다');
+  assert.equal(err.partial, false);
+  assert.match(err.message, /^상품 803 실패: 옵션 "연식"에 값 "12~17 \[No\.Y111\] BSA X" 을 추가해야 합니다 — 아임웹 Open API 는 옵션 값을 추가하지 못합니다.* — 어느 상품도 저장하지 않았습니다$/);
+  assert.deepEqual(writes(), [], '앞의 세트(712)도 상품명·상세·판매가를 쓰지 않는다');
+  // 한 상품만 고칠 때도 상품명·판매가보다 먼저 거부한다(예전에는 쓰고 나서 던졌다).
+  const yrGroup = (await api.loadProduct(803)).optionGroups.find(g => g.name === '연식');
+  await assert.rejects(api.updateProduct({ prodNo: 803, title: '새 이름', price: 81000,
+    optionValues: [{ optionCode: yrGroup.optionCode, values: ['a BSA X', 'a BSA O'] }] }), /"a BSA X" 을 추가해야 합니다/);
+  assert.deepEqual(writes(), []);
+  assert.deepEqual([client.store.get('803').name, client.store.get('803').price, client.store.get('712').price], [
+    '옵틱글래스 쌍용 렉스턴W 미러 운전석/조수석', 80000, 150000]);
 });
 
 test('상품수정 탭: 재고 관리를 쓰지 않는 상품(Open API 로 만든 상품)은 재고만 건너뛰고 알리며, 가격은 저장한다', async () => {

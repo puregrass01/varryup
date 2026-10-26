@@ -17,8 +17,7 @@ const KEY = 'veryup.board.selection.v1';
 const CELLS = {
   KOREA: ['own', 'b2b', 'open1', 'open2'],
   USA: ['own', 'open1', 'open2'],
-  JAPAN: ['own', 'open1', 'open2'],
-  ARAB: ['own'],
+  JAPAN: ['own', 'open1'],   // 라쿠텐(JAPAN-open2)·쇼피파이(ARAB-own)는 연동이 없어 비활성 칸이다(10-26)
 };
 const ALL = Object.entries(CELLS).flatMap(([c, ts]) => ts.map(t => `${c}-${t}`));
 const rowOf = (...countries) => countries.flatMap(c => CELLS[c].map(t => `${c}-${t}`)).sort();
@@ -82,7 +81,7 @@ try {
 
   await countTabSwitches();
   await preset('all');
-  assert.deepEqual(await selected(), [...ALL].sort(), '전체 = 켤 수 있는 열한 칸');
+  assert.deepEqual(await selected(), [...ALL].sort(), '전체 = 켤 수 있는 아홉 칸');
   assert.deepEqual(await pressed(), ['all']);
   assert.ok(await page.evaluate(() => window.tabSwitches) <= 1,
     `칸 여러 개를 바꿔도 폼 탭은 한 번만 옮긴다 (${await page.evaluate(() => window.tabSwitches)}번)`);

@@ -61,7 +61,7 @@ test('제목만 수정하면 제목 속성만 PATCH로 보내고 이미지·불�
   const { amazon, calls } = setup(t, call =>
     call.method === 'GET' ? ok(existingListing()) : ok({ sku: 'SKU-1', status: 'ACCEPTED', submissionId: 'sub-1' }));
 
-  // veryup-update-product 경로가 넘기는 형태: 값이 없는 필드는 빈 문자열로 들어온다.
+  // 값이 없는 필드는 빈 문자열로 들어올 수 있다(예전 veryup-update-product 경로의 형태 — 그 경로는 2026-10-23 지웠다).
   const result = await amazon.updateExistingProduct({
     sku: 'SKU-1', title: '새 제목', titleEn: '새 제목', price: '', stock: '', description: '', marketplaceId: MP
   });

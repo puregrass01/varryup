@@ -156,6 +156,11 @@ test('price update changes only the US offer and checks item-level failures', as
   remote.behavior = async (m, url) => url.endsWith('bulk_update_price_quantity') ? { responses: [{ statusCode: 400, errors: [{ message: 'Price rejected' }] }] } : undefined;
   await assert.rejects(service.updatePriceQuantity({ sku: product.sku, price: 60, quantity: 3 }), /Price rejected/);
 });
+test('price update that eBay accepted is not reported as failed when the local cache update throws', async t => {
+  const { service, store } = fixture(t); await service.saveDraft(product); await service.publish(product.sku);
+  store.updateCachedListing = () => { throw new SyntaxError('broken listings cache'); };
+  assert.equal((await service.updatePriceQuantity({ sku: product.sku, price: '60.00', quantity: 3 })).status, 'UPDATED');
+});
 test('concurrent mutations and config changes are rejected while a job is active', async t => {
   const { service, api } = fixture(t); let release; api.aspects = () => new Promise(resolve => { release = resolve; });
   const pending = service.saveDraft(product); await assert.rejects(service.saveDraft(product), /진행 중/); assert.throws(() => service.saveConfig({}), /작업 중/);

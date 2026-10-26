@@ -19,7 +19,7 @@ export class EbayStore {
   // 깨진 파일은 던진다 — ebay.js _legacyListingForSku 가 받아 '확인 못 함' 으로 진행한다.
   listingsCache() { return this.listings.read(); }
   // 전체 동기화 결과는 바로 쓴다 — 받은 목록을 타이머에 맡기지 않는다.
-  saveListingsCache(data) { this.listings.set(data); this.listings.flush(); return data; }
+  saveListingsCache(data) { this.listings.save(data); return data; }
   clearListingsCache() { this.listings.clear(); }
   /** 아직 안 쓴 변경을 지금 쓴다(앱을 끌 때). */
   flush() { return this.listings.flush(); }

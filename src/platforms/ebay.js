@@ -567,8 +567,10 @@ export class Ebay {
         if (detail) Object.assign(error, { status: Number(response.statusCode) || 400, rejected: true });
         throw error;
       }
+      // eBay 수정은 이미 성공했다. 목록 캐시가 깨져 있어도(listingsCache 가 던진다) 실패로 알리면 안 된다 — 아마존 _syncCachedListing 과 같다.
       if (typeof this.store?.updateCachedListing === 'function') {
-        this.store.updateCachedListing(current.sku, quantity === undefined ? { price } : { price, stock: quantity });
+        try { this.store.updateCachedListing(current.sku, quantity === undefined ? { price } : { price, stock: quantity }); }
+        catch (e) { console.warn('[eBay] 캐시 반영 실패(무시):', e.message); }
       }
       return { status: 'UPDATED', warnings: response.warnings || [] };
     });

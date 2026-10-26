@@ -32,7 +32,8 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(pathToFileURL(path.resolve('src/ui/index_up.html')).href);
   await page.locator('label[for="mode-edit"]').click();
-  await page.locator('#cell-USA-open1 .plat-name').click();
+  // 로고 타일에는 .plat-name 이 없다(로고 파일이 없을 때만 이름) — 칸 자체를 누른다.
+  await page.locator('#cell-USA-open1').click();
   const frame = page.frameLocator('#form-frame');
   await frame.locator('#amzSearchBtn').click();
   await frame.locator('#amzSearchResults .vu-product-select').waitFor();
@@ -51,14 +52,14 @@ try {
     await frame.locator('#amzSearchResults').getByText(message, { exact: true }).waitFor();
     assert.equal(await frame.locator('#amzSearchBtn').isEnabled(), true);
   }
-  await page.locator('#cell-JAPAN-open1 .plat-name').click();
+  await page.locator('#cell-JAPAN-open1').click();
   assert.equal(await frame.locator('#amzMarketplaceId').inputValue(), 'A1VC38T7YXB528');
   await frame.locator('#amzSearchText').fill('');
   await frame.locator('#amzSearchBtn').click();
   await frame.locator('#amzSearchResults .vu-product-select').click();
   assert.deepEqual(await child.evaluate(() => window.calls.filter(c => c.channel === 'amazon-load-product').at(-1).data),
     { sku: 'custom/<sku>', marketplaceId: 'A1VC38T7YXB528' });
-  await page.locator('#cell-USA-open2 .plat-name').click();
+  await page.locator('#cell-USA-open2').click();
   await frame.locator('[data-eb="search"]').click();
   await frame.locator('#ebSearchResults .vu-product-select').waitFor();
   assert.equal(await frame.locator('#ebSearchResults img').count(), 0);
