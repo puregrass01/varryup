@@ -68,44 +68,53 @@ try {
   assert.equal(await parent.locator('#btn-confirm-platform').count(), 0);
   assert.equal(await parent.locator('#section8-header').count(), 1);
   // 1-클릭: 테이블 클릭만으로 확인 버튼 없이 바로 폼과 해당 탭이 열림
-  await parent.locator('#cell-USA-open2 .plat-name').click();
+  // 로고가 있는 타일에는 .plat-name 이 없다(로고가 깨질 때만 생긴다) — 타일 자체를 누른다.
+  await parent.locator('#cell-USA-open2').click();
   const frame = parent.frameLocator('#form-frame'); await frame.locator('#ebayTab').waitFor({ state: 'visible' });
   assert.equal(await frame.locator('#ebayTab').isVisible(), true);
   assert.equal(await frame.locator('#coupangTab').isVisible(), false);
   assert.equal(await frame.locator('.app-header').isVisible(), false);
-  assert.equal(await frame.locator('.app-tabs').isVisible(), true);
+  assert.equal(await frame.locator('.app-tabs').isVisible(), false, '가운데 몰 탭 줄은 10-16 에 뺐다 — 현황판 타일이 탭을 고른다');
   assert.equal(await frame.locator('#ebStatus').isVisible(), true);
-  await frame.locator('#ebSku').fill('PRESERVE-SKU');
+  // eBay 탭 로그(#ebLog)는 셸에서 숨는다 — 줄마다 셸 로그로 '[eBay] ' 를 붙여 단계 그대로 넘어가야 한다.
+  const ebFrame = parent.frames().find(f => f.url().includes('/index.html'));
+  await ebFrame.evaluate(() => { document.getElementById('ebCategoryQuery').value = 'mirror'; document.querySelector('[data-eb="categories"]').click(); });
+  await parent.waitForFunction(() => document.getElementById('log-window').textContent.includes('[eBay] 1개 카테고리'));
+  await ebFrame.evaluate(() => document.querySelector('[data-eb="settings"]').click());   // 가짜 IPC 에 없는 채널 → 오류 줄
+  await parent.waitForFunction(() => [...document.querySelectorAll('#log-window .log-entry.error')].some(e => e.textContent.includes('[eBay] Offline test stub')));
+  assert.equal(await parent.locator('#log-window .log-entry.info', { hasText: '[eBay] 1개 카테고리' }).count(), 1, '기본(system) 줄은 info 로');
+  // SKU 칸은 셸이 채우는 칸이라(shell-owned) 숨는다 — 사람이 치는 카테고리 검색어로 탭 전환 뒤 보존을 본다.
+  await frame.locator('#ebCategoryQuery').fill('PRESERVE-QUERY');
   // 1-클릭: 현황판에서 아임웹 자사몰 클릭 시 바로 아임웹 탭으로 전환되고 iwTargetUs 체크됨
-  await parent.locator('#cell-USA-own .plat-name').click();
+  await parent.locator('#cell-USA-own').click();
   await frame.locator('#imwebBoardTab').waitFor({ state: 'visible' });
   assert.equal(await frame.locator('#iwTargetUs').isChecked(), true);
   await parent.screenshot({ path: path.join(output, 'imweb-us-parent.png'), fullPage: true, animations: 'disabled' });
-  await frame.locator('.tab-btn[onclick*="ebayTab"]').click();
+  await parent.locator('#cell-USA-open2').click();   // 이미 켠 eBay 타일을 다시 누르면 그 탭으로 돌아간다
   await frame.locator('#ebayTab').waitFor({ state: 'visible' });
-  assert.equal(await frame.locator('#ebSku').inputValue(), 'PRESERVE-SKU');
-  assert.equal(await parent.locator('#cell-USA-open2 input').isChecked(), true);
+  assert.equal(await frame.locator('#ebCategoryQuery').inputValue(), 'PRESERVE-QUERY');
+  assert.equal(await parent.locator('#cell-USA-open2').getAttribute('aria-checked'), 'true');
   await parent.screenshot({ path: path.join(output, 'ebay-parent.png'), fullPage: true, animations: 'disabled' });
 
   // 1-클릭: 네이버 클릭 시 폼에서 네이버 탭 활성화
-  await parent.locator('#cell-KOREA-open1 .plat-name').click();
+  await parent.locator('#cell-KOREA-open1').click();
   await frame.locator('#naverTab').waitFor({ state: 'visible' });
   assert.equal(await frame.locator('#naverTab').isVisible(), true);
   assert.equal(await frame.locator('#ebayTab').isVisible(), false);
 
   // 1-클릭: 쿠팡 클릭 시 쿠팡 탭 활성화
-  await parent.locator('#cell-KOREA-open2 .plat-name').click();
+  await parent.locator('#cell-KOREA-open2').click();
   await frame.locator('#coupangTab').waitFor({ state: 'visible' });
   assert.equal(await frame.locator('#coupangTab').isVisible(), true);
 
   // 1-클릭: 이미 체크된 네이버 다시 클릭 시 네이버로 뷰 전환
-  await parent.locator('#cell-KOREA-open1 .plat-name').click();
+  await parent.locator('#cell-KOREA-open1').click();
   await frame.locator('#naverTab').waitFor({ state: 'visible' });
   assert.equal(await frame.locator('#naverTab').isVisible(), true);
 
   // Existing edit-mode selection must use the eBay form, not the unrelated generic search IPC.
   await parent.locator('label[for="mode-edit"]').click();
-  await parent.locator('#cell-USA-open2 .plat-name').click();
+  await parent.locator('#cell-USA-open2').click();
   await frame.locator('#ebEditForm').waitFor({ state: 'visible' });
   assert.equal(await frame.locator('#ebMode').inputValue(), 'edit');
   await parent.evaluate(() => { uncheckAllAndClearCards(); updateEmptyState(); });
@@ -113,5 +122,5 @@ try {
   const ebayErrors = errors.filter(error => /ebay|eb[A-Z]/i.test(error));
   assert.deepEqual(ebayErrors, []);
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ result: 'PASS', checks: 'form, metadata, common import, draft, publish, edit, stale state, parent iframe, edit routing', pageErrors: errors, screenshots: output }, null, 2));
+  console.log(JSON.stringify({ result: 'PASS', checks: 'form, metadata, common import, draft, publish, edit, stale state, parent iframe, shell log forward, edit routing', pageErrors: errors, screenshots: output }, null, 2));
 } finally { await browser.close(); }

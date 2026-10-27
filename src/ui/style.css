@@ -545,13 +545,6 @@ textarea.form-input {
     background: rgba(59, 130, 246, 0.05);
 }
 
-.ai-upload-box:hover {
-    border-color: #a78bfa !important;
-    background: rgba(139, 92, 246, 0.1) !important;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
-}
-
 .upload-placeholder {
     display: flex;
     flex-direction: column;
@@ -618,15 +611,6 @@ textarea.form-input {
     display: flex;
     gap: var(--space-sm);
     align-items: stretch;
-}
-
-.folder-select {
-    flex: 1;
-    font-size: 0.85rem;
-}
-
-.folder-select:disabled {
-    opacity: 0.5;
 }
 
 /* HTML Output */

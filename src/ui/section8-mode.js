@@ -16,8 +16,7 @@ function setSection8Mode(mode, force = false) {
     if (btnBulkEdit) btnBulkEdit.style.display = mode === 'edit' ? '' : 'none';
     // 세대·연식·BSA·차량종류·조견표 HTML 은 신규 모드 채우기(fillFrame)만 읽는다. 수정 모드에서는
     // 입력해도 아무 데도 안 쓰여서 '왜 반영이 안 되지' 를 만든다 → 확인 버튼과 같이 숨긴다.
-    // 브랜드·차종명·상품코드·상품번호는 남긴다 — 수정 모드의 searchProduct() 가 검색어로 쓰고,
-    // fillFrame 이 수정 폼의 찾기 칸(SKU·상품번호)에 넘긴다.
+    // 브랜드·차종명·상품코드·상품번호는 남긴다 — fillFrame 이 수정 폼의 찾기 칸(SKU·상품번호)에 넘긴다.
     for (const el of document.querySelectorAll('.new-only')) {
       el.style.display = mode === 'new' ? '' : 'none';
     }
@@ -30,19 +29,15 @@ function setSection8Mode(mode, force = false) {
     if (library) library.hidden = mode === 'edit';
     const infoTitle = document.getElementById('product-info-title');
     if (infoTitle) infoTitle.textContent = mode === 'new' ? '상품 정보' : '상품 정보 (검색 조건)';
-    if (changed) {
-      if (mode === 'edit') logWindow.innerHTML = '';
-      cardArea.innerHTML = '';
-    }
+    // 로그(#log-window)는 두 모드 모두 보이고 모드를 바꿔도 지우지 않는다 — 수정 저장·콘솔·일괄 결과가 여기 남는다.
+    if (changed) cardArea.innerHTML = '';
     if (mode === 'new') {
-      logWindow.style.display = '';
       cardArea.style.display = 'none';
       if (sec8Desc) sec8Desc.textContent = '신규등록 — 실행 로그';
       if (btnClear) btnClear.title = '로그 지우기';
       const emptyText = $('empty-state-text');
       if (emptyText) emptyText.textContent = '현황판에서 플랫폼을 클릭하면 등록 폼이 열립니다.';
     } else {
-      logWindow.style.display = 'none';
       cardArea.style.display = 'flex';
       if (sec8Desc) sec8Desc.textContent = '단일 상품 수정 — 상품 편집';
       if (btnClear) btnClear.title = '선택한 폼 모두 닫기';

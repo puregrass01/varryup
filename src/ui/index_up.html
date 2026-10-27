@@ -132,7 +132,28 @@
       font-weight: 700;
       letter-spacing: 0.08em;
       color: var(--text-primary);
+      flex: none;
+    }
+
+    /* 상태줄 — addLog 의 마지막 줄. 로그창이 숨는 화면(접힘 400px·상품 일괄 수정·API KEY)에서도 결과가 보인다.
+       두 줄까지(줄 높이 14px × 2 = 버튼 28px)라 헤더 높이가 안 바뀐다. */
+    #shell-status {
       flex: 1;
+      min-width: 0;
+      font-size: 12px;
+      line-height: 14px;
+      color: var(--text-secondary);
+      overflow: hidden;
+      overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+    #shell-status[data-level="warn"]  { color: var(--log-warn); }
+    #shell-status[data-level="error"] { color: var(--log-err); }
+    /* 접힌 400px 창에서는 제목 자리를 상태줄에 준다(메시지가 생긴 뒤에만). */
+    @media (max-width: 560px) {
+      #header:has(#shell-status:not(:empty)) #app-title { display: none; }
     }
 
     /* ── 모드 선택 ── */
@@ -739,32 +760,7 @@
 
     .product-card-body { padding: 10px 12px; }
 
-    .searching-indicator {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 0;
-      color: var(--text-secondary);
-      font-size: 12px;
-    }
-    .spinner {
-      width: 14px; height: 14px;
-      border: 2px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      flex-shrink: 0;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .no-results {
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 12px;
-      padding: 14px 0;
-    }
-
-    /* 일괄 수정 결과 카드 — 수정 모드에서는 로그창이 숨어 있어 결과를 여기에 적는다. */
+    /* 일괄 수정 결과 카드 — 이번 일괄 수정의 결과만 모아 둔다(로그에도 같이 남는다). */
     .bulk-edit-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
     .bulk-edit-rows li { font-size: 12px; line-height: 1.5; padding: 4px 8px; border-radius: 4px; overflow-wrap: anywhere; }
     .bulk-edit-rows li.info  { background: rgba(59,130,246,0.06); color: var(--text-primary); }
@@ -804,6 +800,7 @@
   <div id="header">
     <button id="btn-back" title="런처로 돌아가기">← 런처로</button>
     <div id="app-title">VERY UP VER3</div>
+    <div id="shell-status" role="status" aria-live="polite"></div>
     <div style="display:flex;gap:6px;margin-left:auto;-webkit-app-region:no-drag;">
       <button id="btn-theme" type="button" data-theme-toggle title="밝게 / 어둡게"
         style="width:28px;height:28px;border-radius:50%;border:none;background:var(--ovl-2);color:var(--text-secondary);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;"
@@ -1100,10 +1097,11 @@ const PLATFORMS = {
     { type: 'own',   name: '아임웹',  label: '자사몰',    active: true  },
     { type: 'b2b',   name: '',        label: 'B2B',       active: false },
     { type: 'open1', name: '아마존',  label: '오픈마켓1', active: true  },
-    { type: 'open2', name: '라쿠텐', label: '오픈마켓2', active: true  },
+    // 라쿠텐·쇼피파이는 앱에 연동(찾기·등록·수정)이 없어 꺼 둔다. 켜 두면 일괄 수정이 늘 '상품 없음' 으로 센다.
+    { type: 'open2', name: '라쿠텐', label: '오픈마켓2', active: false },
   ],
   ARAB: [
-    { type: 'own',   name: '쇼피파이', label: '자사몰',    active: true  },
+    { type: 'own',   name: '쇼피파이', label: '자사몰',    active: false },
     { type: 'b2b',   name: '',         label: 'B2B',       active: false },
     { type: 'open1', name: '',         label: '오픈마켓1', active: false },
     { type: 'open2', name: '',         label: '오픈마켓2', active: false },
@@ -1252,6 +1250,7 @@ loadVuVehicleCatalog();
 const $ = id => document.getElementById(id);
 const boardBody  = $('board-body');
 const logWindow  = $('log-window');
+const shellStatus = $('shell-status');
 const cardArea   = $('card-area');
 const emptyState = $('empty-state');
 const sec8Desc   = $('sec8-desc');
@@ -1738,16 +1737,6 @@ function handleCheck(country, type, isChecked, targetTab, { quiet = false } = {}
   const plat = PLATFORMS[country]?.find(p => p.type === type);
   const resolvedTab = targetTab || (plat ? NAME_TO_TAB[plat.name] : null);
 
-  if (currentMode === 'edit' && !resolvedTab) {
-    if (isChecked) {
-      searchProduct(country, type);
-    } else {
-      removeCard(country, type);
-    }
-    updateEmptyState();
-    return;
-  }
-
   if (quiet) return;
 
   // 1-Click 테이블 클릭 시 바로 해당 플랫폼 탭 열기
@@ -1814,78 +1803,14 @@ function addLog(msg, level = 'info') {
   requestAnimationFrame(() => {
     logWindow.scrollTop = logWindow.scrollHeight;
   });
+  // 헤더 상태줄에는 마지막 줄의 글자만 — 로그창이 숨는 화면에서도 보인다.
+  shellStatus.textContent = msg;
+  shellStatus.dataset.level = level;
 
   updateEmptyState();
 }
 
-/* ══════════════════════════════════════════════
-   상품 검색 (수정 모드 — Section 8 카드 영역)
-══════════════════════════════════════════════ */
-async function searchProduct(country, type) {
-  const plat = PLATFORMS[country]?.find(p => p.type === type);
-  if (!plat) return;
-
-  const brand = $('inp-brand')?.value.trim() || '';
-  const carModel = $('inp-carmodel')?.value.trim() || '';
-  const code = $('inp-code')?.value.trim() || '';
-  const no = $('inp-no')?.value.trim() || '';
-  const searchText = code || no || `${brand} ${carModel}`.trim() || '';
-  const cardId = `card-${country}-${type}`;
-
-  // 기존 카드 제거 후 새로 생성
-  removeCard(country, type);
-
-  const card = document.createElement('div');
-  card.className = 'product-card';
-  card.id = cardId;
-  card.innerHTML = `
-    <div class="product-card-header">
-      <span class="platform-badge">${escHtml(country)}</span>
-      <span class="card-title">${escHtml(plat.name)} — ${escHtml(plat.label)}</span>
-      <span class="card-status" id="${cardId}-status">검색 중...</span>
-    </div>
-    <div class="product-card-body" id="${cardId}-body">
-      <div class="searching-indicator">
-        <div class="spinner"></div>
-        <span>${escHtml(plat.name)}에서 상품 검색 중${searchText ? ' (' + escHtml(searchText) + ')' : ''}...</span>
-      </div>
-    </div>
-  `;
-  cardArea.appendChild(card);
-  updateEmptyState();
-
-  try {
-    addLog(`[${country} ${plat.name}] 상품 검색 시작... (${searchText || '전체'})`, 'info');
-    const result = await ipc.invoke('veryup-search-product', {
-      country, platform: plat.name, searchText, brand, model: carModel, code: code || no
-    });
-    renderSearchResult(cardId);
-    const count = (result && result.items) ? result.items.length : 0;
-    addLog(`[${country} ${plat.name}] 검색 완료 (${count}건)`, count > 0 ? 'ok' : 'warn');
-  } catch (err) {
-    const body = document.getElementById(`${cardId}-body`);
-    if (body) body.innerHTML = `<div class="no-results">❌ 검색 오류: ${escHtml(String(err.message || err))}</div>`;
-    const status = document.getElementById(`${cardId}-status`);
-    if (status) status.textContent = '오류';
-    addLog(`[${country} ${plat.name}] 검색 실패: ${err.message}`, 'error');
-  }
-}
-
-// 카드는 탭이 없는 몰(라쿠텐·쇼피파이)만 쓴다. 메인에 그 몰의 검색·수정이 없어 결과는 늘 비어 있고(veryup-search-product),
-// 일괄 수정은 이 '결과 없음' 을 보고 그 몰을 '상품 없음' 으로 센다(requireEditItem).
-// 예전의 상품 표 · 수정 폼 · 적용(veryup-update-product)은 결과가 없어 닿을 수 없었다 — 10-23 지웠다.
-function renderSearchResult(cardId) {
-  const body = document.getElementById(`${cardId}-body`);
-  const status = document.getElementById(`${cardId}-status`);
-  if (!body) return;
-  if (status) status.textContent = '결과 없음';
-  body.innerHTML = '<div class="no-results">검색 결과가 없습니다.</div>';
-}
-
-function removeCard(country, type) {
-  const card = document.getElementById(`card-${country}-${type}`);
-  if (card) card.remove();
-}
+// 탭이 없는 몰(라쿠텐·쇼피파이)의 수정 모드 검색 카드(veryup-search-product)는 늘 빈 결과라 10-26 지웠다 — 그 몰은 현황판에서 꺼져 있다.
 
 /* ══════════════════════════════════════════════
    좌측 → 오른쪽 등록·수정 폼
@@ -2555,11 +2480,8 @@ function fixOrdinals(s) {
 function updateEmptyState() {
   const frame = $('form-frame');
   const frameOpen = frame && frame.style.display === 'block';
-  if (currentMode === 'new') {
-    emptyState.style.display = (frameOpen || logWindow.children.length > 0) ? 'none' : 'flex';
-  } else {
-    emptyState.style.display = (frameOpen || cardArea.children.length > 0) ? 'none' : 'flex';
-  }
+  // 로그는 두 모드 모두 보인다. 카드 영역은 수정 모드에만 있다(신규로 가면 비운다 — section8-mode.js).
+  emptyState.style.display = (frameOpen || logWindow.children.length > 0 || cardArea.children.length > 0) ? 'none' : 'flex';
 }
 
 /* ══════════════════════════════════════════════
@@ -2594,8 +2516,10 @@ function uncheckAllAndClearCards() {
 /* ══════════════════════════════════════════════
    이벤트 연결
 ══════════════════════════════════════════════ */
-// 뒤로가기
+// 뒤로가기. 일괄 등록·수정 중이면 묻는다 — 창이 닫히면 남은 몰은 처리되지 않는다.
+// 저장 안 한 상품 일괄 수정 변경은 메인이 묻는다(will-prevent-unload).
 $('btn-back').addEventListener('click', () => {
+  if (isBulkRunning && !confirm(`${bulkKind}이 진행 중입니다. 런처로 가면 남은 몰은 처리되지 않습니다. 그래도 갈까요?`)) return;
   ipc.send('close-app');
 });
 
@@ -3045,8 +2969,7 @@ async function runBulkRegister() {
 /* ══════════════════════════════════════════════
    일괄 수정 (단일 상품 수정 모드 — 선택된 플랫폼의 수정 저장을 순차 실행)
    몰마다 그 탭에 '불러온 상품' 을 저장한다. 수정할 상품이 없는 몰은 저장 함수를 부르지 않고
-   EditItemMissingError 로 끝낸다 — 저장 함수에 맡기면 '먼저 불러오세요' 가 그 탭 로그에만 남고,
-   카드 몰(라쿠텐 등)은 '결과 없음' 인 채로 아무 일도 없이 지나갔다.
+   EditItemMissingError 로 끝낸다 — 저장 함수에 맡기면 '먼저 불러오세요' 가 그 탭 로그에만 남았다.
    셸이 대신 불러와서 저장하지는 않는다: 고친 것 없는 저장도 마켓에는 수정이다(쿠팡은 승인 심사를 다시 탄다).
 ══════════════════════════════════════════════ */
 class EditItemMissingError extends Error {
@@ -3056,7 +2979,7 @@ class EditItemMissingError extends Error {
   }
 }
 
-// 수정 모드에서 현황판에서 켠 몰. tabId 가 있으면 그 탭의 저장 함수(fn)를 탄다. card 는 탭이 없는 몰 — 고를 상품이 없어 늘 '상품 없음'.
+// 수정 모드에서 현황판에서 켠 몰. 그 탭(tabId)의 저장 함수(fn)를 탄다.
 // unavailable: 일괄 수정에서 빼는 이유. 아임웹 B2B 는 2026-10-05 Open API 저장으로 옮겨 넣었다 — 판매가는 B2B 탭 값 그대로다
 // (B2B 가는 세트·개별·조합마다 달라 좌측 변경 판매가를 넣지 않는다). 게시판 글은 Open API 가 없어 저장할 때 브라우저를 띄운다.
 // currency: 그 몰이 읽는 좌측 변경 판매가 칸. 'market' 은 탭에 불러온 마켓의 통화(아마존 미국 USD · 일본 JPY).
@@ -3074,25 +2997,11 @@ function bulkEditTargets() {
   // 불러온 상품과 마켓이 달라져 저장이 거부된다.
   if (checked.USA?.open1 || checked.JAPAN?.open1) targets.push({ name: '아마존', tabId: 'amazonTab', country: null, fn: 'registerAmazon', currency: 'market' });
   if (checked.USA?.open2) targets.push({ name: 'eBay 미국', tabId: 'ebayTab', country: 'USA', fn: 'ebayUpdate', what: '가격·판매 수량 수정', currency: 'USD' });
-  const countryKo = { KOREA: '한국', USA: '미국', JAPAN: '일본', ARAB: '중동' };
-  for (const country of Object.keys(PLATFORMS)) {
-    for (const plat of PLATFORMS[country]) {
-      if (plat.active && plat.name && !NAME_TO_TAB[plat.name] && checked[country][plat.type]) {
-        targets.push({ name: `${plat.name} ${countryKo[country] || country}`, card: `card-${country}-${plat.type}` });
-      }
-    }
-  }
   return targets;
 }
 
 // 수정할 상품을 돌려준다. 없으면 던진다 — 일괄 수정은 이 예외로 그 몰을 '상품 없음' 으로 센다.
 function requireEditItem(target, win) {
-  if (target.card) {
-    const status = document.getElementById(`${target.card}-status`)?.textContent || '';
-    throw new EditItemMissingError(/결과 없음|오류/.test(status)
-      ? `수정할 상품이 없습니다 — 검색 결과가 없습니다(${status})`
-      : '수정할 상품이 없습니다 — 카드의 검색 결과에서 상품을 고르세요');
-  }
   const item = typeof win.editItemOf === 'function' ? win.editItemOf(target.tabId) : null;
   if (!item) throw new EditItemMissingError(`수정할 상품이 없습니다 — ${target.name} 탭에서 상품을 먼저 불러오세요`);
   return item;
@@ -3138,7 +3047,7 @@ function skuBsa() {
   return listing ? !!listing.bsa : null;
 }
 
-// 결과 카드. 수정 모드에서는 로그창이 숨어 있어 결과를 카드 영역 맨 위에 적는다(로그에도 같이 남긴다).
+// 결과 카드. 이번 일괄 수정의 결과만 카드 영역 맨 위에 모은다(로그·헤더 상태줄에도 같이 남긴다).
 // bulkEditLive: 도는 동안의 카드 — 도중 모드 전환 거절도 여기에 적는다.
 let bulkEditLive = null;
 function bulkEditReport() {
@@ -3206,7 +3115,7 @@ async function runBulkEdit() {
     prices[currency] = value;
   }
   // 찾는 열쇠(SKU·상품ID)를 지금 좌측 값으로 맞춰 둔다. 도중에 늦게 들어가면 탭이 '불러온 상품과
-  // 칸이 다르다' 며 저장을 거부한다. 폼이 아직 안 떴으면(카드 몰만 켬) 넘길 것도 없다.
+  // 칸이 다르다' 며 저장을 거부한다.
   clearTimeout(frameSyncTimer);
   frameSyncTimer = null;
   fillFrame({ report: false });
@@ -3237,27 +3146,21 @@ async function runBulkEdit() {
       }
       let result, label = '', priced = null;
       try {
-        let item, run;
-        if (target.card) {
-          requireEditItem(target);   // 카드 몰은 고를 상품이 없다 — 늘 EditItemMissingError 로 던진다
-        } else {
-          openPlatformTab(target.tabId, target.country);
-          const win = await waitForFormFunction(target.fn, bulkTiming.frameMs);
-          if (!win) throw new Error(`수정 폼이 ${bulkDuration(bulkTiming.frameMs)} 안에 준비되지 않았습니다(${target.fn} 없음)`);
-          item = requireEditItem(target, win);
-          label = [item.id, item.market].filter(Boolean).join(' · ');
-          // 변경 판매가를 그 탭에 불러온 상품에 넣고 같은 저장으로 보낸다. 넣지 못하면(쿠팡에 그 번호 옵션이
-          // 없다 등) applyEditPrice 가 던진다 — 그 몰은 저장하지 않고 실패로 센다. 판매가만 빼고 저장하면
-          // 사람은 판매가까지 바뀐 줄 안다.
-          const currency = target.currency === 'market' ? (item.market === '일본' ? 'JPY' : 'USD') : target.currency;
-          if (currency && prices[currency]) {
-            if (typeof win.applyEditPrice !== 'function') throw new Error('이 탭은 판매가를 넣을 수 없습니다(applyEditPrice 없음)');
-            priced = { currency, ...win.applyEditPrice(target.tabId, prices[currency], { no: keyNo, bsa: keyBsa }) };
-            pricedCurrencies.add(currency);
-          }
-          run = () => win[target.fn]();
+        openPlatformTab(target.tabId, target.country);
+        const win = await waitForFormFunction(target.fn, bulkTiming.frameMs);
+        if (!win) throw new Error(`수정 폼이 ${bulkDuration(bulkTiming.frameMs)} 안에 준비되지 않았습니다(${target.fn} 없음)`);
+        const item = requireEditItem(target, win);
+        label = [item.id, item.market].filter(Boolean).join(' · ');
+        // 변경 판매가를 그 탭에 불러온 상품에 넣고 같은 저장으로 보낸다. 넣지 못하면(쿠팡에 그 번호 옵션이
+        // 없다 등) applyEditPrice 가 던진다 — 그 몰은 저장하지 않고 실패로 센다. 판매가만 빼고 저장하면
+        // 사람은 판매가까지 바뀐 줄 안다.
+        const currency = target.currency === 'market' ? (item.market === '일본' ? 'JPY' : 'USD') : target.currency;
+        if (currency && prices[currency]) {
+          if (typeof win.applyEditPrice !== 'function') throw new Error('이 탭은 판매가를 넣을 수 없습니다(applyEditPrice 없음)');
+          priced = { currency, ...win.applyEditPrice(target.tabId, prices[currency], { no: keyNo, bsa: keyBsa }) };
+          pricedCurrencies.add(currency);
         }
-        label = label || [item.id, item.market].filter(Boolean).join(' · ');
+        const run = () => win[target.fn]();
         addLog(`[${target.name}] ${label ? `${label} ` : ''}${target.what || '수정 저장'} 요청 전송 중...`, 'info');
         // 저장 함수는 던지지 않기로 했지만, 던져도(폼 스크립트 오류 등) 실패로 세고 다음 몰로 간다.
         const raw = await withBulkTimeout(Promise.resolve().then(run), bulkTiming.stepMs);
@@ -3412,7 +3315,7 @@ setSection8Mode(initialMode);
 // 기본 화면은 현황판뿐이다. 앱은 main_process 가 ?panels=collapsed 로 띄운다 — 창도 이미 접힌
 // 폭으로 만들어져 있어 크기 요청은 안 보낸다. 쿼리 없이 열면(테스트·개발) 예전처럼 다 펼친다.
 if (urlParams.get('panels') === 'collapsed') setPanels(false, { resize: false });
-// 지난번 현황판 선택을 되살린다. 모드를 정한 뒤에 해야 수정 모드의 카드 몰이 제 길로 간다.
+// 지난번 현황판 선택을 되살린다. 모드를 정한 뒤에 해야 폼이 그 모드로 열린다.
 // 접혀 있으면 폼은 숨은 채로 미리 떠 있다가, 열기를 누르면 바로 보인다.
 document.querySelectorAll('.board-preset').forEach(btn => {
   btn.addEventListener('click', () => setBoardSelection(presetSelection(BOARD_PRESETS[btn.dataset.preset] || [])));

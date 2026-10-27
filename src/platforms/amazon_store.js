@@ -51,9 +51,7 @@ export class AmazonStore {
 
   // 전체 동기화 결과는 바로 쓴다 — 수 분 걸려 받은 목록을 타이머에 맡기지 않는다.
   saveListingsCache(data) {
-    const cache = this.cache(data?.marketplaceId);
-    cache.set(data);
-    cache.flush();
+    this.cache(data?.marketplaceId).save(data);
     return data;
   }
 

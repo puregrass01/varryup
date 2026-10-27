@@ -16,7 +16,8 @@ import { englishPrice } from './utils/imweb_currency.js';
 import { registerCurrencyRatesIPC } from './currency_rates_ipc.js';
 import { registerEbayIPC } from './ebay_ipc.js';
 import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
+import { localPathKey } from './utils/file_url.js';
 import fs from 'fs';
 import { NaverSmartStore } from './platforms/naver_smartstore.js';
 import { NaverProducts } from './platforms/naver_products.js';
@@ -45,6 +46,7 @@ import { resolveRuntimeProxy } from './utils/runtime_proxy.js';
 import { loadUserEnv } from './utils/env_file.js';
 import { toVeryupLog, VERYUP_LOG_CHANNEL } from './utils/ui_log.js';
 import { RegistrationLedger } from './utils/registration_ledger.js';
+import { writeJsonAtomic } from './utils/json_file.js';
 import {
     createInflightLock, runGuardedRegistration, noticeSuffix, isGuardError, guardErrorResponse, brandsFromCatalog,
     planCoupang, checkCoupang, recordCoupang, planNaver, checkNaver, recordNaver,
@@ -245,7 +247,7 @@ function getCoupang() {
                 fs.copyFileSync(defaultConfig, configPath);
             } else {
                 // Write minimal default
-                fs.writeFileSync(configPath, JSON.stringify({
+                writeJsonAtomic(configPath, {
                     vendorId: '', accessKey: '', secretKey: '',
                     outboundShippingPlaceCode: '', returnCenterCode: '',
                     deliveryChargeType: 'FREE', deliveryCharge: 0,
@@ -254,7 +256,7 @@ function getCoupang() {
                     returnCharge: 5000,
                     afterServiceInformation: '옵틱글래스 A/S 센터',
                     afterServiceContactNumber: ''
-                }, null, 2), 'utf-8');
+                });
             }
         }
         // 옵션 판매가 로컬 캐시(coupang_prices_cache.json) — 상품 일괄 수정 목록의 '(목록)' 판매가. 아마존·eBay 의 목록 캐시와 같은 자리.
@@ -276,14 +278,14 @@ function getAmazon() {
             if (fs.existsSync(defaultConfig)) {
                 fs.copyFileSync(defaultConfig, configPath);
             } else {
-                fs.writeFileSync(configPath, JSON.stringify({
+                writeJsonAtomic(configPath, {
                     sellerId: '', clientId: '', clientSecret: '', refreshToken: '',
                     endpoint: 'https://sellingpartnerapi-na.amazon.com',
                     marketplaceId: 'ATVPDKIKX0DER',
                     productType: 'AUTO_PART',
                     brand: 'Optic Glass', manufacturer: 'Optic Glass',
                     currency: 'USD'
-                }, null, 2), 'utf-8');
+                });
             }
         }
         amazonInstance = new Amazon(configPath, new AmazonStore(app.getPath('userData')));
@@ -309,14 +311,14 @@ function getImweb() {
         const configPath = path.join(app.getPath('userData'), 'imweb_config.json');
         
         if (!fs.existsSync(configPath)) {
-            fs.writeFileSync(configPath, JSON.stringify({
+            writeJsonAtomic(configPath, {
                 b2bUrl: 'https://bbstore37.imweb.me/admin/',
                 b2bId: '',
                 headUrl: 'https://optic-glass.imweb.me/admin',
                 headId: '',
                 usUrl: 'https://optic-glass-us.imweb.me/admin',
                 usId: ''
-            }, null, 2), 'utf-8');
+            });
         }
         
         // ImwebEdit 는 Imweb(게시판 · 로그인)을 상속하고, B2B몰 상품은 아임웹 Open API(imweb_b2b.js)로 한다.
@@ -451,12 +453,23 @@ function getBrowserSync() {
     return browser;
 }
 
+// 앱을 두 번 켜면 두 프로세스가 같은 캐시 파일(쿠팡·아마존·eBay 목록 — 메모리에 두고 모아서 쓴다)을 서로 덮어쓰고,
+// 한쪽은 낡은 목록으로 eBay 중복을 검사한다. 아임웹 잠금도 저희끼리 다툰다 → 두 번째 실행은 끝내고 떠 있는 창을 앞으로.
+if (!app.requestSingleInstanceLock()) app.exit(0);
+app.on('second-instance', () => {
+    const win = liveWindows().find(w => w.isVisible()) || liveWindows()[0];
+    if (!win) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+});
+
 // 창 4개가 모두 nodeIntegration 이라, 앱 화면(src/ui) 밖 페이지로 넘어가면 그 페이지가 Node 권한을 얻는다 —
 // 링크나 파일을 창에 끌어다 놓기만 해도 그렇다. 화면 밖으로의 이동과 새 창 열기를 막는다.
 // 외부 페이지는 open-external(shell.openExternal)로만 연다.
-const UI_URL = pathToFileURL(path.join(__dirname, 'ui')).href + '/';
+const UI_DIR = path.normalize(path.join(__dirname, 'ui') + path.sep).toLowerCase();
 app.on('web-contents-created', (_, contents) => {
-    const block = e => { if (!String(e.url || '').startsWith(UI_URL)) e.preventDefault(); };
+    const block = e => { if (!localPathKey(e.url)?.startsWith(UI_DIR)) e.preventDefault(); };
     contents.on('will-navigate', block);
     contents.on('will-frame-navigate', block);
     contents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -478,8 +491,7 @@ function createLauncher() {
 // 않는다 — 화면에 아무것도 없는데 프로세스·자동화 Edge·AI 서버가 남고, '나중에' 로 미룬 업데이트도
 // 설치되지 않았다. 그래서 앱 창이 닫힐 때 남은 게 숨은 런처뿐이면 런처도 닫아 정상 종료 경로
 // (window-all-closed → 브라우저 정리 → stopAiServers → app.quit)를 타게 한다.
-// '← 런처로'(close-app)는 창을 닫으면서 곧바로 런처를 보여 주므로 여기서 닫히지 않는다
-// ('closed' 는 닫기가 끝난 뒤에 오고, 그때 런처는 이미 보이는 상태다).
+// '← 런처로'(close-app)는 그 창의 'closed' 맨 앞에서 런처를 먼저 보여 주므로 여기서 닫히지 않는다.
 function closeHiddenLauncherIfLast() {
     if (!launcherWindow || launcherWindow.isDestroyed() || launcherWindow.isVisible()) return;
     const others = BrowserWindow.getAllWindows().filter(w => w !== launcherWindow && !w.isDestroyed());
@@ -507,6 +519,14 @@ function setUpWindowMode(mode) {
 }
 
 function createUpWindow(mode = 'new') {
+    // 이미 떠 있으면 그 창을 앞으로(모드도 그대로) — 두 개면 아임웹 토큰·캐시 파일을 서로 덮어쓴다.
+    if (upWindow && !upWindow.isDestroyed()) {
+        if (upWindow.isMinimized()) upWindow.restore();
+        upWindow.show();
+        upWindow.focus();
+        if (launcherWindow) launcherWindow.hide();
+        return;
+    }
     setUpWindowMode(mode);
     upWindow = new BrowserWindow({
         // 현황판(좌측 380px)만 보이는 접힌 화면으로 뜬다. '열기' 를 누르면 화면이 1200 으로 넓히며
@@ -523,6 +543,18 @@ function createUpWindow(mode = 'new') {
     const win = upWindow;
     win.webContents.on('did-finish-load', () => {
         win.webContents.send('veryup-set-mode', upWindowMode);
+    });
+    // 상품 일괄 수정은 저장 안 한 변경·진행 중 작업이 있으면 beforeunload 로 닫기를 막는다(bulk-edit.js).
+    // 그대로 두면 ✕·'← 런처로'가 아무 말 없이 무시된다 → 묻고 '닫기'일 때만 닫는다.
+    win.webContents.on('will-prevent-unload', (event) => {
+        const choice = dialog.showMessageBoxSync(win, {
+            type: 'question', title: 'VERY UP', message: '저장하지 않은 변경이 있습니다. 닫을까요?',
+            buttons: ['닫기', '취소'], defaultId: 1, cancelId: 1, noLink: true,
+        });
+        if (choice === 0) { event.preventDefault(); return; }
+        // 취소: '← 런처로'가 걸어 둔 런처 띄우기를 뗀다 — 남겨 두면 나중에 ✕ 로 끌 때 런처가 다시 뜬다.
+        const show = launcherOnClose.get(win);
+        if (show) { win.removeListener('closed', show); launcherOnClose.delete(win); }
     });
     win.on('closed', () => { if (upWindow === win) upWindow = null; closeHiddenLauncherIfLast(); });
     if (launcherWindow) launcherWindow.hide();
@@ -548,9 +580,20 @@ function mergeIntoConfig(filename, data) {
     try {
         const p = path.join(app.getPath('userData'), filename);
         let cur = {};
-        if (fs.existsSync(p)) { try { cur = JSON.parse(fs.readFileSync(p, 'utf-8')); } catch {} }
+        // 깨진 파일은 앱도 못 읽으니 그대로 두면 서버 동기화로도 복구되지 않는다. 그렇다고 덮어쓰면 로컬에만 있던 값
+        // (아마존 JP 토큰·쿠팡 출고지/반품지 코드 등)을 되살릴 길이 없다 → .corrupt-<시각> 으로 옮겨 두고 서버 값으로 새로 쓴다.
+        // 읽기 자체가 실패하면(다른 프로그램이 잡고 있음 등) 깨진 것이 아니다 — 바깥 catch 로 가서 이번엔 건너뛴다.
+        if (fs.existsSync(p)) {
+            const raw = fs.readFileSync(p, 'utf-8');
+            try { cur = JSON.parse(raw); }
+            catch (e) {
+                const moved = `${p}.corrupt-${Date.now()}`;
+                fs.renameSync(p, moved);
+                console.warn('설정 파일이 깨져 서버 값으로 새로 씁니다(원본 보관):', filename, e.message, '→', moved);
+            }
+        }
         const merged = { ...cur, ...data };
-        fs.writeFileSync(p, JSON.stringify(filename === 'amazon_config.json' ? cleanAmazonConfig(merged) : merged, null, 2), 'utf-8');
+        writeJsonAtomic(p, filename === 'amazon_config.json' ? cleanAmazonConfig(merged) : merged);
     } catch (e) { console.warn('설정 병합 실패:', filename, e.message); }
 }
 // 이베이는 clientSecret·refreshToken 을 평문 JSON 이 아니라 OS 암호화 저장소(safeStorage)에
@@ -854,10 +897,15 @@ ipcMain.on('veryup-set-mode', (event, mode) => {
     setUpWindowMode(mode);
 });
 
+// '← 런처로'. 런처는 창이 정말 닫힌 뒤에 띄운다 — 저장 안 한 변경 확인에서 '취소'하면 창이 그대로 남는다.
+// prepend: 창의 'closed'(closeHiddenLauncherIfLast)보다 먼저 런처를 보여야 그쪽이 숨은 런처를 닫지 않는다.
+const launcherOnClose = new WeakMap();   // 창 → 닫히면 런처를 띄울 리스너(닫기 취소 시 createUpWindow 가 뗀다)
 ipcMain.on('close-app', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
-    if (win) win.close();
-    if (launcherWindow && !launcherWindow.isDestroyed()) launcherWindow.show(); else createLauncher();
+    const show = () => { if (launcherWindow && !launcherWindow.isDestroyed()) launcherWindow.show(); else createLauncher(); };
+    if (!win) return show();
+    if (!launcherOnClose.has(win)) { launcherOnClose.set(win, show); win.prependOnceListener('closed', show); }
+    win.close();
 });
 
 // 커스텀 윈도우 컨트롤 (최소화 / 닫기)
@@ -1113,8 +1161,8 @@ const fxAutoPrice = registerFxAutoPriceIPC({
 });
 app.whenReady().then(() => fxAutoPrice.start());
 app.on('before-quit', () => fxAutoPrice.stop());
-// 쿠팡 판매가 캐시는 모아서 쓴다(coupang_store.js). 끄기 직전 몇 초 동안 읽은 판매가도 남긴다.
-app.on('before-quit', () => { coupangInstance?.store?.flush(); });
+// 쿠팡 판매가 · 아마존 · eBay 목록 캐시는 모아서 쓴다(JsonCache). 끄기 직전 몇 초 동안 바뀐 값도 남긴다.
+app.on('before-quit', () => { coupangInstance?.store?.flush(); amazonInstance?.store?.flush(); ebayInstance?.store?.flush(); });
 // ── 아임웹 Open API(OAuth) ──────────────────────────────────────────
 // 본사몰(KR·US·JP 구역이 있는 한 사이트)에 연동된 앱. 토큰은 디스크에 두지 않고 필요할 때 메모리에서
 // 발급 · 갱신한다(imweb_client.js). siteCode · redirectUri 는 설정 파일에 있으면 그 값을 쓴다.
@@ -1129,8 +1177,9 @@ function readImwebOpenApiConfig() {
 // 같은 앱이 두 사이트에 연동돼 있다: 본사몰(기본) · B2B몰(B2B_SITE_CODE). 토큰은 사이트마다 따로다.
 const imwebApiClients = new Map();
 // 베리맵 아임웹 수집기(별도 프로세스)와 토큰을 서로 무효화하지 않게, 요청마다 공용 잠금을 잡는다.
-// 1분 동안 요청이 없으면 놓는다 — 그 사이에 수집기를 돌릴 수 있다(utils/imweb_lock.js).
-const imwebLock = createImwebLock(path.join(app.getPath('userData'), 'imweb_api.lock'), { idleMs: 60_000 });
+// 마지막 요청을 보낸 뒤 2분 30초 조용하면 놓는다 — 그 뒤로 수집기를 돌릴 수 있다(utils/imweb_lock.js).
+// 이미지가 든 요청은 응답까지 120초를 기다리므로(imweb_client form 제한 시간) 그보다 길어야 요청 도중에 풀리지 않는다.
+const imwebLock = createImwebLock(path.join(app.getPath('userData'), 'imweb_api.lock'), { idleMs: 150_000 });
 const imwebLockedFetch = (url, init) => { imwebLock.acquire(); return fetch(url, init); };
 app.on('before-quit', () => imwebLock.release());
 function getImwebApiClient(siteCode) {
@@ -1191,10 +1240,6 @@ ipcMain.handle('naver-key-config-save', (_, data) => {
     try { return { success: true, config: new NaverStore(app.getPath('userData'), safeStorage).save(data) }; }
     catch (e) { return { success: false, error: e.message }; }
 });
-
-// 탭이 없는 몰(라쿠텐·쇼피파이)의 수정 모드 카드가 묻는다(index_up.html searchProduct). 그 몰은 연동이 없어 늘 빈 목록이다.
-// 다른 몰 분기와 카드 수정(veryup-update-product)은 화면이 부를 수 없어 10-23 지웠다 — 그 몰들은 각 탭이 찾고 고친다.
-ipcMain.handle('veryup-search-product', () => ({ items: [] }));
 
 // ESM 이미지 호스팅 폴더 경로 (국가별). KOREA=조견표, 그 외(USA 등)=Compatibility Chart
 function esmBasePath(country, category) {

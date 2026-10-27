@@ -16,11 +16,11 @@ function temp(t) {
   return dir;
 }
 
-test('server stale flag survives disk/restart, blocks price calculation, and clears only with fresh rates', async t => {
+// 관리 서버 환율 경로는 2026-10-23 지웠다(운영 미배포). 출처가 stale 로 표시한 값은 직접 조회(direct)로 흉내 낸다.
+test('stale flag survives disk/restart, blocks price calculation, and clears only with fresh rates', async t => {
   const dir = temp(t); let clock = now, fresh = false, calls = 0;
-  const options = { cachePath: path.join(dir, 'rates.json'), baseUrl: 'https://example.test', getToken: () => 'test',
-    clock: () => clock, direct: async () => { throw new Error('unavailable'); },
-    fetchImpl: async () => { calls++; return { ok: true, json: async () => ({ ...snapshot(), stale: !fresh, warning: fresh ? null : 'source marked stale' }) }; } };
+  const options = { cachePath: path.join(dir, 'rates.json'), clock: () => clock,
+    direct: async () => { calls++; return { ...snapshot(), stale: !fresh, warning: fresh ? null : 'source marked stale' }; } };
   const client = new CurrencyRatesClient(options);
   assert.equal((await client.get()).data.stale, true);
   assert.equal(JSON.parse(fs.readFileSync(options.cachePath)).warning, 'source marked stale');

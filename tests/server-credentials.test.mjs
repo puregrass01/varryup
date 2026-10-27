@@ -8,6 +8,7 @@ import { cleanAmazonConfig } from '../src/platforms/amazon.js';
 import { Ebay } from '../src/platforms/ebay.js';
 import { EbayStore } from '../src/platforms/ebay_store.js';
 import { fetchCredentials } from '../src/utils/server_keys.js';
+import { writeJsonAtomic } from '../src/utils/json_file.js';
 
 // Exercise the actual Electron login-sync helpers without starting Electron.
 const mainSource = fs.readFileSync(new URL('../src/main_process.js', import.meta.url), 'utf8');
@@ -34,7 +35,7 @@ function fixture(t, credentials) {
   });
   const context = vm.createContext({
     app: { getPath: name => { assert.equal(name, 'userData'); return directory; } },
-    fs, path, cleanAmazonConfig, fetchCredentials,
+    fs, path, cleanAmazonConfig, fetchCredentials, writeJsonAtomic,
     getEbay: () => ebay,
     ADMIN_SERVER_URL: 'https://admin.example',
     serverAuth: { token: 'test-staff-token' },
@@ -101,6 +102,22 @@ test('staff credential sync routes eBay keys through encrypted storage while pre
   assert.equal(saved.refreshToken, undefined);
   for (const value of ['new-ebay-secret', 'new-ebay-refresh', 'test-staff-token', 'must-not-be-stored']) assert.ok(!raw.includes(value));
   assert.equal(warnings.length, 0);
+});
+
+test('an unreadable local config is kept as .corrupt-* and rewritten from server fields (the app cannot read it anyway)', async t => {
+  const { directory, warnings, sync } = fixture(t, [{ platform: 'coupang', data: { vendorId: 'A001', accessKey: 'ak', secretKey: 'sk' } }]);
+  const file = path.join(directory, 'coupang_config.json');
+  const broken = '{"outboundShippingPlaceCode": "123", broken';
+  fs.writeFileSync(file, broken);
+
+  await sync();
+
+  const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.deepEqual([saved.vendorId, saved.accessKey, saved.secretKey], ['A001', 'ak', 'sk']);
+  const kept = fs.readdirSync(directory).filter(name => name.startsWith('coupang_config.json.corrupt-'));
+  assert.equal(kept.length, 1, '깨진 원본은 한 번만 옮겨 둔다');
+  assert.equal(fs.readFileSync(path.join(directory, kept[0]), 'utf8'), broken, '손으로 되살릴 수 있게 바이트 그대로');
+  assert.ok(warnings.some(w => /깨져.*coupang_config\.json/.test(w.join(' '))));
 });
 
 test('mixed credential responses keep browser logins in memory and skip unavailable or unknown keys', async t => {

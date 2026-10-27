@@ -108,8 +108,103 @@ try {
   await frame.locator('button[onclick="findCoupangIdFromSheet()"]').click();
   await waitTab('cpProductIdInput', '9876543210');
 
+  // ── 아임웹 B2B·게시판 수정 — 폼만 따로 연다(셸이 브랜드 칸을 건드리지 않게) ─────────────
+  //   6) B2B 제조사·모델 첫 칸은 '-- 전체 --' 이고 골라져 있다 — 상품 코드만으로 찾는다
+  //   7) URL 칸을 비우면 숨은 idx 도 비운다
+  //   8) 검색 전에 옛 결과·편집 상태를 지운다 — 실패해도 옛 상품이 남아 저장되지 않는다(게시판도)
+  //   9) 동작하지 않는 칸·버튼(+ 옵션 추가, 판매가 (수정 가능), 옵션 값 + 추가)은 없다
+  const formCtx = await browser.newContext({ viewport: { width: 1200, height: 850 } });
+  await formCtx.route(/^https?:/, route => route.abort());
+  await formCtx.addInitScript(() => {
+    window.searches = [];
+    window.require = () => ({ ipcRenderer: {
+      on() {}, send() {},
+      invoke(channel, payload) {
+        if (channel === 'imweb-load-categories') {
+          return Promise.resolve({ success: true, categories: { 국산차: { EVION: ['SW40', 'SW50'], 현대: ['싼타페'] }, 수입차: { BMW: ['X5'] } } });
+        }
+        if (channel === 'imweb-search-products' || channel === 'imweb-search-posts') {
+          window.searches.push({ channel, payload });
+          return Promise.resolve(window.__searchRes || { success: false, error: '상품을 찾지 못했습니다' });
+        }
+        return Promise.resolve({});
+      },
+    } });
+  });
+  const form = await formCtx.newPage();
+  form.on('pageerror', error => errors.push(error.message));
+  await form.goto(pathToFileURL(path.resolve('src/ui/index.html')).href);
+  await form.evaluate(() => {
+    switchTab('imwebTab');
+    document.querySelector('input[name="iwB2bWorkMode"]').value = 'edit'; updateImwebB2bModeUI();
+  });
+  await form.locator('#iwB2bEditPanel').waitFor({ state: 'visible' });
+  await form.waitForFunction(() => [...document.getElementById('iwB2bEditBrand').options].some(o => o.value === 'EVION'));
+  const firstOption = id => form.evaluate(id => { const s = document.getElementById(id); return [s.value, s.options[0].text, s.options[0].value]; }, id);
+  assert.deepEqual(await firstOption('iwB2bEditBrand'), ['', '-- 전체 --', ''], '제조사 첫 칸은 -- 전체 -- 이고 골라져 있다(예전엔 EVION)');
+  assert.deepEqual(await firstOption('iwB2bEditModel'), ['', '-- 전체 --', ''], '모델 첫 칸도 -- 전체 --(예전엔 SW40)');
+  await form.locator('#iwB2bEditBrand').selectOption('EVION');
+  assert.deepEqual(await form.evaluate(() => [...document.getElementById('iwB2bEditModel').options].map(o => o.value)), ['', 'SW40', 'SW50']);
+  await form.locator('#iwB2bEditBrand').selectOption('');
+
+  await form.locator('#iwB2bEditCodeInput').fill('612');
+  await form.evaluate(() => { window.__searchRes = { success: true, groups: [{ baseKey: '옵틱글래스 EVION SW40', items: [
+    { name: '옵틱글래스 EVION SW40 미러 1셋 [612]', prodNo: 701, type: 'set', price: 100 }] }] }; });
+  await form.locator('#iwB2bLoadBtn').click();
+  await form.locator('#iwB2bResultList tbody tr').first().waitFor();
+  assert.deepEqual(await form.evaluate(() => window.searches.at(-1).payload), { brand: '', model: '', code: '612', idx: '' },
+    '상품 코드만으로 찾는다 — 제조사·모델로 거르지 않는다');
+
+  await form.locator('#iwB2bEditUrlInput').fill('https://bb-store.co.kr/shop_view?idx=927');
+  assert.equal(await form.locator('#iwB2bEditIdxInput').inputValue(), '927');
+  await form.locator('#iwB2bEditUrlInput').fill('');
+  assert.equal(await form.locator('#iwB2bEditIdxInput').inputValue(), '', 'URL 칸을 비우면 숨은 idx 도 비운다');
+
+  await form.evaluate(() => {
+    iwB2bEditState = { baseKey: '옛 상품', products: [{ prodNo: 701 }], sharedGroups: [], detailImages: ['https://x/1.jpg'] };
+    document.getElementById('iwB2bEditLoaded').style.display = '';
+    window.__searchRes = { success: false, error: '상품을 찾지 못했습니다' };
+  });
+  await form.locator('#iwB2bLoadBtn').click();
+  await form.waitForFunction(() => window.searches.length === 2 && !document.getElementById('iwB2bLoadBtn').disabled);
+  assert.deepEqual(await form.evaluate(() => [iwB2bEditState, document.getElementById('iwB2bEditLoaded').style.display,
+    document.getElementById('iwB2bSearchResult').style.display, document.getElementById('iwB2bResultList').childElementCount]),
+  [null, 'none', 'none', 0], '검색이 실패해도 옛 결과·편집 상태가 남지 않는다');
+
+  assert.equal(await form.locator('#iwB2bEditPanel button', { hasText: '옵션 추가' }).count(), 0, '정의 없는 + 옵션 추가 버튼이 없다');
+  assert.equal(await form.locator('#iwB2bEditPrice').count(), 0, '아무도 읽지 않는 판매가 (수정 가능) 칸이 없다');
+  await form.evaluate(() => {
+    iwB2bEditState = { baseKey: 'K', sharedGroups: [{ name: '연식', values: ['A'] }], detailImages: [],
+      products: [{ prodNo: 1, suffix: '', type: 'set', price: 1, optionGroups: [{ name: '연식', values: [{ valueName: 'A' }] }], combos: [] }] };
+    renderImwebB2bOptions();
+  });
+  assert.equal(await form.locator('#iwB2bOptionList button', { hasText: '추가' }).count(), 0, '옵션 값 + 추가 줄이 없다(Open API 불가)');
+  assert.equal(await form.locator('#iwB2bOptionList button', { hasText: '삭제' }).count(), 1);
+
+  await form.evaluate(() => {
+    switchTab('imwebBoardTab');
+    document.querySelector('input[name="iwBoardWorkMode"]').value = 'edit'; updateImwebBoardModeUI();
+  });
+  await form.locator('#iwBoardEditPanel').waitFor({ state: 'visible' });
+  assert.deepEqual(await firstOption('iwBoardEditBrand'), ['', '-- 브랜드 선택 --', ''], '게시판 브랜드도 첫 브랜드가 미리 골라져 있지 않다');
+  await form.locator('#iwBoardEditCodeInput').fill('612');
+  await form.locator('#iwBoardLoadBtn').click();
+  assert.equal(await form.evaluate(() => window.searches.filter(s => s.channel === 'imweb-search-posts').length), 0,
+    '브랜드를 안 고르면 엉뚱한 게시판을 뒤지지 않는다');
+  await form.locator('#iwBoardEditBrand').selectOption('EVION');
+  await form.evaluate(() => {
+    iwBoardEditState = { code: '612', lang: 'ko', brand: 'EVION', postCode: 'p1', title: '옛 글', detailImages: [] };
+    document.getElementById('iwBoardEditLoaded').style.display = '';
+  });
+  await form.locator('#iwBoardLoadBtn').click();
+  await form.waitForFunction(() => window.searches.some(s => s.channel === 'imweb-search-posts') && !document.getElementById('iwBoardLoadBtn').disabled);
+  assert.deepEqual(await form.evaluate(() => [iwBoardEditState, document.getElementById('iwBoardEditLoaded').style.display,
+    document.getElementById('iwBoardSearchResult').style.display]), [null, 'none', 'none'], '게시판 검색 실패도 옛 게시글을 남기지 않는다');
+  await formCtx.close();
+
   assert.deepEqual(errors, []);
-  console.log('PASS: 네이버·쿠팡 찾기 칸에 좌측 브랜드·차종명, 자동 조회 없음, 내부 상품번호 안 넘김, 탭 수정 존중, 결과 1건 자동 채움');
+  console.log('PASS: 네이버·쿠팡 찾기 칸에 좌측 브랜드·차종명, 자동 조회 없음, 내부 상품번호 안 넘김, 탭 수정 존중, 결과 1건 자동 채움, '
+    + 'B2B 코드만 검색(-- 전체 --), idx 비움, 검색 전 옛 상태 지움(B2B·게시판), 죽은 버튼 없음');
 } finally {
   await browser.close();
 }

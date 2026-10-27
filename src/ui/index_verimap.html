@@ -410,7 +410,17 @@ function loadManual() {
     MANUAL_BROKEN = false;
     let raw;
     try { raw = fs.readFileSync(MANUAL_F, 'utf8'); }
-    catch (e) { if (e.code !== 'ENOENT') manualBroken(e); return; }
+    catch (e) {
+        if (e.code !== 'ENOENT') { manualBroken(e); return; }
+        // 깨져서 옮겨 둔 사본이 남아 있으면 빈 목록으로 시작하지 않는다 — 그 사이 새로 쓴 표시를, 나중에 되돌린 사본이 덮어쓴다.
+        const left = fs.existsSync(DIR) ? fs.readdirSync(DIR).filter(n => n.startsWith('manual_links.json.corrupt-')) : [];
+        if (left.length) {
+            MANUAL_BROKEN = true;
+            log(`✖ 깨져서 옮겨 둔 수동 확인 목록이 남아 있습니다(${left.join(', ')}). 고쳐서 manual_links.json 으로 되돌리거나, `
+                + '버려도 되면 지운 뒤 [현황 불러오기]를 누르세요. 그때까지 저장을 막습니다.', 'err');
+        }
+        return;
+    }
     try {
         const doc = JSON.parse(raw);
         if (!doc || typeof doc !== 'object' || Array.isArray(doc)) throw new Error('객체가 아닙니다');

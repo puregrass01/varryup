@@ -1,7 +1,6 @@
 .vu-image-gallery { display:flex; flex-wrap:wrap; gap:12px; margin:4px 0; max-height:320px; overflow:auto; padding:4px; }
 .vu-image-tile { position:relative; margin:0; width:70px; }
-.vu-image-tile img { width:70px; height:70px; object-fit:contain; background:#fff; border-radius:5px; transition:filter .15s ease; }
-.vu-image-tile:hover img, .vu-image-tile:focus-within img { filter:blur(2px); }
+.vu-image-tile img { width:70px; height:70px; object-fit:contain; background:#fff; border-radius:5px; }
 .vu-image-tile figcaption { font-size:11px; text-align:center; color:var(--text-secondary,#64748b); }
 .vu-image-tile .vu-image-open { display:block; border:0; padding:0; background:transparent; cursor:zoom-in; }
 .vu-image-tile .vu-image-remove,
@@ -15,7 +14,12 @@
 #bulk-edit-workspace .vu-image-tile:focus-within .vu-image-remove { opacity:1; }
 .vu-image-tile .vu-image-remove:focus-visible { opacity:1; outline:2px solid var(--accent,#2563eb); outline-offset:2px; }
 #bulk-edit-workspace .vu-image-tile .vu-image-remove:hover:not(:disabled) { background:#991b1b; color:#fff; }
-.vu-image-tile .vu-image-remove:disabled { cursor:default; background:#64748b; }
+/* 비활성 ✖(작업 중·읽기 전용)는 회색 반투명. 위 빨강·hover 규칙보다 특이도를 높여야 이긴다(예전엔 빨강이 이겼다). */
+.vu-image-tile .vu-image-remove:disabled,
+#bulk-edit-workspace .vu-image-tile .vu-image-remove:disabled { cursor:not-allowed; background:var(--text-muted,#64748b); }
+.vu-image-tile:hover .vu-image-remove:disabled, .vu-image-tile:focus-within .vu-image-remove:disabled,
+#bulk-edit-workspace .vu-image-tile:hover .vu-image-remove:disabled,
+#bulk-edit-workspace .vu-image-tile:focus-within .vu-image-remove:disabled { opacity:.5; }
 .vu-image-moves { display:flex; gap:4px; justify-content:center; }
 .vu-image-moves button { padding:0 6px; border:1px solid var(--border,#cbd5e1); border-radius:4px; background:transparent; color:inherit; cursor:pointer; }
 .vu-image-save-hint, .vu-image-empty { font-size:12px; color:var(--text-secondary,#64748b); margin:2px 0; }
