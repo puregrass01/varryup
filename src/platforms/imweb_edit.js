@@ -31,7 +31,6 @@ export class ImwebEdit extends Imweb {
 
     // ── B2B몰: 전부 Open API(imweb_b2b.js) ─────────────────────────────────────
     registerB2bViaApi(data) { return this.b2bApi.registerB2bViaApi(data); }
-    modifyB2bViaApi(data) { return this.b2bApi.modifyB2bViaApi(data); }
     listB2bRowsByCode(code) { return this.b2bApi.listB2bRowsByCode(code); }
     b2bOptionValuesOf(prodNo) { return this.b2bApi.b2bOptionValuesOf(prodNo); }
     searchProducts(query) { return this.b2bApi.searchProducts(query); }

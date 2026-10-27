@@ -64,9 +64,9 @@ try {
   await page.locator('#btn-bulk-edit').click();
   assert.match(await page.locator('#bulk-edit-result').textContent(), /현황판에서 수정할 플랫폼을 먼저 선택하세요/);
 
-  // ── 몰을 켠다. 라쿠텐(탭 없음)은 카드로 검색되는데 결과가 없다 ──
+  // ── 몰을 켠다. 라쿠텐·쇼피파이 칸은 셸에서 꺼 두어(비활성) 고르지 않는다 ──
   await page.evaluate(([sku]) => {
-    window.__script = { 'veryup-search-product': { items: [] } };
+    window.__script = {};
     // 이베이·아마존 SKU 칸이 따로다 — 이 차는 두 몰이 같은 SKU 를 쓴다.
     for (const id of ['inp-sku', 'inp-amz-sku']) {
       const el = document.getElementById(id);
@@ -74,13 +74,12 @@ try {
       el.dispatchEvent(new Event('input', { bubbles: true }));
     }
     for (const [c, t] of [['KOREA', 'open1'], ['KOREA', 'open2'], ['KOREA', 'b2b'], ['KOREA', 'own'],
-                          ['USA', 'open1'], ['USA', 'open2'], ['JAPAN', 'open2']]) handleCheck(c, t, true);
+                          ['USA', 'open1'], ['USA', 'open2']]) handleCheck(c, t, true);
   }, [SKU]);
   await page.waitForFunction(() => {
     const w = document.getElementById('form-frame').contentWindow;
     return w?.document.readyState === 'complete' && typeof w.ebayEditItem === 'function' && typeof w.editItemOf === 'function';
   }, null, { timeout: 20000 });
-  await page.waitForFunction(() => document.getElementById('card-JAPAN-open2-status')?.textContent === '결과 없음');
   await page.waitForFunction(() => frameSyncTimer === null);
   const form = page.frames().find(f => f.url().includes('/index.html'));
 
@@ -123,7 +122,7 @@ try {
   };
 
   {
-    const { card, formCalls, shellCalls } = await bulk();
+    const { card, formCalls } = await bulk();
     const has = text => assert.ok(card.includes(text), `결과 카드에 "${text}" 가 없다:\n${card}`);
     has(`[네이버] 상품 없음: 수정할 상품이 없습니다 — 네이버 탭에서 상품을 먼저 불러오세요`);
     has(`[쿠팡 ${CPID}] 수정 완료`);
@@ -131,18 +130,16 @@ try {
     has('[아임웹 자사몰/게시판] 게시판 글은 Open API 가 없어(저장할 때 브라우저를 띄움) 일괄 수정에서 뺍니다 — 그 탭의 저장 버튼으로 수정하세요');
     has(`[아마존 ${SKU} · 미국] 수정 완료`);
     has(`[eBay 미국 ${SKU}] 수정 완료`);
-    has('[라쿠텐 일본] 상품 없음: 수정할 상품이 없습니다 — 검색 결과가 없습니다(결과 없음)');
-    has('일괄 수정 완료 (성공: 3건, 실패: 3건 · 그중 상품 없음 3건, 건너뜀: 1건)');
-    has('수정할 상품이 없는 몰: 네이버, 아임웹 B2B몰, 라쿠텐 일본');
+    has('일괄 수정 완료 (성공: 3건, 실패: 2건 · 그중 상품 없음 2건, 건너뜀: 1건)');
+    has('수정할 상품이 없는 몰: 네이버, 아임웹 B2B몰');
     // 상품이 없는 몰·건너뛴 몰은 저장 요청이 안 나간다.
     for (const ch of ['smartstore-update-product', 'imweb-update-group', 'imweb-update-post']) {
       assert.equal(formCalls.filter(c => c === ch).length, 0, `${ch} 가 나갔다`);
     }
-    assert.equal(shellCalls.filter(([c]) => c === 'veryup-update-product').length, 0, '라쿠텐 수정 요청이 나갔다');
     for (const ch of ['coupang-update', 'amazon-update', 'ebay-update']) {
       assert.equal(formCalls.filter(c => c === ch).length, 1, `${ch} 가 한 번 나가야 한다`);
     }
-    assert.equal(await page.locator('#bulk-edit-status').textContent(), '실패 3건');
+    assert.equal(await page.locator('#bulk-edit-status').textContent(), '실패 2건');
     assert.deepEqual(await page.evaluate(() => ({ running: isBulkRunning, disabled: document.getElementById('btn-bulk-edit').disabled })),
       { running: false, disabled: false });
   }
@@ -153,7 +150,7 @@ try {
     const { card } = await bulk();
     assert.ok(card.includes(`[쿠팡 ${CPID}] 수정 실패: 쿠팡 거부: 옵션 형식 오류`), card);
     assert.ok(card.includes('다시 확인할 몰: 쿠팡'), card);
-    assert.ok(card.includes('일괄 수정 완료 (성공: 2건, 실패: 4건 · 그중 상품 없음 3건, 건너뜀: 1건)'), card);
+    assert.ok(card.includes('일괄 수정 완료 (성공: 2건, 실패: 3건 · 그중 상품 없음 2건, 건너뜀: 1건)'), card);
   }
 
   // ── 도는 중 모드 전환은 거절한다 ──
@@ -177,7 +174,7 @@ try {
     assert.equal(during.mode, 'edit');
     assert.equal(during.editChecked, true);
     assert.match(during.card, /일괄 수정 중에는 모드를 바꿀 수 없습니다 — 끝난 뒤 바꾸세요\. 도중에 바꾸면 남은 몰이 신규 등록으로 넘어갑니다/);
-    assert.match(await page.locator('#bulk-edit-rows').innerText(), /일괄 수정 완료 \(성공: 3건, 실패: 3건 · 그중 상품 없음 3건, 건너뜀: 1건\)/);
+    assert.match(await page.locator('#bulk-edit-rows').innerText(), /일괄 수정 완료 \(성공: 3건, 실패: 2건 · 그중 상품 없음 2건, 건너뜀: 1건\)/);
   }
 
   // ── 아임웹 B2B: 탭에 불러온 세트·개별 묶음을 탭의 저장(Open API imweb-update-group)으로 보낸다 ──
@@ -209,8 +206,8 @@ try {
     assert.deepEqual(sent.products.map(p => [p.prodNo, Number(p.price), p.combos.map(c => Number(c.price))]),
       [[3240, 150000, [150000]], [3241, 80000, [80000, 75000]]], 'B2B 가격은 탭 값 그대로 — 좌측 변경 판매가를 넣지 않는다');
     assert.ok(card.includes('변경 판매가 (원) 160,000원: 넣은 몰이 없습니다'), card);
-    // 쿠팡은 상품번호가 없어 판매가를 못 넣고 실패, 네이버·라쿠텐은 상품 없음.
-    assert.ok(card.includes('일괄 수정 완료 (성공: 3건, 실패: 3건 · 그중 상품 없음 2건, 건너뜀: 1건)'), card);
+    // 쿠팡은 상품번호가 없어 판매가를 못 넣고 실패, 네이버는 상품 없음.
+    assert.ok(card.includes('일괄 수정 완료 (성공: 3건, 실패: 2건 · 그중 상품 없음 1건, 건너뜀: 1건)'), card);
   }
 
   // ════ 변경 판매가 (원 · USD · 엔) ════
@@ -304,7 +301,7 @@ try {
     await setPrices({ 'inp-edit-krw': '160,000', 'inp-edit-usd': '110' });
     const { card, form: calls } = await bulkWithArgs();
     const has = text => assert.ok(card.includes(text), `결과 카드에 "${text}" 가 없다:\n${card}`);
-    has('일괄 수정 시작 (총 7개 플랫폼 · 변경 판매가 160,000원 · 110 USD)');
+    has('일괄 수정 시작 (총 6개 플랫폼 · 변경 판매가 160,000원 · 110 USD)');
     has('[네이버 777] 수정 완료 · 판매가 115,000원 → 160,000원 (기본 판매가 · 옵션가 차액 유지)');
     has(`[쿠팡 ${CPID}] 수정 완료 · 판매가 115,000원 → 160,000원 (No.K138 BSA 옵션 1개)`);
     has(`[아마존 ${SKU} · 미국] 수정 완료 · 판매가 30 USD → 110 USD`);
@@ -355,7 +352,7 @@ try {
     await setPrices({ 'inp-edit-usd': '' });
     await page.evaluate(() => { document.getElementById('inp-edit-jpy').value = '9999'; });
     const hidden = await bulkWithArgs();
-    assert.ok(hidden.card.includes('일괄 수정 시작 (총 7개 플랫폼)'), hidden.card);
+    assert.ok(hidden.card.includes('일괄 수정 시작 (총 6개 플랫폼)'), hidden.card);
     assert.equal(sentArgs(hidden.form, 'amazon-update')[0]?.price, '110', '판매가를 비우면 탭의 가격 그대로 저장한다');
   }
 

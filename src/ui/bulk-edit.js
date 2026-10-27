@@ -73,21 +73,26 @@
     '<button id="be-list" type="button">상품 목록 조회</button><button id="be-sync" type="button" hidden>전체 목록 동기화</button></div>' +
     '<p class="be-help">상품을 선택하고 가격 적용·이미지 적용으로 값을 넣은 뒤 선택 변경 저장을 누르세요. 현재가·이미지를 아직 불러오지 않은 상품은 적용할 때 먼저 불러옵니다. 쿠팡 이미지는 상품 전체 옵션에 적용됩니다.</p>' +
     '<div class="be-actions">' +
-    // 선택·해제는 표 머리의 전체선택 체크 하나로 한다. 판매가는 [칸][값 출처][가격 적용] 한 묶음이다.
+    // 선택·해제는 표 머리의 전체선택 체크 하나로 한다. 판매가·이미지 입력은 표 머리 아래 줄, 그 열 바로 밑에 있다.
     '<div class="be-group" role="group" aria-label="선택"><button id="be-load" type="button">선택 상품 현재가·이미지 불러오기</button></div>' +
-    '<div class="be-group" role="group" aria-label="판매가 덮어쓰기"><span class="be-group-label">판매가</span><input id="be-value" type="number" min="0" placeholder="덮어쓸 판매가" aria-label="선택 행에 넣을 판매가">' +
-    '<span id="be-currency" class="be-unit"></span><select id="be-price-source" aria-label="판매가 값 출처" title="환율가: 국내 기준가 등급 ÷ 오늘 환율(우대 없음)에서 앞 두 자리만 남긴 값을 행마다 계산합니다(아마존·eBay 전용)">' +
-    '<option value="direct">직접 입력</option><option value="fx">환율가</option></select><button id="be-apply" type="button">가격 적용</button></div>' +
-    '<div class="be-group" role="group" aria-label="이미지 입력"><span class="be-group-label">이미지</span><input id="be-image-value" type="text" placeholder="ESM URL 또는 &lt;img&gt; HTML" title="빈칸이면 이미지 설정의 ESM 상세 목록을 불러옵니다" aria-label="선택 상품에 적용할 이미지 URL 목록">' +
-    '<select id="be-image-op" aria-label="이미지 적용 방식"><option value="replace">교체</option><option value="append">끝에 추가</option><option value="remove">이 URL 제거</option></select>' +
-    '<button id="be-image-apply" type="button">이미지 적용</button></div>' +
     '<div class="be-group be-group-end"><button id="be-stop" type="button" hidden>중단</button><button id="be-export" type="button">결과 CSV</button><button id="be-save" type="button" class="be-primary">선택 변경 저장</button></div></div>' +
     '<div class="be-state"><div id="be-status" role="status" aria-live="polite"></div><p class="be-help" id="be-count"></p></div>' +
     // 필터는 표 왼쪽 레일에 세로로 쌓는다(표 안 검색이 맨 위). 표는 나머지 폭을 쓴다.
     '<div class="be-body"><div class="be-filters" id="be-filters" role="group" aria-label="표 필터"></div>' +
-    '<div class="be-scroll"><table class="be-table"><thead><tr><th class="be-check-column"><label class="be-th-check-label"><input type="checkbox" id="be-th-select-all" aria-label="필터 결과 모든 페이지 전체선택" title="필터에 맞는 모든 페이지의 행을 선택합니다 · 다시 누르면 선택을 모두 해제합니다"> 전체선택</label></th><th class="be-photo-column"><span id="be-photo-label">사진</span><small id="be-image-hint"></small></th><th>상품명 / 옵션</th><th>상품번호 / SKU</th><th>브랜드 / 차종</th><th id="be-price-label">기존 판매가</th><th>판매가 덮어쓰기</th><th>처리 결과</th></tr></thead><tbody id="be-body"></tbody></table></div></div>' +
+    '<div class="be-scroll"><table class="be-table"><thead><tr><th class="be-check-column"><label class="be-th-check-label"><input type="checkbox" id="be-th-select-all" aria-label="필터 결과 모든 페이지 전체선택" title="필터에 맞는 모든 페이지의 행을 선택합니다 · 다시 누르면 선택을 모두 해제합니다"> 전체선택</label></th><th class="be-photo-column"><span id="be-photo-label">사진</span><small id="be-image-hint"></small></th><th>상품명 / 옵션</th><th>상품번호 / SKU</th><th>브랜드 / 차종</th><th id="be-price-label">기존 판매가</th><th>판매가 덮어쓰기</th><th>처리 결과</th></tr>' +
+    // 열마다 칸 하나씩(합치지 않는다) — 입력이 그 열 머리 바로 밑에 온다. 이미지는 사진 열, 판매가는 판매가 덮어쓰기 열.
+    '<tr class="be-th-tools"><td></td><td class="be-photo-column"><div class="be-tool" role="group" aria-label="이미지 입력">' +
+    '<input id="be-image-value" type="text" placeholder="ESM URL 또는 &lt;img&gt; HTML" title="빈칸이면 이미지 설정의 ESM 상세 목록을 불러옵니다" aria-label="선택 상품에 적용할 이미지 URL 목록">' +
+    '<select id="be-image-op" aria-label="이미지 적용 방식"><option value="replace">교체</option><option value="append">끝에 추가</option><option value="remove">이 URL 제거</option></select>' +
+    '<button id="be-image-apply" type="button">이미지 적용</button></div></td><td></td><td></td><td></td><td></td>' +
+    '<td><div class="be-tool" role="group" aria-label="판매가 덮어쓰기"><input id="be-value" type="number" min="0" placeholder="덮어쓸 판매가" aria-label="선택 행에 넣을 판매가">' +
+    '<span id="be-currency" class="be-unit"></span><select id="be-price-source" aria-label="판매가 값 출처" title="환율가: 국내 기준가 등급 ÷ 오늘 환율(우대 없음)에서 앞 두 자리만 남긴 값을 행마다 계산합니다(아마존·eBay 전용)">' +
+    '<option value="direct">직접 입력</option><option value="fx">환율가</option></select><button id="be-apply" type="button">가격 적용</button></div></td><td></td></tr>' +
+    '</thead><tbody id="be-body"></tbody></table></div></div>' +
     '<div class="be-pager"><button id="be-prev" type="button">이전</button><span id="be-page"></span><button id="be-next" type="button">다음</button></div>';
-  window.VUFxAutoPrice?.mount(root, ipc);   // 일일 환율 자동 변경 패널(fx-auto-price.js)
+  // 일일 환율 자동 변경 패널(fx-auto-price.js)은 모드 바 '환율' 탭의 칸에 붙는다. 일괄 화면 바로 뒤 형제 칸이다.
+  const fxRoot = el('section'); fxRoot.id = 'fx-workspace'; fxRoot.hidden = true; fxRoot.setAttribute('aria-label', '환율');
+  root.after(fxRoot); window.VUFxAutoPrice?.mount(fxRoot, ipc);
   const viewer = el('dialog', 'be-image-viewer'); viewer.id = 'be-image-viewer';
   viewer.setAttribute('aria-labelledby', 'be-image-viewer-title');
   const viewerBar = el('div', 'be-image-viewer-bar'), viewerTitle = el('strong'); viewerTitle.id = 'be-image-viewer-title';
@@ -250,7 +255,10 @@
       const own = platformId(r); if (own) id.append(el('small', 'be-own-id', own));
       tr.append(id);
       const taxonomy = el('td', '', r.tax.brand); taxonomy.append(el('small', '', r.tax.vehicle + ' / ' + r.tax.model)); tr.append(taxonomy);
-      tr.append(el('td', 'be-price', r.ready ? (r.price === '' ? '미등록' : Number(r.price).toLocaleString('ko-KR') + ' ' + unit) : (r.price !== '' ? (Number.isFinite(Number(r.price)) ? Number(r.price).toLocaleString('ko-KR') + ' ' + unit : r.price) + ' (목록)' : '조회 필요')));
+      const current = el('td', 'be-price', r.ready ? (r.price === '' ? '미등록' : Number(r.price).toLocaleString('ko-KR') + ' ' + unit) : (r.price !== '' ? (Number.isFinite(Number(r.price)) ? Number(r.price).toLocaleString('ko-KR') + ' ' + unit : r.price) + ' (목록)' : '조회 필요'));
+      const fx = state().fx, tier = fx?.links?.[r.id];
+      if (tier) current.append(el('small', '', (fx.on ? '환율 자동 · ' : '환율 등급 · ') + tier));
+      tr.append(current);
       const priceCell = el('td'), input = el('input'); input.type = 'number'; input.step = unit === 'USD' ? '.01' : '1'; input.min = unit === 'USD' ? '.01' : '1';
       input.value = r.newPrice; input.disabled = busy || !r.ready || r.readonly || r.priceReadonly;
       input.setAttribute('aria-label', '판매가: ' + r.name + (r.variant ? ' / ' + r.variant : ''));
@@ -271,8 +279,7 @@
   }
   function lock(value) {
     busy = value;
-    // 환율 자동 변경 패널은 자기 상태로 잠근다(실행은 메인 프로세스에서 따로 돈다).
-    root.querySelectorAll('button, input, select').forEach(n => { if (!n.closest('.fx-panel')) n.disabled = value; });
+    root.querySelectorAll('button, input, select').forEach(n => { n.disabled = value; });
     $('be-stop').hidden = !value; $('be-stop').disabled = false;
     draw();
   }
@@ -287,6 +294,8 @@
     // 숨은 검색칸(아마존·eBay 밖)에 남은 글자로 거르지 않는다.
     const result = await call('bulk-price-list', { scope, query: $('be-api-query').hidden ? '' : $('be-api-query').value.trim() });
     state().rows = result.items.map(augment); state().note = result.note || '';
+    // 아마존·eBay 행의 환율 등급 꼬리표. 못 읽어도 목록은 그대로 쓴다.
+    state().fx = /^(?:amazon-|ebay$)/.test(scope) ? await call('fx-auto-price-links', { scope }).catch(() => null) : null;
     state().filters = {}; query = ''; search.value = ''; page = 0;
     rebuildFilters(); tell(result.note || result.items.length + '개 상품을 불러왔습니다.');
   }));
@@ -312,7 +321,8 @@
   });
   // 현재가는 몰이 한 요청에 허용하는 만큼 묶어 읽는다(메인 bulk-price-load-many: 네이버 목록 조회 100건, 아마존 20건×2).
   // 묶음 조회가 없는 쿠팡·eBay 는 메인이 상품마다 읽으므로, 진행 표시와 중단이 늦지 않게 작게 나눠 보낸다.
-  const LOAD_CHUNK = { naver: 100, 'amazon-us': 40, 'amazon-jp': 40, ebay: 8, coupang: 4 };
+  // 네이버도 묶음 결과에 상세 이미지가 없어 메인이 상품마다 이미지 목록을 읽는다 — 같은 이유로 작게.
+  const LOAD_CHUNK = { naver: 10, 'amazon-us': 40, 'amazon-jp': 40, ebay: 8, coupang: 4 };
   // 고른 행의 상품마다 현재가(와 이미지)를 읽어 행을 바꿔 끼운다. '현재가 불러오기'와 '가격 적용'(안 읽은 행)이 같이 쓴다.
   async function loadPrices(work) {
     const products = [...new Map(work.map(r => [r.id, r])).values()];
@@ -345,12 +355,17 @@
         const at = rows().findIndex(x => x.id === r.id);
         const other = rows().filter(x => x.id !== r.id);
         // 옵션 줄이 이미 있었으면 그 선택을 이어 쓴다. 상품 한 줄을 처음 펼칠 때만 전부 고른다 — 예전에는 옵션 하나만
-        // 골라도 불러온 뒤 모든 옵션이 선택돼, 이어서 '가격 입력' 을 누르면 옵션가가 한 값으로 납작해졌다.
+        // 골라도 불러온 뒤 모든 옵션이 선택돼, 이어서 '가격 적용' 을 누르면 옵션가가 한 값으로 납작해졌다.
         const before = rows().filter(x => x.id === r.id);
         const picked = before.some(x => x.optionId) ? new Map(before.map(x => [x.optionId || '', x.selected])) : null;
-        other.splice(at, 0, ...item.rows.map(x => ({ ...augment(x), selected: !x.readonly && (!picked || !!picked.get(x.optionId || '')) })));
+        // 이미지 변경안(이미지 적용·✖)이 걸린 상품은 변경안과 그때 읽은 revision 을 새 행에 옮긴다. 가격 적용이 안 읽은 행을
+        // 불러오며 행을 바꿔 끼울 때 변경안이 조용히 사라지던 것. revision 을 그대로 두어 저장의 expectedRevision 검사가 맞다.
+        const draft = before.find(x => x.imagesReady && Array.isArray(x.newImages));
+        other.splice(at, 0, ...item.rows.map(x => ({ ...augment(x),
+          ...(draft && { images: draft.images, imageRevision: draft.imageRevision, imagesReady: true, newImages: [...draft.newImages], imageResult: draft.imageResult }),
+          selected: !x.readonly && (!picked || !!picked.get(x.optionId || '')) })));
         state().rows = other;
-        if (!item.rows[0]?.imagesReady) noImages++;
+        if (!draft && !item.rows[0]?.imagesReady) noImages++;
         ok++;
       }
       if (got.blocked) blocked = got.blocked;
@@ -364,8 +379,8 @@
     if (!work.length) { tell('현재가를 불러올 상품을 선택하세요.'); return; }
     const { total, ok, failed, firstError, blocked, noImages } = await loadPrices(work);
     const counts = '성공 ' + ok + ' · 실패 ' + failed + (ok + failed < total ? ' · 남음 ' + (total - ok - failed) : '');
-    // 네이버 묶음 조회에는 상세 이미지가 없다. 이미지 적용을 누르면 그 상품만 조회한다.
-    const imageNote = noImages ? ' 이미지 목록은 이미지 적용 때 상품별로 조회합니다(' + noImages + '개).' : '';
+    // 이미지는 현재가와 함께 언제나 읽는다(메인 loadMany). 못 읽은 상품은 행의 '이미지 목록 조회'로 다시 읽는다.
+    const imageNote = noImages ? ' 이미지 목록을 불러오지 못한 상품 ' + noImages + '개 — 처리 결과 칸을 보고 행의 이미지 목록 조회로 다시 읽으세요.' : '';
     tell(blocked ? '현재가 조회를 멈췄습니다 (' + counts + '). 나머지 상품도 같은 이유로 실패할 오류입니다: ' + blocked
       : cancel ? '현재가 조회를 중단했습니다 (' + counts + ').'
         : failed ? '현재가 조회 끝 (' + counts + '). 실패한 행은 처리 결과 칸을 확인하세요. 첫 오류: ' + firstError + imageNote
@@ -378,19 +393,30 @@
   $('be-apply').addEventListener('click', () => run(async () => {
     const fx = $('be-price-source').value === 'fx', value = $('be-value').value;
     if (!fx && (!value || Number(value) <= 0)) { tell('덮어쓸 판매가를 입력하세요.'); return; }
-    if (!selected().length) { tell('가격을 넣을 상품을 선택하세요.'); return; }
-    const pending = selected().filter(r => !r.ready && !r.priceReadonly);
+    // 고른 줄은 불러오기 전에 키로 기억한다. 불러온 가격이 가격 필터에서 빠져도 그 줄을 채우고, 필터가 숨기던 선택 줄은 건드리지 않는다.
+    const before = selected(), wanted = new Set(before.map(key)), ids = new Set(before.map(r => r.id));
+    if (!before.length) { tell('가격을 넣을 상품을 선택하세요.'); return; }
+    const pending = before.filter(r => !r.ready && !r.priceReadonly);
     const loaded = pending.length ? await loadPrices(pending) : null;
     if (cancel) { tell('가격 적용을 중단했습니다. 판매가 칸은 바꾸지 않았습니다.'); return; }
-    const picked = selected(), ids = new Set(picked.map(r => r.id)), ready = picked.filter(r => r.ready && !r.priceReadonly);
+    // 상품 한 줄이 불러온 뒤 옵션 여러 줄로 펼쳐지면 옵션가가 한 값으로 납작해지지 않게 채우지 않는다(옵션을 보고 다시 적용).
+    const spread = new Set(), picked = [];
+    for (const r of rows()) {
+      if (wanted.has(key(r))) picked.push(r);
+      else if (wanted.has(r.id + ':')) { if (rows().filter(x => x.id === r.id).length > 1) spread.add(r.id); else picked.push(r); }
+    }
+    const ready = picked.filter(r => r.ready && !r.readonly && !r.priceReadonly);
     // 고른 상품 안의 읽기 전용 줄(쿠팡 승인 전 옵션·이미지만 고칠 수 있는 줄)은 건너뛰고 개수만 알린다.
-    const readonly = rows().filter(r => ids.has(r.id) && (r.readonly || r.priceReadonly)).length;
-    const unloaded = picked.filter(r => !r.ready && !r.priceReadonly).length;
+    const readonly = rows().filter(r => ids.has(r.id) && !spread.has(r.id) && (r.readonly || r.priceReadonly)).length;
+    const unloaded = picked.filter(r => !r.ready && !r.readonly && !r.priceReadonly).length;
+    const inView = new Set(view()), hidden = ready.filter(r => !inView.has(r)).length;
     const notes = (readonly ? ' 읽기 전용이라 건너뛴 행 ' + readonly + '개.' : '') +
       (unloaded ? ' 현재가를 불러오지 못해 건너뛴 행 ' + unloaded + '개(처리 결과 칸 확인).' : '') +
+      (spread.size ? ' 상품 ' + spread.size + '개가 옵션 ' + rows().filter(r => spread.has(r.id)).length + '행으로 펼쳐져 판매가를 넣지 않았습니다. 옵션별 현재가를 확인한 뒤 다시 가격 적용을 누르세요.' : '') +
+      (hidden ? ' 현재가를 불러온 뒤 가격 필터에서 빠진 행 ' + hidden + '개도 채웠습니다(필터를 바꿔야 보이고 저장됩니다).' : '') +
       (loaded?.blocked ? ' 현재가 조회를 멈춘 이유: ' + loaded.blocked : '');
     if (!ready.length) { tell('판매가를 넣을 수 있는 행이 없습니다.' + notes); return; }
-    const visible = new Set(pageRows()), off = ready.filter(r => !visible.has(r)).length;
+    const visible = new Set(pageRows()), off = ready.filter(r => inView.has(r) && !visible.has(r)).length;
     const where = off ? '(다른 페이지 ' + off + '행 포함)' : '';
     if (!fx) {
       ready.forEach(r => { r.newPrice = value; });
@@ -436,8 +462,12 @@
     // 제거는 새 이미지를 올리지 않으니 ESM 확인 없이 적은 URL 그대로 맞춘다(주소 표기만 URL 규칙으로 맞춤).
     const same = url => { try { return new URL(String(url).trim()).href; } catch { return String(url).trim(); } };
     let checked;
-    if (op === 'remove') checked = { images: input.split(/[|\r\n]/).map(x => x.trim()).filter(Boolean), verified: 0 };
-    else { tell('ESM 호스팅 이미지 확인 중…'); checked = await call('bulk-images-import', { scope, input }); }
+    if (op === 'remove') {
+      // <img> HTML 을 붙여 넣으면 src 만 뽑아 맞춘다(가져오기와 같은 입력). DOMParser 문서는 이미지를 읽지 않는다.
+      const list = /<img\b/i.test(input) ? [...new DOMParser().parseFromString(input, 'text/html').querySelectorAll('img[src]')].map(img => img.getAttribute('src')) : input.split(/[|\r\n]/);
+      checked = { images: list.map(x => x.trim()).filter(Boolean), verified: 0 };
+      if (!checked.images.length) { tell('제거할 이미지 URL을 찾지 못했습니다. URL 또는 <img src="…"> HTML을 입력하세요.'); return; }
+    } else { tell('ESM 호스팅 이미지 확인 중…'); checked = await call('bulk-images-import', { scope, input }); }
     // 변경안을 걸기 전에 상품마다 지금 이미지(revision)를 읽는다('이미지 목록 조회'와 같은 길). 상품 하나가 실패해도 나머지는
     // 그대로 두고, 중단을 누르면 다음 상품부터 멈춘다. 지금 이미지를 모르는 상품에는 변경을 걸지 않는다.
     const ids = new Set(picked.map(r => r.id)), snapshots = new Map(), failed = new Map(), ready = new Set();
@@ -584,11 +614,14 @@
   ipc.on('ebay-cache-progress', (_, progress) => {
     if (busy && scope === 'ebay') tell('eBay 목록 동기화 · ' + (progress.loaded || 0) + '/' + (progress.total || '?'));
   });
-  const nav = $('mode-bar');
-  for (const [value, label] of [['bulk', '상품 일괄 수정'], ['api', 'API KEY']]) {
+  // 모드 바: 신규등록 · 단일 상품 수정 · 상품 일괄 수정, 오른쪽 끝에 설정 묶음(환율 · API KEY).
+  const nav = $('mode-bar'), settings = el('div', 'mode-settings');
+  settings.setAttribute('role', 'group'); settings.setAttribute('aria-label', '설정');
+  for (const [value, label] of [['bulk', '상품 일괄 수정'], ['fx', '환율'], ['api', 'API KEY']]) {
     const b = el('button', 'mode-label', label); b.type = 'button'; b.dataset.workspace = value;
-    b.addEventListener('click', () => show(value)); nav.append(b);
+    b.addEventListener('click', () => show(value)); (value === 'bulk' ? nav : settings).append(b);
   }
+  nav.append(settings);
   let requestedApiPlatform = null;
   const keyPlatform = id => ({
     naverTab: 'naver', coupangTab: 'coupang', amazonTab: 'amazon', ebayTab: 'ebay',
@@ -625,11 +658,13 @@
       requestedApiPlatform = previous === 'bulk' ? keyPlatform(scope) :
         keyPlatform(lastTab) || keyPlatform(document.querySelector('#board-body .platform-cell.viewing')?.dataset.tabId) || 'naver';
     }
-    // 앱은 접힌 채(400px, ?panels=collapsed)로 뜬다. 일괄·API 화면은 넓은 창이 필요하니 셸의 접기부터 푼다.
+    // 앱은 접힌 채(400px, ?panels=collapsed)로 뜬다. 일괄·환율·API 화면은 넓은 창이 필요하니 셸의 접기부터 푼다.
     if (viewName && typeof panelsCollapsed === 'function' && panelsCollapsed()) setPanels(true);
     if (viewName) document.body.dataset.workspaceView = viewName;
     else delete document.body.dataset.workspaceView;
     root.hidden = viewName !== 'bulk';
+    fxRoot.hidden = viewName !== 'fx';
+    if (viewName === 'fx' && previous !== 'fx') window.VUFxAutoPrice?.refresh();
     nav.querySelectorAll('[data-workspace]').forEach(b => b.classList.toggle('is-active', b.dataset.workspace === viewName));
     if (viewName === 'api') {
       frame.contentDocument?.documentElement.classList.add('api-key-view');
@@ -653,6 +688,9 @@
   }, true);
   $('form-frame').addEventListener('load', () => requestAnimationFrame(() => apiView(true)));
   window.addEventListener('vu-api-keys-ready', () => apiView());
-  window.addEventListener('beforeunload', e => { if (busy || [...states.values()].some(s => s.rows.some(dirty))) { e.preventDefault(); e.returnValue = ''; } });
+  // 일괄 표의 저장 안 한 행과 환율 탭의 저장 안 한 설정(등급표·대상·자동 저장)이 있으면 닫기를 멈춘다.
+  window.addEventListener('beforeunload', e => {
+    if (busy || [...states.values()].some(s => s.rows.some(dirty)) || window.VUFxAutoPrice?.isDirty()) { e.preventDefault(); e.returnValue = ''; }
+  });
   rebuildFilters(); draw();
 })();

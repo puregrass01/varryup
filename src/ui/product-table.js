@@ -191,6 +191,8 @@
       prev.disabled = page === 0; next.disabled = (page + 1) * pageSize >= filtered.length;
     }
     draw();
+    // 찾기 결과가 1건이면 바로 고른다(모든 탭의 '선택'은 읽기만 한다 — 저장은 사람이 누른다).
+    if (records.length === 1) body.querySelector('.vu-product-select')?.click();
     return { clearSelection() { selected = null; draw(); } };
   }
   window.VUProductTable = { normalize, render };

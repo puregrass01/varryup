@@ -37,7 +37,6 @@
         .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; }
         .card { background:var(--bg-panel); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
         .card h3 { margin:0 0 4px; font-size:.92rem; font-weight:700; }
-        .card .hint { margin:0 0 12px; font-size:.76rem; color:var(--text-muted); line-height:1.6; }
         .runs { display:flex; flex-direction:column; gap:7px; }
         .run { display:flex; align-items:center; gap:9px; width:100%; text-align:left; cursor:pointer;
             background:var(--bg-card); border:1px solid var(--border); color:var(--text-main);
@@ -73,7 +72,7 @@
         thead th { position:sticky; top:0; background:var(--bg-panel); font-weight:700; font-size:.73rem;
             border-bottom:1px solid var(--border); z-index:1; }
         td.c { text-align:center; }
-        /* 채널 칸에는 상품명·게시물 제목이 들어가 길다. 폭을 묶고 말줄임으로 자른다 —
+        /* 채널 칸에는 상품명이 들어가 길다. 폭을 묶고 말줄임으로 자른다 —
            마우스를 올리면 title 로 전체가 뜨고, 칸을 누르면 펼쳐진다. */
         td.ch { cursor:default; }
         td.ch.open { white-space:normal; word-break:break-all; overflow:visible; }
@@ -215,13 +214,6 @@ const TASKS = [
     ['12', 'B2B몰', 'node', ['scripts/verimap_collect_imweb.mjs', '--site=b2b', '--no-server'], '1분'],
     ['14', 'B2B 옵션 - 확인필요분', 'node', ['scripts/verimap_collect_imweb.mjs', '--site=b2b', '--no-server', '--options'], '약 6분'],
   ]],
-  ['해외몰(미국 · 일본)', [
-    ['19', '게시판 구조 확인 - 게시판 3개만', 'node', ['scripts/verimap_collect_imweb_boards.mjs', '--boards-limit=3'], '1분'],
-    ['18', '게시판 등록현황 수집', 'node', ['scripts/verimap_collect_imweb_boards.mjs'], '몇 분'],
-    ['20', '게시물 본문 구조 확인 - 3건만', 'node', ['scripts/verimap_collect_imweb_boards.mjs', '--detail', '--detail-limit=3'], '즉시'],
-    ['22', '게시물 본문 읽기 - 확인필요분만', 'node', ['scripts/verimap_collect_imweb_boards.mjs', '--detail'], '약 5분'],
-    ['23', '게시물 본문 읽기 - 전량 (링크용 idx 포함)', 'node', ['scripts/verimap_collect_imweb_boards.mjs', '--detail-all'], '약 15분'],
-  ]],
   ['대조', [
     ['21', '코드표 X 전 채널 대조', 'node', ['scripts/verimap_match.mjs'], '몇 초'],
   ]],
@@ -240,17 +232,10 @@ let busy = false;
 function renderCards() {
     const host = document.getElementById('cards');
     host.innerHTML = '';
-    const NOTE = {
-      '해외몰(미국 · 일본)':
-        '미국몰·일본몰은 상품 페이지가 아니라 게시물로 운영됩니다. 아임웹 Open API 에는 게시판이 ' +
-        '없어서, 베리업이 글을 올릴 때 쓰는 관리자 세션으로 게시판·게시물 목록을 읽어 옵니다. ' +
-        '엣지 창이 열리고 아임웹 관리자에 로그인합니다.',
-    };
     for (const [title, rows] of TASKS) {
         const c = document.createElement('div');
         c.className = 'card';
         c.innerHTML = `<h3>${title}</h3>`
-          + (NOTE[title] ? `<p class="hint">${NOTE[title]}</p>` : '')
           + `<div class="runs"></div>`;
         const box = c.querySelector('.runs');
         for (const [n, label, kind, args, when] of rows) {
@@ -389,9 +374,9 @@ function loadLinks() {
 function urlFor(ch, id) {
     const t = LINKFMT[ch];
     if (!t || !id) return '';
-    // 틀이 '{id}' 뿐이면 id 자체가 완성된 주소다(해외몰) — 인코딩하면 주소가 깨진다.
+    // 틀이 '{id}' 뿐이면 id 자체가 완성된 주소다(쿠팡) — 인코딩하면 주소가 깨진다.
     const u = String(t).trim() === '{id}' ? String(id) : String(t).replace('{id}', encodeURIComponent(id));
-    // 주소가 아닌 값(게시물 코드만 들어온 경우 등)을 넘기면 윈도가 폴더 경로로 알아듣고
+    // 주소가 아닌 값(상품번호만 들어온 경우 등)을 넘기면 윈도가 폴더 경로로 알아듣고
     // 탐색기를 연다. http(s) 로 시작할 때만 링크로 본다.
     return /^https?:\/\//i.test(u) ? u : '';
 }

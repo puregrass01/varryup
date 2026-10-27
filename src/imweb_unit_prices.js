@@ -98,7 +98,7 @@ export function buildPatch(product, plan) {
   return payload;
 }
 
-// 옵션 조합을 쓰기 형식으로(imweb_edit.js updateProduct 와 같은 모양). 조합 목록·순서는 그대로 둔다.
+// 옵션 조합을 쓰기 형식으로(createOpenApiGateway 의 save() 가 구역별 PATCH 로 푼다). 조합 목록·순서는 그대로 둔다.
 function optionWrite(poiRaw, priceOf) {
   const poi = clone(poiRaw);
   poi.optionDetails = (poiRaw?.optionDetails || []).map((d, i) => {

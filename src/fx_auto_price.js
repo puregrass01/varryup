@@ -2,10 +2,12 @@
 //
 // 정한 규칙 (2026-09-30)
 //   · 기준가는 가격 등급표다. 해외 상품은 처음 본 가격으로 등급을 한 번 정해 저장한다(utils/fx_pricing.js).
+//     손으로 다른 등급 가격으로 바꾼 상품은 그 등급으로 옮긴다(2026-10-27, tierBook).
 //   · 이 PC 에서 켠 경우에만, 앱이 켜져 있는 동안 새 환율이 들어온 뒤 하루 한 번 자동 저장한다.
 //     설정은 PC 마다 따로다. 여러 PC 에서 켜면 같은 상품을 PC 수만큼 조회한다.
 //   · 환산한 뒤 앞 두 자리만 남기고 버린다(110.61 → 110, 17,396엔 → 17,000엔).
-//   · 환율로 계산한 값이 지금 판매가와 1% 이상 차이날 때만 저장하고, 10% 넘게 바뀌는 상품은 자동으로 저장하지 않는다.
+//   · 환율로 계산한 값이 지금 판매가와 1% 이상 차이날 때만 저장하고, 10% 넘게 바뀌는 상품은 자동으로 저장하지 않는다
+//     (환율 탭의 '10% 초과 검토'에서 골라 저장 — approve).
 //     두 자리 가격이 아닌 지금 가격(109.32 등)은 1% 미만이어도 한 번 정리한다(fx_pricing.js planPrice).
 //   · 한 번 실행하는 동안 환율 하나로 고정한다. 환율 우대·마진 없음.
 //   · 조회·저장은 상품 일괄 수정과 같은 경로(bulk_price_ipc.js)다: 보내기 직전 현재가 비교 → 저장 → 재조회.
@@ -102,10 +104,15 @@ export function createFxAutoPrice({ store, rates, service, imwebUnits = null, cl
     const assignments = { ...cfg.assignments }, added = {};
     return {
       find(scope, id, price) {
-        const key = scope + ':' + id;
+        const key = scope + ':' + id, currency = FX_SCOPES[scope].currency;
         const saved = byId.get(assignments[key]?.tier);
-        if (saved) return saved;
-        let tier = findTier(price, FX_SCOPES[scope].currency, snapshot, cfg.tiers), via = 'price';
+        let tier = findTier(price, currency, snapshot, cfg.tiers), via = 'price';
+        // 저장된 등급이 먼저다. 그 등급으로는 10% 넘게 바뀌는(매번 '변동 폭 초과') 가격이 다른 등급 범위에 들면
+        // 손으로 그 등급 가격으로 바꾼 것으로 보고 옮긴다. 범위 안에서 조금 고친 가격은 다음 실행이 등급 가격으로 되돌린다.
+        // ponytail: 자동이 꺼진 채 환율이 크게(기본 등급이면 약 14%) 움직이면 옆 등급으로 잘못 옮길 수 있다.
+        // 막으려면 마지막으로 본·저장한 가격을 연결에 남겨 두고, 그 가격에서 바뀐 상품만 옮긴다.
+        const moved = saved && tier && tier !== saved && planPrice({ current: price, currency, krw: saved.krw, snapshot }).action === 'large';
+        if (saved && !moved) return saved;
         for (const other of Object.keys(FX_SCOPES)) {
           if (tier) break;
           if (other !== scope && byId.has(assignments[other + ':' + id]?.tier)) { tier = byId.get(assignments[other + ':' + id].tier); via = other; }
@@ -167,7 +174,8 @@ export function createFxAutoPrice({ store, rates, service, imwebUnits = null, cl
   }
 
   // 한 상품. 이 몰의 나머지 상품을 멈춰야 하면 이유를 돌려준다.
-  async function runItem(scope, item, { snapshot, book, rows, counts, flow, live: loadLive }) {
+  // reviewed: 환율 탭 검토 저장(approve)에서 사람이 본 지금 가격 — 그 가격 그대로일 때만, 10% 제한 없이 저장한다.
+  async function runItem(scope, item, { snapshot, book, rows, counts, flow, live: loadLive, reviewed = null }) {
     const currency = FX_SCOPES[scope].currency;
     const { base, skip, tier, info } = screen(scope, item, { snapshot, book });
     const note = (kind, result, extra = {}) => { counts[kind]++; rows.push({ ...base, kind, result, ...extra }); };
@@ -183,11 +191,14 @@ export function createFxAutoPrice({ store, rates, service, imwebUnits = null, cl
     const live = String(row?.price ?? '').trim();
     if (!row?.ready || row.readonly || !(Number(live) > 0)) { note('noPrice', row?.result || '현재가 없음', info); await sleep(pace); return ''; }
     base.current = live;
-    const plan = planPrice({ current: live, currency, krw: tier.krw, snapshot });
+    if (reviewed !== null && Number(live) !== Number(reviewed)) {
+      note('check', '검토한 뒤 지금 가격이 바뀜 (' + reviewed + ' → ' + live + ') — 저장 안 함', info); await sleep(pace); return '';
+    }
+    const plan = planPrice({ current: live, currency, krw: tier.krw, snapshot, maxChange: reviewed === null ? MAX_AUTO_CHANGE : Infinity });
     const detail = planned(info, plan, currency);
     if (SKIP[plan.action]) { note(...SKIP[plan.action], detail); await sleep(pace); return ''; }
     if (plan.action === 'large') {
-      note('large', '변동 폭 ' + pct(plan.change) + ' — 자동 저장 안 함 (상품 일괄 수정의 환율가 입력으로 확인 후 저장)', detail);
+      note('large', '변동 폭 ' + pct(plan.change) + ' — 자동 저장 안 함 (환율 탭 \'10% 초과 검토\'에서 골라 저장)', detail);
       await sleep(pace);
       return '';
     }
@@ -294,6 +305,8 @@ export function createFxAutoPrice({ store, rates, service, imwebUnits = null, cl
         finally { book.save(); }
       }
       result.cancelled = job.cancel;
+      // 10% 넘게 바뀌어 건너뛴 아마존·eBay 상품 — 환율 탭에서 골라 저장한다(approve). 아임웹은 미국·일본 미리보기에서.
+      result.review = rows.filter(r => r.kind === 'large');
       return result;
     } catch (e) {
       result.error = e?.message || String(e);
@@ -305,6 +318,49 @@ export function createFxAutoPrice({ store, rates, service, imwebUnits = null, cl
       job = null;
       try { notify({ running: null, lastRun: result }); } catch { /* 닫히는 창 */ }
     }
+  }
+
+  // 환율 탭 검토: 마지막 실행이 '변동 폭 초과'로 건너뛴 상품 중 고른 것만 저장한다. 판단·저장은 자동 실행과 같은 길이고
+  // 10% 제한만 없다. 금액은 지금 환율로 다시 계산한다. 끝나면 마지막 실행 기록의 개수·검토 목록·결과 CSV 를 고친다.
+  async function approve({ keys = [] } = {}) {
+    if (job) throw new Error('환율 자동 변경이 이미 실행 중입니다.');
+    const want = new Set(keys), cfg = store.read();
+    const picked = (cfg.lastRun?.review || []).filter(r => want.has(r.scope + ':' + r.id));
+    if (!picked.length) throw new Error('저장할 상품을 고르세요.');
+    const snapshot = JSON.parse(JSON.stringify(await snapshotOf(null))), problem = rateProblem(snapshot, clock());
+    if (problem) throw new Error(problem);
+    const counts = blank(), done = [], book = tierBook(cfg, snapshot);
+    job = { trigger: 'review', startedAt: iso(), scope: '', index: 0, total: picked.length, counts, cancel: false };
+    let stopped = '';
+    try {
+      for (const r of picked) {
+        if (job.cancel) { stopped = '사용자가 중단했습니다.'; break; }
+        Object.assign(job, { scope: r.scope, index: job.index + 1 });
+        stopped = await runItem(r.scope, { id: r.id, name: r.name, price: r.current }, { snapshot, book, rows: done, counts,
+          flow: { misses: 0 }, live: id => service.load({ scope: r.scope, id }), reviewed: r.current });
+        progress();
+        if (stopped) break;
+      }
+    } finally {
+      book.save();
+      const after = new Map(done.map(r => [r.scope + ':' + r.id, r])), key = r => r.scope + ':' + r.id;
+      const last = store.read().lastRun;
+      for (const r of done) { const c = last.scopes?.[r.scope]?.counts; if (c) { c.large--; c[r.kind]++; } }
+      last.review = last.review.filter(r => !after.has(key(r)));
+      store.update({ lastRun: last });
+      store.saveRows(store.rows().map(r => after.get(key(r)) || r));
+      job = null;
+      try { notify({ running: null, lastRun: last }); } catch { /* 닫히는 창 */ }
+    }
+    return { counts, stopped };
+  }
+
+  // 상품 일괄 수정 표의 꼬리표: 이 몰 상품마다 연결된 등급(이름, 없으면 기준가). on 은 매일 자동 저장 대상인지.
+  function links(scope) {
+    const cfg = store.read(), name = new Map(cfg.tiers.map(t => [t.id, t.label || Number(t.krw).toLocaleString('ko-KR') + '원']));
+    const out = {};
+    for (const [key, a] of Object.entries(cfg.assignments)) if (key.startsWith(scope + ':') && name.has(a?.tier)) out[key.slice(scope.length + 1)] = name.get(a.tier);
+    return { on: cfg.enabled && cfg.scopes[scope] === true, links: out };
   }
 
   // 켜져 있으면 새 환율이 들어온 뒤 하루 한 번. 어제 돌린 환율 그대로면 다음 확인까지 기다린다.
@@ -381,7 +437,7 @@ export function createFxAutoPrice({ store, rates, service, imwebUnits = null, cl
     store.update(patch);
   }
 
-  // 상품 일괄 수정의 '환율가 입력' — 화면에 불러온 행의 새 판매가만 계산한다. 저장은 화면의 '선택 변경 저장'.
+  // 상품 일괄 수정의 값 출처 '환율가'(가격 적용) — 화면에 불러온 행의 새 판매가만 계산한다. 저장은 화면의 '선택 변경 저장'.
   // action 은 자동 실행과 같은 판단(same·small·large·update)이다. 화면은 update·large 만 채운다.
   async function plan({ scope, rows = [] } = {}) {
     const channel = Object.hasOwn(FX_SCOPES, scope) ? FX_SCOPES[scope] : null;
@@ -405,7 +461,7 @@ export function createFxAutoPrice({ store, rates, service, imwebUnits = null, cl
     return { rate: rateInfo(snapshot), rows: out };
   }
 
-  return { run, tick, start, stop, cancel, state, saveConfig, plan, rows: () => store.rows(), running: () => !!job };
+  return { run, tick, start, stop, cancel, state, saveConfig, plan, approve, links, rows: () => store.rows(), running: () => !!job };
 }
 
 export function registerFxAutoPriceIPC({ ipcMain, dir, log = console, ...deps }) {
@@ -425,5 +481,7 @@ export function registerFxAutoPriceIPC({ ipcMain, dir, log = console, ...deps })
   handle('fx-auto-price-cancel', () => { fx.cancel(); return fx.state({ withRate: false }); });
   handle('fx-auto-price-rows', () => fx.rows());
   handle('fx-auto-price-plan', input => fx.plan(input));
+  handle('fx-auto-price-approve', input => fx.approve(input));
+  handle('fx-auto-price-links', input => fx.links(String(input.scope || '')));
   return fx;
 }

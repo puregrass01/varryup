@@ -503,6 +503,9 @@ try {
   };
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push(e.message));
+  // 일괄 등록은 입력 확인 경고가 있으면 confirm 으로 묻는다. 기본은 '계속' — 취소 검사에서만 거절한다.
+  let 확인답 = true;
+  page.on('dialog', d => (확인답 ? d.accept() : d.dismiss()));
   await page.goto(pathToFileURL(path.join(ROOT, 'src/ui/index_up.html')).href);
 
   // 사전이 도착해야 영문·일문 자동 채움이 돈다.
@@ -951,6 +954,17 @@ try {
       ['이베이',  '초안 요청 한 번 나감',    drafts, 1],
       ['셸 로그', '던진 아마존 = 실패',      log2.includes('[아마존 미국] 등록 실패: 아마존 폼 오류'), true],
       ['셸 로그', '던져도 끝까지 감',        log2.includes('일괄 등록 완료 (성공: 5건, 실패: 1건)'), true],
+    ]);
+  }
+  {
+    // 입력 확인 경고가 있을 때 confirm 을 거절하면 어느 몰에도 보내지 않는다.
+    확인답 = false;
+    const log = await 일괄(다성공, 이베이성공);
+    확인답 = true;
+    const sent = await 폼.evaluate(() => window.__bulk.length);
+    판정('일괄 등록 — 경고 확인창에서 취소', [
+      ['셸 로그', '취소 안내',              log.includes('일괄 등록을 취소했습니다'), true],
+      ['폼',      '등록 함수 안 부름',       sent, 0],
     ]);
   }
   {

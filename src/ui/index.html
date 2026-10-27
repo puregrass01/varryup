@@ -1557,12 +1557,11 @@ Upgrade your driving experience today and enjoy peace of mind with every ride!</
                 addLog('naver', `"${brand} ${model}" 상품을 찾지 못했습니다.`, 'error');
                 return;
             }
+            // 고르면(1건이면 표가 바로 고른다) 번호를 채우고 불러온다 — 저장은 불러온 상품을 보고 사람이 누른다.
             VUProductTable.render(box, rows, {
-                caption: '네이버 상품 검색 결과', onSelect: item => pickSmartstoreId(item.id, item.name)
+                caption: '네이버 상품 검색 결과', onSelect: async item => { pickSmartstoreId(item.id, item.name); await loadSmartstoreProduct(); }
             });
-            // 하나뿐이면 표에서 또 누를 것 없이 채운다. 불러오기는 여전히 사람이 누른다 — 불러온 상품을 보고 저장한다.
-            if (rows.length === 1) { pickSmartstoreId(rows[0].id, rows[0].name); return; }
-            addLog('naver', `${rows.length}건 검색됨 — 표에서 상품을 선택하세요.`, 'system');
+            if (rows.length > 1) addLog('naver', `${rows.length}건 검색됨 — 표에서 상품을 선택하세요.`, 'system');
         }
 
         function pickSmartstoreId(id, name) {
@@ -1940,12 +1939,11 @@ Upgrade your driving experience today and enjoy peace of mind with every ride!</
                 addLog('coupang', `${src}에서 "${brand} ${model}" 상품을 찾지 못했습니다.`, 'error');
                 return;
             }
+            // 고르면(1건이면 표가 바로 고른다) ID 를 채우고 불러온다 — 저장은 불러온 상품을 보고 사람이 누른다.
             VUProductTable.render(box, rows, {
-                caption: '쿠팡 상품 검색 결과', onSelect: item => pickCoupangId(item.id, item.name)
+                caption: '쿠팡 상품 검색 결과', onSelect: async item => { pickCoupangId(item.id, item.name); await loadCoupangProduct(item.id); }
             });
-            // 하나뿐이면 표에서 또 누를 것 없이 채운다. 불러오기는 여전히 사람이 누른다.
-            if (rows.length === 1) { pickCoupangId(rows[0].id, rows[0].name); return; }
-            addLog('coupang', `${src}에서 ${rows.length}건 검색됨 — 표에서 상품을 선택하세요.`, 'system');
+            if (rows.length > 1) addLog('coupang', `${src}에서 ${rows.length}건 검색됨 — 표에서 상품을 선택하세요.`, 'system');
         }
 
         function pickCoupangId(id, name) {
@@ -3131,6 +3129,8 @@ Upgrade your driving experience today and enjoy peace of mind with every ride!</
                 onSelect: item => loadImwebB2bGroup(item.groupProductNos)
             });
             addLog('imweb', `✓ ${res.groups.length}묶음 검색됨 — 수정할 묶음을 불러오세요.`, 'success');
+            // 한 묶음(세트+개별 여러 줄)이면 바로 불러온다. 한 줄뿐이면 표가 이미 골랐다.
+            if (res.groups.length === 1 && products.length > 1) loadImwebB2bGroup(products[0].groupProductNos);
         }
 
         // ── 2) 짝을 함께 불러오기 ──

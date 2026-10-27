@@ -56,7 +56,7 @@ test('네이버 현재가: 목록 조회 한 번에 100건, 응답에 없는 번
   const byId = new Map(res.data.items.map(item => [item.id, item.rows]));
   assert.deepEqual([byId.get('1000')[0].price, byId.get('1000')[0].ready, byId.get('1000')[0].name], ['10000', true, '상품 1000']);
   assert.equal(byId.get('1005')[0].price, '5000');
-  assert.equal(byId.get('1000')[0].imagesReady, undefined, '검색 결과에는 상세 이미지가 없다 — 이미지 불러오기 때 조회');
+  assert.equal(byId.get('1000')[0].imagesReady, undefined, '검색 결과에는 상세 이미지가 없다 — 이미지 적용 때 조회');
   assert.ok(!byId.has('9999'));
 });
 

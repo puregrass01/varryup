@@ -130,7 +130,8 @@ try {
         tableBox: scroll.clientWidth, table: w('.be-table'), minTable, photo: w('th.be-photo-column'),
         columns: [...document.querySelectorAll('.be-table thead th')].map(th => Math.round(th.getBoundingClientRect().width)),
         railStack: [...document.querySelectorAll('#be-filters > label')].map(l => l.firstChild.textContent.trim()),
-        railTop: document.querySelector('#be-filters > label input')?.id };
+        railTop: document.querySelector('#be-filters > label input')?.id,
+        railOverflow: document.querySelector('#be-filters').scrollHeight - document.querySelector('#be-filters').clientHeight };
     });
     console.log('1200x800 일괄 화면 폭:', JSON.stringify(widths));
     await shell.screenshot({ path: 'scratch/bulk-rail-1200x800.png' });
@@ -139,8 +140,53 @@ try {
     assert.ok(widths.minTable <= widths.tableBox - 17, '세로 스크롤바가 있어도 표가 칸 안에 들어간다');
     assert.ok(widths.rail >= 170 && widths.rail <= 190, '레일 약 180px');
     assert.ok(widths.photo >= 190 && widths.photo <= 210, '사진 열 약 200px');
+    assert.ok(widths.columns[7] >= 80, '처리 결과 열이 낱말 중간에서 끊길 만큼 좁지 않다');
+    assert.ok(widths.railOverflow <= 0, '800px 높이에서 레일의 여섯 칸이 스크롤 없이 보인다');
     assert.equal(widths.railTop, 'be-search', '표 안 검색이 레일 맨 위');
     assert.deepEqual(widths.railStack, ['표 안에서 검색', '브랜드', '차량·제조사', '차종', '상품 종류', '가격']);
+
+    // 환율 탭: 모드 바는 신규등록 · 단일 상품 수정 · 상품 일괄 수정, 오른쪽 끝 설정 묶음(환율 · API KEY).
+    assert.deepEqual(await shell.evaluate(() => [...document.querySelectorAll('#mode-bar .mode-label')].map(n => n.textContent.trim())),
+      ['신규등록', '단일 상품 수정', '상품 일괄 수정', '환율', 'API KEY']);
+    assert.deepEqual(await shell.evaluate(() => [...document.querySelectorAll('#mode-bar .mode-settings [data-workspace]')].map(b => b.dataset.workspace)), ['fx', 'api']);
+    const bar = await shell.evaluate(() => {
+      const box = sel => document.querySelector(sel).getBoundingClientRect();
+      return { right: box('#mode-bar').right - box('[data-workspace="api"]').right, split: box('[data-workspace="fx"]').left - box('[data-workspace="bulk"]').right };
+    });
+    assert.ok(bar.right <= 20 && bar.split > 200, '설정 묶음은 모드 바 오른쪽 끝: ' + JSON.stringify(bar));
+    // 일괄 화면에는 환율 패널이 없다. 접어 둔 채 환율을 눌러도 패널을 펴고, 왼쪽 입력판 없이 폭 전체에 늘 펼친다.
+    assert.equal(await shell.locator('#bulk-edit-workspace .fx-panel').count(), 0, '일괄 화면에 환율 패널 없음');
+    await shell.evaluate(() => setPanels(false, { resize: false }));
+    await shell.locator('[data-workspace="fx"]').click();
+    assert.equal(await shell.evaluate(() => panelsCollapsed()), false, '환율 진입 시 패널을 편다');
+    assert.equal(await shell.locator('[data-workspace="fx"]').getAttribute('class'), 'mode-label is-active');
+    assert.equal(await shell.locator('#bulk-edit-workspace').isVisible(), false);
+    assert.equal(await shell.locator('#main').isVisible(), false, '왼쪽 입력판은 숨는다');
+    assert.equal(await shell.locator('#fx-workspace > #fx-panel').isVisible(), true);
+    assert.equal(await shell.locator('#fx-workspace #fx-in-preview').isVisible(), true, '아임웹 상품명 블록도 같이 옮겨 왔다');
+    const fx = await shell.evaluate(() => {
+      const box = sel => document.querySelector(sel).getBoundingClientRect(), css = sel => getComputedStyle(document.querySelector(sel));
+      return { width: Math.round(box('#fx-workspace').width), bodyMax: css('.fx-body').maxHeight, save: Math.round(box('#fx-save').height),
+        saveBg: css('#fx-save').backgroundColor, runBg: css('#fx-run').backgroundColor, cancel: css('#fx-cancel').display,
+        tierAdd: Math.round(box('#fx-tier-add').height), overflow: css('#fx-workspace').overflowY };
+    });
+    console.log('환율 탭:', JSON.stringify(fx));
+    await shell.waitForTimeout(600); // 모드 바 색 전환(transition)이 끝난 뒤 찍는다.
+    await shell.screenshot({ path: 'scratch/fx-tab-1200x800.png' });
+    assert.ok(fx.width >= 1180, '폭 전체');
+    assert.equal(fx.bodyMax, 'none', '46vh 제한 없음');
+    assert.equal(fx.overflow, 'auto', '길면 탭 칸이 스크롤');
+    assert.deepEqual([fx.save, fx.tierAdd], [32, 32], '탭 안 버튼도 일괄 화면과 같은 32px');
+    assert.notEqual(fx.saveBg, fx.runBg, '설정 저장은 강조 버튼');
+    assert.equal(fx.cancel, 'none', 'hidden 버튼은 숨는다');
+    // 저장 안 한 환율 설정(등급표)이 있으면 창 닫기를 멈춘다.
+    const blocksUnload = () => shell.evaluate(() => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; });
+    assert.equal(await blocksUnload(), false);
+    await shell.locator('#fx-tier-add').click();
+    assert.equal(await blocksUnload(), true, '환율 설정 미저장 시 beforeunload');
+    await shell.locator('[data-workspace="bulk"]').click();
+    assert.equal(await shell.locator('#fx-workspace').isVisible(), false);
+    assert.equal(await shell.locator('#bulk-edit-workspace').isVisible(), true);
     await shell.close();
   }
   assert.deepEqual(errors, []);

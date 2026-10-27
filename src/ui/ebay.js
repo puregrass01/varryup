@@ -263,6 +263,8 @@
         const tallied = stats ? ` (재고 ${stats.scanned}${stats.total === null ? '' : `/${stats.total}`}건 · 검색어 일치 ${stats.matched} · Offer 없음 ${stats.noOffer} · Offer 중복 ${stats.multiOffer})` : '';
         log(`eBay API 정상 응답: ${items.length}건 검색됨${tallied}${items.length ? ' — 수정할 상품을 선택하세요.' : ''}`);
         if (stats?.reason) log(stats.reason, 'system');
+        // 1건이면 바로 불러온다(읽기만). 표의 자동 선택은 검색 중(busy)이라 위임 클릭이 무시된다.
+        if (items.length === 1) { $('ebEditSku').value = items[0].id; await loadProduct(); }
         if (stats?.activeCount) {
           $('ebActiveStatus').textContent = `eBay 활성 리스팅 총 ${stats.activeCount}건이 발견되었습니다. [기존 리스팅 전체 이관] 버튼을 눌러 가져오세요.`;
         }

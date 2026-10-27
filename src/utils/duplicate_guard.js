@@ -923,7 +923,7 @@ export const imwebAdminProductUrl = no => `https://bbstore37.imweb.me/admin/shop
 export function planImweb(data, { brands = DEFAULT_BRANDS, boardNameFor = () => null, nameForLang = (d, f) => d?.[f], extractImageUrl = s => String(s || '').trim() } = {}) {
   const notices = [];
   const base = { channel: 'imweb', brands, notices, lockKeys: [], targets: [] };
-  if (data?.isEditMode) return { ...base, skip: true };   // 수정 경로는 건드리지 않는다
+  // isEditMode 로 건너뛰지 않는다 — imweb-register 는 이제 언제나 새로 만든다(수정은 imweb-update-post · B2B API).
   const targets = [];
   const ci = codeInfo(data?.code);
 

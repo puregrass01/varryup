@@ -150,8 +150,8 @@ test('bannerFor — 언어별 배너 형식', () => {
         '※ インフィニティ G25 適合表 ※<br>4th gen [No.612]');
 });
 
-test('세 포스팅 경로가 같은 헬퍼를 쓴다 (복붙 재발 방지)', () => {
-    // 신규(cm API) · 신규(브라우저 폼) · 수정 세 곳이 각자 문자열을 조립하던 것이 원래 문제다.
+test('포스팅 경로가 같은 헬퍼를 쓴다 (복붙 재발 방지)', () => {
+    // 예전엔 신규 · 수정 경로가 각자 문자열을 조립했다 — 다시 복붙되면 표기가 갈린다.
     const imweb = read('src/platforms/imweb.js');
     const edit = read('src/platforms/imweb_edit.js');
 

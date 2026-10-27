@@ -98,6 +98,7 @@ try {
   const enabledStyle=await removeStyle();
   await firstRow.locator('.vu-image-remove').nth(1).evaluate(el=>{el.disabled=true;});
   await firstRow.locator('.vu-image-remove').nth(1).hover({force:true});
+  await page.waitForTimeout(200);   // 버튼 배경 transition(0.15s)이 끝난 뒤 읽는다
   const disabledStyle=await removeStyle();
   assert.notEqual(disabledStyle.bg,enabledStyle.bg,'disabled ✖ is not red');
   assert.notEqual(disabledStyle.bg,'rgb(153, 27, 27)','no red hover on disabled ✖');
@@ -235,14 +236,17 @@ try {
   assert.equal(await priceFilter.locator('option[value="17500"]').count(),0);
   await page.locator('[data-scope="imweb-en"]').click();
   assert.match(await priceFilter.locator('option[value="58"]').textContent(),/^58 USD$/);
-  // 네이버 3개 현재가: 묶음 요청 한 번, 상품별 이미지 조회 없음(이미지 불러오기 때 조회).
+  // 네이버 3개 현재가: 묶음 요청 한 번, 상품별 이미지 조회 없음(이미지 적용 때 조회).
   await page.evaluate(()=>{calls.length=0;});
   await page.locator('[data-scope="naver"]').click(); await selectAll();
   await page.locator('#be-load').click(); await idle();
   assert.deepEqual(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-price-load-many').map(c=>c.data.ids.length)),[3]);
   assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-images-load').length),0);
-  assert.match(await page.locator('#be-status').textContent(),/이미지 적용 때 상품별로 조회합니다\(3개\)/);
-  await page.locator('#be-body tr').first().getByRole('button', {name:'이미지 목록 조회',exact:true}).click(); await idle();
+  // Product 1·3 의 이미지 변경안(위에서 걸어 둔 것)은 현재가를 다시 읽어도 남는다. 목록을 모르는 건 Product 2 하나다.
+  assert.match(await page.locator('#be-status').textContent(),/이미지 적용 때 상품별로 조회합니다\(1개\)/);
+  assert.equal(await page.locator('.be-image-pending').count(),2,'reload keeps staged image drafts');
+  await page.locator('#be-body tr').nth(1).getByRole('button', {name:'이미지 목록 조회',exact:true}).click(); await idle();
+  assert.equal(await page.locator('#be-body tr').nth(1).locator('.vu-image-remove').count(),2);
   await page.locator('#be-body tr').first().locator('.vu-image-tile').first().hover();
   await page.locator('#be-body tr').first().locator('.vu-image-remove').first().click();
   await page.locator('#be-body tr').first().locator('.vu-image-tile').first().hover();
@@ -272,11 +276,12 @@ try {
   await page.locator('[data-scope="imweb-b2b"]').click();
   await page.locator('#be-list').click(); await idle();
   assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-price-list').at(-1).data.query),'','hidden query is not sent');
-  await page.locator('#be-api-query').fill('');
 
   // ── 판매가 한 묶음: [칸][직접 입력/환율가][가격 적용]. 안 읽은 선택 행은 먼저 읽고 채운다. 보내지는 않는다 ──
   await page.locator('[data-scope="amazon-jp"]').click();
-  assert.equal(await page.locator('thead input, thead button').count(),0,'열 머리에는 라벨만 남긴다');
+  await page.locator('#be-api-query').fill('');
+  assert.equal(await page.locator('thead input:not(#be-th-select-all), thead button, thead select').count(),0,'열 머리에는 라벨만 남긴다');
+  assert.equal(await page.locator('thead th').nth(6).textContent(),'판매가 덮어쓰기');
   assert.equal(await page.locator('#be-fx-apply').count(),0);
   assert.equal(await page.locator('#be-apply').textContent(),'가격 적용');
   await page.evaluate(()=>{calls.length=0;});
@@ -322,6 +327,44 @@ try {
   assert.match(await page.locator('#be-status').textContent(),/이미지가 하나도 남지 않아 적용하지 않은 상품: Product 1, Product 2, Product 3\./);
   assert.deepEqual(await srcs(),['https://ai.esmplus.com/test/detail.jpg','https://ai.esmplus.com/test/new.jpg'],'emptying list is not staged');
   await page.locator('#be-image-op').selectOption('replace');
+
+  // ── 이미지 적용 뒤 가격 적용이 안 읽은 행을 불러와도 이미지 변경안은 남는다(예전엔 행을 바꿔 끼우며 사라졌다) ──
+  await page.reload(); await page.locator('#be-list').waitFor();
+  await page.locator('#be-list').click(); await idle(); await selectAll();
+  await page.locator('#be-image-value').fill(urls); await page.locator('#be-image-apply').click(); await idle();
+  assert.equal(await page.locator('.be-image-pending').count(),3);
+  await page.locator('#be-value').fill('12000'); await page.locator('#be-apply').click(); await idle();
+  assert.match(await page.locator('#be-status').textContent(),/^3행에 가격을 입력했습니다\./);
+  assert.equal(await page.locator('.be-image-pending').count(),3,'auto-load keeps staged image drafts');
+  await page.evaluate(()=>{calls.length=0;});
+  await page.locator('#be-save').click(); await idle();
+  assert.deepEqual(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-images-save').map(c=>[c.data.id,c.data.urls.length,c.data.expectedRevision])),[['1',2,'old'],['2',2,'old'],['3',2,'old']]);
+  assert.deepEqual(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-price-save').map(c=>c.data.newPrice)),['12000','12000','12000']);
+  // 상품 한 줄이 옵션 여러 줄로 펼쳐지면 한 값으로 납작하게 채우지 않고 알린다. 옵션을 보고 다시 누르면 채운다.
+  await page.locator('[data-scope="coupang"]').click(); await page.locator('#be-list').click(); await idle(); await selectAll();
+  await page.locator('#be-value').fill('20000'); await page.locator('#be-apply').click(); await idle();
+  assert.deepEqual(await page.locator('#be-body input[type=number]').evaluateAll(n=>n.map(x=>x.value)),['10000','10000']);
+  assert.match(await page.locator('#be-status').textContent(),/^판매가를 넣을 수 있는 행이 없습니다\. 상품 1개가 옵션 2행으로 펼쳐져 판매가를 넣지 않았습니다\./);
+  await page.locator('#be-apply').click(); await idle();
+  assert.deepEqual(await page.locator('#be-body input[type=number]').evaluateAll(n=>n.map(x=>x.value)),['20000','20000']);
+  // 불러온 가격이 가격 필터에서 빠져도 고른 줄을 채우고 그 수를 알린다.
+  await page.locator('[data-scope="amazon-us"]').click(); await page.locator('#be-list').click(); await idle();
+  await priceFilter.selectOption('20000');
+  await page.locator('#be-body input[type=checkbox]').first().check();
+  await page.evaluate(()=>{window.loadedPrice='17500';});
+  await page.locator('#be-value').fill('18000'); await page.locator('#be-apply').click(); await idle();
+  assert.match(await page.locator('#be-status').textContent(),/^1행에 가격을 입력했습니다\. 현재가를 불러온 뒤 가격 필터에서 빠진 행 1개도 채웠습니다/);
+  await priceFilter.selectOption('17500');
+  assert.equal(await page.locator('#be-body input[type=number]').first().inputValue(),'18000');
+  // 이 URL 제거에 <img> HTML 을 넣어도 src 로 맞춘다.
+  await page.locator('[data-scope="ebay"]').click(); await page.locator('#be-list').click(); await idle(); await selectAll();
+  await page.evaluate(()=>{calls.length=0;});
+  await page.locator('#be-image-op').selectOption('remove');
+  await page.locator('#be-image-value').fill('<p><img src="https://ai.esmplus.com/test/old.jpg"></p>');
+  await page.locator('#be-image-apply').click(); await idle();
+  assert.deepEqual(await srcs(),['https://ai.esmplus.com/test/detail.jpg']);
+  assert.match(await page.locator('#be-status').textContent(),/^3개 상품에 입력한 URL 제거 대기\./);
+  assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-images-import').length),0);
   assert.deepEqual(errors,[]);
-  console.log('PASS: photo previews, pipe lists, one shared input, ESM import, HTML parsing, automatic revision load, full-image viewer, staged apply, filtered saves, uncertain-write stop, Coupang deduplication, Imweb on the Open API (no catalog lock), dynamic price filtering, all-page selection, URL previews, per-platform state.');
+  console.log('PASS: photo previews, pipe lists, one shared input, ESM import, HTML parsing, automatic revision load, full-image viewer, staged apply, filtered saves, uncertain-write stop, Coupang deduplication, Imweb on the Open API (no catalog lock), dynamic price filtering, all-page selection, URL previews, per-platform state, drafts kept through price auto-load, option spread not flattened, price-filter apply, HTML removal.');
 } finally { await browser?.close(); await new Promise(resolve=>server.close(resolve)); }

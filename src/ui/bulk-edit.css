@@ -1,4 +1,4 @@
-body[data-workspace-view="bulk"] #main, body[data-workspace-view="bulk"] .detail-toggle-footer { display:none!important; }
+body:is([data-workspace-view="bulk"], [data-workspace-view="fx"]) :is(#main, .detail-toggle-footer) { display:none!important; }
 body[data-workspace-view="api"] #main > :not(#section8), body[data-workspace-view="api"] .detail-toggle-footer,
 body[data-workspace-view="api"] #section8-header, body[data-workspace-view="api"] #log-window,
 body[data-workspace-view="api"] #card-area, body[data-workspace-view="api"] #empty-state,
@@ -10,7 +10,10 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 #mode-bar button.mode-label { font:inherit; font-size:12px; cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--text-secondary); }
 #mode-bar button.mode-label:hover { background:var(--ovl-1); }
 #mode-bar button.is-active, #mode-bar button.is-active:hover { background:var(--accent); border-color:var(--accent); color:white; }
-#bulk-edit-workspace {
+#mode-bar button.mode-label:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+/* 설정 묶음(환율 · API KEY)은 모드 바 오른쪽 끝 */
+#mode-bar .mode-settings { display:flex; gap:6px; margin-left:auto; }
+#bulk-edit-workspace, #fx-workspace {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -21,7 +24,8 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
   background: var(--bg-panel);
   box-sizing: border-box;
 }
-#bulk-edit-workspace[hidden], #bulk-edit-workspace [hidden] { display: none !important; }
+#fx-workspace { overflow-y: auto; }
+:is(#bulk-edit-workspace, #fx-workspace)[hidden], :is(#bulk-edit-workspace, #fx-workspace) [hidden] { display: none !important; }
 .be-head, .be-platforms, .be-tools, .be-filters, .be-help, .be-actions, .be-state, .be-pager {
   flex-shrink: 0;
 }
@@ -32,32 +36,32 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 .be-platforms,.be-tools,.be-pager { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:4px 0; }
 .be-platforms { gap:5px; margin-bottom:8px; }
 
-/* 입력칸·셀렉트·버튼을 같은 높이(32px)와 테마 색으로 맞춘다. */
-#bulk-edit-workspace select,
-#bulk-edit-workspace input:not([type="checkbox"]) {
+/* 입력칸·셀렉트·버튼을 같은 높이(32px)와 테마 색으로 맞춘다. 환율 탭(#fx-workspace)도 같은 모양을 쓴다. */
+:is(#bulk-edit-workspace, #fx-workspace) select,
+:is(#bulk-edit-workspace, #fx-workspace) input:not([type="checkbox"]) {
   box-sizing:border-box; height:32px; padding:0 10px; font:inherit; font-size:13px;
   color:var(--text-primary); background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius);
 }
-#bulk-edit-workspace input::placeholder { color:var(--text-muted); }
-#bulk-edit-workspace input[type="checkbox"] { width:15px; height:15px; margin:0; accent-color:var(--accent); cursor:pointer; }
-#bulk-edit-workspace button {
+:is(#bulk-edit-workspace, #fx-workspace) input::placeholder { color:var(--text-muted); }
+:is(#bulk-edit-workspace, #fx-workspace) input[type="checkbox"] { width:15px; height:15px; margin:0; accent-color:var(--accent); cursor:pointer; }
+:is(#bulk-edit-workspace, #fx-workspace) button {
   box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; gap:6px;
   height:32px; padding:0 12px; font:inherit; font-size:13px; font-weight:500; white-space:nowrap;
   color:var(--text-primary); background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius);
   cursor:pointer; transition:background var(--transition), border-color var(--transition), color var(--transition);
 }
-#bulk-edit-workspace button:hover:not(:disabled) { background:var(--ovl-1); border-color:var(--text-secondary); }
-#bulk-edit-workspace button:focus-visible,
-#bulk-edit-workspace select:focus-visible,
-#bulk-edit-workspace input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
-#bulk-edit-workspace button[aria-selected="true"],
-#bulk-edit-workspace .be-primary { color:#fff; background:var(--accent); border-color:var(--accent); }
-#bulk-edit-workspace button[aria-selected="true"]:hover:not(:disabled),
-#bulk-edit-workspace .be-primary:hover:not(:disabled) { background:var(--accent-hover); border-color:var(--accent-hover); }
-#bulk-edit-workspace .be-primary { font-weight:600; }
-#bulk-edit-workspace button:disabled,
-#bulk-edit-workspace input:disabled,
-#bulk-edit-workspace select:disabled { opacity:.5; cursor:default; }
+:is(#bulk-edit-workspace, #fx-workspace) button:hover:not(:disabled) { background:var(--ovl-1); border-color:var(--text-secondary); }
+:is(#bulk-edit-workspace, #fx-workspace) button:focus-visible,
+:is(#bulk-edit-workspace, #fx-workspace) select:focus-visible,
+:is(#bulk-edit-workspace, #fx-workspace) input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+:is(#bulk-edit-workspace, #fx-workspace) button[aria-selected="true"],
+:is(#bulk-edit-workspace, #fx-workspace) .be-primary { color:#fff; background:var(--accent); border-color:var(--accent); }
+:is(#bulk-edit-workspace, #fx-workspace) button[aria-selected="true"]:hover:not(:disabled),
+:is(#bulk-edit-workspace, #fx-workspace) .be-primary:hover:not(:disabled) { background:var(--accent-hover); border-color:var(--accent-hover); }
+:is(#bulk-edit-workspace, #fx-workspace) .be-primary { font-weight:600; }
+:is(#bulk-edit-workspace, #fx-workspace) button:disabled,
+:is(#bulk-edit-workspace, #fx-workspace) input:disabled,
+:is(#bulk-edit-workspace, #fx-workspace) select:disabled { opacity:.5; cursor:default; }
 
 #bulk-edit-workspace .be-platforms button { height:34px; padding:0 10px; font-weight:600; }
 .be-platform-logo { width:18px; height:18px; object-fit:contain; background:#ffffff; border-radius:3px; padding:1px; box-sizing:border-box; flex-shrink:0; }
@@ -66,11 +70,12 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 /* 필터 레일: 표 왼쪽 180px, 표 안 검색이 맨 위, 칸은 세로로 쌓고 폭을 채운다. 높이가 모자라면 레일만 스크롤한다.
    padding 은 포커스 테두리(2px+1px)가 스크롤 칸에 잘리지 않게 둔다. */
 .be-body { display:flex; gap:12px; flex:1 1 0; min-height:90px; }
-.be-filters { display:flex; flex-direction:column; gap:8px; flex:0 0 180px; min-height:0; overflow-y:auto; padding:3px; box-sizing:border-box; }
-.be-filters label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--text-secondary); }
+/* 칸 사이를 좁게 잡아 1200x800 창에서 여섯 칸이 스크롤 없이 들어간다. */
+.be-filters { display:flex; flex-direction:column; gap:4px; flex:0 0 180px; min-height:0; overflow-y:auto; padding:3px; box-sizing:border-box; }
+.be-filters label { display:flex; flex-direction:column; gap:2px; font-size:12px; line-height:1.25; color:var(--text-secondary); }
 .be-filters select, .be-filters input[type="search"] { width:100%; }
 
-/* 작업 버튼은 현재가 불러오기 → 판매가 → 이미지 → 저장 순서로 묶고, 저장은 오른쪽 끝에 둔다.
+/* 작업 줄은 현재가·이미지 불러오기와, 오른쪽 끝의 저장 묶음뿐이다. 판매가·이미지 입력은 표 머리 아래 줄(.be-th-tools).
    (선택은 표 머리의 전체선택으로 한다.) */
 .be-actions {
   display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px; margin:8px 0 4px; padding:8px 10px;
@@ -78,10 +83,12 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 }
 .be-group { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
 .be-group-end { margin-left:auto; }
-.be-group-label { font-size:12px; font-weight:600; color:var(--text-secondary); margin-right:2px; }
 .be-unit { font-size:12px; font-weight:600; color:var(--text-secondary); min-width:28px; }
-#be-value { width:120px; }
-#be-image-value { width:220px; }
+/* 열 머리 아래 입력 줄: 칸 폭 안에서 줄을 바꿔 쌓는다(판매가 열 [칸][통화] / [값 출처][가격 적용], 사진 열 [URL] / [방식][이미지 적용]). */
+.be-table .be-th-tools td { padding:4px 8px 8px; background:var(--bg-panel); vertical-align:top; }
+.be-tool { display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
+#be-value { width:72px; }
+#be-image-value { width:100%; }
 .be-state { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:4px 16px; margin:2px 0 6px; }
 .be-state .be-help { margin:0; }
 .be-th-check-label { display:inline-flex; align-items:center; gap:5px; cursor:pointer; user-select:none; font-size:12px; font-weight:600; }
@@ -98,11 +105,13 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 }
 /* 1200px 창에서 레일(180)을 뺀 폭(약 970, 세로 스크롤바 17px 빼면 950)에 들어가게 칸 폭을 잡는다. 더 좁으면 표 칸만 가로로 스크롤한다. */
 .be-table { border-collapse:collapse; width:100%; min-width:900px; font-size:13px; background:var(--bg-card); }
-.be-table th { position:sticky; top:0; background:var(--bg-panel); z-index:1; text-align:left; white-space:nowrap; font-size:12px; font-weight:600; color:var(--text-secondary); }
+/* 머리 두 줄(열 이름 · 입력)을 함께 붙여 둔다 — 표를 내려도 입력이 보인다. */
+.be-table thead { position:sticky; top:0; z-index:2; }
+.be-table th { background:var(--bg-panel); text-align:left; white-space:nowrap; font-size:12px; font-weight:600; color:var(--text-secondary); }
 .be-table th,.be-table td { padding:10px 8px; border-bottom:1px solid var(--border); vertical-align:middle; }
 .be-table th.be-check-column,.be-table td.be-check-column { width:1%; text-align:center; }
 .be-table img { width:60px; height:52px; object-fit:contain; border-radius:5px; background:white; }
-.be-table .be-title { min-width:190px; max-width:430px; line-height:1.45; }
+.be-table .be-title { min-width:150px; max-width:430px; line-height:1.45; }
 .be-table small { display:block; color:var(--text-secondary); margin-top:4px; }
 .be-table input[type="number"] { width:100px; }
 .be-table tr.be-dirty { background:rgba(37,99,235,.07); }
@@ -113,7 +122,8 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 .be-table .be-no.be-missing { font-weight:400; color:var(--text-muted); }
 .be-table .be-sku { font-family:Consolas, 'Courier New', monospace; font-size:11.5px; overflow-wrap:anywhere; }
 .be-table .be-own-id { font-size:11px; color:var(--text-muted); overflow-wrap:anywhere; }
-.be-table .be-result { max-width:250px; white-space:normal; font-size:12px; }
+/* 처리 결과는 낱말 중간에서 끊지 않는다('현재가 조/회 전'). 넓힌 폭은 상품명 칸 최소 폭에서 가져온다. */
+.be-table .be-result { min-width:90px; max-width:250px; white-space:normal; word-break:keep-all; overflow-wrap:anywhere; font-size:12px; }
 #be-status { min-height:20px; font-size:13px; font-weight:500; }
 .be-pager { justify-content:flex-end; margin-top:8px; }
 .be-pager span { min-width:48px; text-align:center; font-size:13px; color:var(--text-secondary); }

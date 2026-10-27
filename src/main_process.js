@@ -1152,7 +1152,7 @@ const bulkPriceService = registerBulkPriceIPC({
 });
 // 일일 환율 자동 변경: 아마존·eBay 판매가를 국내 기준가 ÷ 오늘 환율로 맞춘다(fx_auto_price.js).
 // 아임웹 미국·일본은 체크했을 때만, 아래 imwebUnitPrices 의 sync(읽고 바로 저장)로 한다(호출은 실행 때라 선언 순서는 상관없다).
-// 켜기·등급표는 상품 일괄 수정 화면에서 PC 마다 정한다. 꺼져 있으면 확인만 하고 아무것도 보내지 않는다.
+// 켜기·등급표는 모드 바 '환율' 탭에서 PC 마다 정한다. 꺼져 있으면 확인만 하고 아무것도 보내지 않는다.
 const fxAutoPrice = registerFxAutoPriceIPC({
     ipcMain, dir: app.getPath('userData'), service: bulkPriceService,
     imwebUnits: { sync: options => imwebUnitPrices.sync(options) },
@@ -1895,7 +1895,7 @@ ipcMain.handle('imweb-register', async (event, data) => {
         };
 
         // 조회가 등록과 같은 토큰·세션을 쓰고 대신 볼 스냅샷이 없으며 중복이 즉시 공개된다
-        // — 확인하지 못하면 멈춘다(fail-closed). 수정 모드(isEditMode)는 planImweb 이 건너뛴다.
+        // — 확인하지 못하면 멈춘다(fail-closed).
         const plan = planImweb(data, {
             brands: guardBrands(),
             boardNameFor: (b, l) => imweb.boardNameFor(b, l),

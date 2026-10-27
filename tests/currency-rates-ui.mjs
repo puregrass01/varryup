@@ -46,6 +46,7 @@ try {
   }, { catalog });
   const page = await context.newPage(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
+  page.on('dialog', d => d.accept());   // 일괄 등록의 입력 확인 경고 confirm — 여기서는 환율 고정만 본다
   const url = pathToFileURL(path.resolve('src/ui/index_up.html')).href;
   await page.goto(url);
   await page.waitForFunction(() => window.VUCurrency?.convert(1, 'USD', 'KRW') === 1350);

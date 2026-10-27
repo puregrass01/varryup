@@ -1,5 +1,5 @@
-// 일일 환율 자동 변경 패널 — 상품 일괄 수정 화면 위쪽. 계산·저장은 메인 프로세스(fx_auto_price.js)가 한다.
-// bulk-edit.js 가 화면을 만든 뒤 mount 를 부른다. 설정은 PC 마다 따로 저장된다.
+// 일일 환율 자동 변경 패널 — 모드 바 '환율' 탭(#fx-workspace) 전체. 계산·저장은 메인 프로세스(fx_auto_price.js)가 한다.
+// bulk-edit.js 가 탭 칸을 만든 뒤 mount 를 부른다. 탭 안에서는 늘 펼쳐 둔다. 설정은 PC 마다 따로 저장된다.
 (() => {
   const COUNT_LABELS = [['updated', '저장 확인'], ['accepted', '아마존 접수'], ['unchanged', '이미 같은 값'], ['check', '확인 필요'],
     ['small', '1% 미만'], ['large', '변동 폭 초과'], ['noTier', '등급 없음'], ['noPrice', '현재가 없음'],
@@ -109,9 +109,38 @@
         box.append(line);
         if (s.error || s.stopped) box.append(el('p', 'fx-warn', label(scope) + ': ' + (s.error || s.stopped)));
       }
+      if (last.review?.length) box.append(buildReview(last.review));
     }
     if (withTiers && !dirty) { tiers = state.tiers.map(t => ({ id: t.id, label: t.label, krw: t.krw })); drawTiers(); }
     else syncControls();
+  }
+
+  // 마지막 실행이 10% 넘게 바뀌어 건너뛴 아마존·eBay 상품. 고른 것만 지금 환율로 다시 계산해 저장한다(메인 approve).
+  function buildReview(review) {
+    const wrap = el('details', 'fx-review'), list = el('div', 'fx-last'), all = el('input'), go = el('button', 'be-primary', '고른 상품 저장');
+    wrap.append(el('summary', 'fx-label', '10% 초과 ' + num(review.length) + '건 검토'));
+    const boxes = review.map(r => {
+      const line = el('label', 'fx-check'), box = el('input');
+      box.type = 'checkbox'; box.value = r.scope + ':' + r.id;
+      line.append(box, document.createTextNode(label(r.scope) + ' · ' + r.id + ' · ' + r.name + ' — ' + r.current + ' → ' + r.target + ' (' + pct(r.change) + ', ' + (r.tier || num(r.krw) + '원') + ')'));
+      list.append(line);
+      return box;
+    });
+    all.type = 'checkbox'; all.onchange = () => boxes.forEach(b => { b.checked = all.checked; });
+    const head = el('label', 'fx-check'); head.append(all, document.createTextNode('모두 고르기'));
+    go.type = 'button'; go.id = 'fx-review-save';
+    go.onclick = () => act(async () => {
+      const keys = boxes.filter(b => b.checked).map(b => b.value);
+      if (!keys.length) { tell('저장할 상품을 고르세요.'); return; }
+      if (!window.confirm('고른 ' + num(keys.length) + '개 상품의 판매가를 지금 환율로 다시 계산해 저장합니다(10% 넘게 바뀜).\n\n' +
+        '· 보내기 직전에 지금 가격을 다시 읽고, 위 목록의 가격과 다르면 보내지 않습니다.\n\n계속할까요?')) { tell('저장을 취소했습니다.'); return; }
+      const r = await call('fx-auto-price-approve', { keys });
+      tell('검토 저장 · ' + counted(r.counts) + (r.stopped ? ' · ' + r.stopped : ''));
+    });
+    list.style.maxHeight = '240px'; list.style.overflowY = 'auto';
+    const bar = el('div', 'fx-line'); bar.append(head, go);
+    wrap.append(bar, list);
+    return wrap;
   }
 
   // 실행·중단 응답에는 환율이 없다(서버를 다시 부르지 않는다). 보던 환율은 그대로 둔다.
@@ -150,7 +179,7 @@
       ...rows.map(r => [label(r.scope), r.id, r.name, r.tier, r.krw, r.current, r.raw, r.target, pct(r.change), r.result])]);
   }
 
-  // ── 아임웹 미국·일본 (임시 · 크롤링, imweb_unit_prices.js) ─────────────────
+  // ── 아임웹 미국·일본 (Open API, imweb_unit_prices.js) ─────────────────
   // 본사몰 한 사이트의 한국 구역 가격을 기준으로 미국·일본 구역 가격을 위와 같은 규칙으로 바꾼다. 미리보기 → 저장.
   let iwBusy = false, iwPlanned = 0;
   const unitName = { KRW: '한국', USD: '미국', JPY: '일본' };
@@ -290,9 +319,9 @@
   }
 
   function build() {
-    panel = el('details', 'fx-panel'); panel.id = 'fx-panel';
-    const summary = el('summary', 'fx-summary');
-    summary.append(el('span', 'fx-title', '일일 환율 자동 변경'), el('span', 'fx-chip', '확인 중'), el('span', 'fx-brief'));
+    panel = el('section', 'fx-panel'); panel.id = 'fx-panel';
+    const summary = el('div', 'fx-summary');
+    summary.append(el('h2', 'fx-title', '일일 환율 자동 변경'), el('span', 'fx-chip', '확인 중'), el('span', 'fx-brief'));
     summary.children[1].id = 'fx-chip'; summary.children[2].id = 'fx-brief';
     const body = el('div', 'fx-body');
     const toggle = el('div', 'fx-line'), enabledLabel = el('label', 'fx-check'), enabled = el('input');
@@ -310,8 +339,9 @@
     tierBox.append(el('div', 'fx-label', '국내 기준가 등급'), table, add);
     const rate = el('p', 'fx-hint'); rate.id = 'fx-rate';
     const rule = el('p', 'fx-hint', '해외 판매가 = 국내 기준가 ÷ 오늘 환율(우대 없음)에서 앞 두 자리만 남기고 버립니다(110.61 → 110달러, 17,396 → 17,000엔). ' +
-      '환율로 계산한 값이 지금 판매가와 1% 이상 차이날 때만 저장하고(109.32처럼 두 자리 가격이 아니면 한 번 정리), 10% 넘게 바뀌는 상품은 자동으로 저장하지 않습니다. ' +
-      '처음 보는 상품은 지금 가격으로 가장 가까운 등급을 찾아 기억하고, 맞는 등급이 없는 상품은 건드리지 않습니다.');
+      '환율로 계산한 값이 지금 판매가와 1% 이상 차이날 때만 저장하고(109.32처럼 두 자리 가격이 아니면 한 번 정리), 10% 넘게 바뀌는 상품은 자동으로 저장하지 않습니다(아래 \'10% 초과 검토\'에서 골라 저장). ' +
+      '처음 보는 상품은 지금 가격으로 가장 가까운 등급을 찾아 기억하고, 맞는 등급이 없는 상품은 건드리지 않습니다. ' +
+      '손으로 다른 등급 가격으로 바꾼 상품은 그 등급으로 옮기고, 등급 범위(−10%~+5%) 안에서 고친 가격은 다음 실행에서 등급 가격으로 되돌립니다.');
     const actions = el('div', 'fx-line fx-actions');
     const saveBtn = el('button', 'be-primary', '설정 저장'), runBtn = el('button', '', '지금 실행'), cancelBtn = el('button', '', '중단'), exportBtn = el('button', '', '결과 CSV');
     const dirtyNote = el('span', 'fx-dirty', '저장하지 않은 변경'), status = el('span', 'fx-status');
@@ -340,16 +370,13 @@
       if (!rows.length) { tell('내보낼 실행 결과가 없습니다.'); return; }
       exportRows(rows); tell(num(rows.length) + '행을 내보냈습니다.');
     });
-    panel.addEventListener('toggle', () => { if (panel.open && !dirty) refresh(); });
     return panel;
   }
 
   function mount(root, ipcRenderer) {
     if (panel || !root) return;
     ipc = ipcRenderer;
-    const anchor = root.querySelector('.be-head');
-    const node = build();
-    if (anchor) anchor.after(node); else root.prepend(node);
+    root.append(build());
     ipc.on('fx-auto-price-progress', (_, payload) => {
       if (!state) return;
       if (payload?.running) { state.running = payload.running; render(); }
@@ -377,5 +404,6 @@
     }).catch(e => { q('fx-chip').textContent = '오류'; q('fx-brief').textContent = '설정을 불러오지 못했습니다: ' + e.message; });
   }
 
-  window.VUFxAutoPrice = { mount };
+  // refresh: 탭을 열 때 다시 읽는다(고치던 등급표는 덮지 않는다). isDirty: 저장 안 한 설정 — 창 닫기 경고에 쓴다.
+  window.VUFxAutoPrice = { mount, refresh: () => { if (panel && !dirty) refresh(); }, isDirty: () => dirty };
 })();

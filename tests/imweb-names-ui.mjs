@@ -7,7 +7,7 @@ try {
   const page = await browser.newPage();
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   page.on('dialog', d => d.accept());
-  await page.setContent('<div id="root"><div class="be-head"></div></div>');
+  await page.setContent('<section id="fx-workspace"></section>');
   await page.addScriptTag({ path: path.resolve('src/ui/fx-auto-price.js') });
   await page.evaluate(() => {
     window.calls = []; window.handlers = {};
@@ -17,12 +17,13 @@ try {
       'imweb-unit-names-save': { count: { saved: 1512, changedSince: 0, failed: 1 }, stopped: '', results: [{ name: 'X', result: '확인 실패(지금 미국 Y)' }] },
       'imweb-unit-names-rows': [{ prodNo: '2152', kr: '=옵틱', usNow: 'a', usNext: 'b', jpNow: 'c', jpNext: 'd', options: '미국 구성 선택→Select Option', note: '', result: '저장 완료' }],
     };
-    window.VUFxAutoPrice.mount(document.getElementById('root'), {
+    window.VUFxAutoPrice.mount(document.getElementById('fx-workspace'), {
       on(channel, handler) { handlers[channel] = handler; },
       async invoke(channel) { calls.push(channel); return { success: true, data: structuredClone(data[channel]) }; },
     });
   });
-  await page.evaluate(() => { document.getElementById('fx-panel').open = true; });
+  // 상품명 블록은 환율 패널과 함께 '환율' 탭 칸에 있고, 펼치지 않아도 보인다.
+  assert.equal(await page.locator('#fx-workspace #fx-panel #fx-in-preview').isVisible(), true);
   assert.equal(await page.locator('#fx-in-save').isDisabled(), true, 'save disabled before preview');
   await page.click('#fx-in-preview');
   await page.waitForFunction(() => document.getElementById('fx-in-result').textContent.includes('바꿀 상품 1,513개'));

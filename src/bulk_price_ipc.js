@@ -160,19 +160,19 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
   /**
    * 여러 상품의 현재가를 몰이 한 요청에 허용하는 만큼 묶어 읽는다. 네이버 목록 조회 100건, 아마존 20건.
    * 묶음 조회가 없는 쿠팡(옵션별 가격 API)·eBay(SKU별 Offer)는 지금처럼 1건씩 읽고, 묶음에서 빠진 상품도 1건 조회로 확인한다.
-   * 네이버 묶음 결과에는 상세 이미지가 없다 — 이미지는 '이미지 적용'에서 그 상품만 조회한다.
+   * includeImages(화면의 현재가·이미지 불러오기)면 묶음 결과에 상세 이미지가 없는 상품(네이버 목록 조회)은 그 상품만 이미지 목록을 읽어 채운다.
    * @returns {{ items: Array<{id, rows}|{id, error, kind, blocking}>, blocked: string }} blocked 면 그 뒤 상품은 items 에 없다.
    */
-  async function loadMany({ scope, ids, includeImages = false, images = {} } = {}) {
+  async function loadMany({ scope, ids, includeImages = false, images: thumbs = {} } = {}) {
     currency(scope);
     const list = [...new Set((Array.isArray(ids) ? ids : []).map(v => String(v ?? '').trim()).filter(Boolean))];
     if (!list.length || list.length > LOAD_MANY_MAX) throw new Error('한 번에 1~' + LOAD_MANY_MAX + '개 상품의 현재가를 불러올 수 있습니다.');
-    const inputOf = id => ({ scope, id, includeImages, image: images?.[id] });
+    const inputOf = id => ({ scope, id, includeImages, image: thumbs?.[id] });
     const ready = new Map();
     try {
       if (scope === 'naver') {
         for (const [id, p] of await naverListed(list)) ready.set(id, [row(inputOf(id), p.salePrice,
-          { name: p.name || '', variant: '기본 판매가 · 옵션 추가금 유지', image: images?.[id] || p.representativeImage?.url })]);
+          { name: p.name || '', variant: '기본 판매가 · 옵션 추가금 유지', image: thumbs?.[id] || p.representativeImage?.url })]);
       } else if (markets[scope]) {
         for (const [id, p] of await config(amazon).loadProductsForEdit(list, markets[scope])) ready.set(id, [amazonRow(inputOf(id), p)]);
       }
@@ -195,6 +195,21 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
         items.push(item);
         if (item.blocking && !blocked) blocked = item.error;
       }
+    }
+    // 이미지가 빠진 상품은 이미지 목록을 따로 읽는다('이미지 목록 조회'와 같은 길이라 저장 때 revision 검사가 맞다).
+    // 못 읽어도 가격 행은 그대로 쓰고 이유를 처리 결과 칸에 남긴다. 인증·한도 오류가 나면 남은 상품은 읽지 않는다.
+    let imageStop = '';
+    for (const item of includeImages ? items : []) {
+      if (!item.rows || item.rows.every(r => r.imagesReady)) continue;
+      let error = imageStop;
+      if (!error) {
+        try {
+          const got = await images.load({ scope, id: item.id });
+          item.rows = item.rows.map(r => ({ ...r, images: got.images, imageRevision: got.revision, imagesReady: true, newImages: null }));
+          continue;
+        } catch (e) { const info = describeError(e); error = info.error; if (info.blocking) imageStop = error; }
+      }
+      item.rows = item.rows.map(r => ({ ...r, imageResult: '이미지 목록을 불러오지 못했습니다: ' + error }));
     }
     return { items, blocked };
   }

@@ -93,8 +93,7 @@ export const looksLikeOAuthClientId = (value) => UUID.test(String(value ?? '').t
  *
  * 전용 칸(clientId · clientSecret)이 있으면 그것을 쓴다. 없으면 아임웹 탭의 'Open API 키'
  * 입력칸(apiKey · apiSecret)에 OAuth 값이 들어간 경우를 받아준다 — 그 칸은 원래 구 v2 키 자리라,
- * apiKey 가 UUID 일 때만 OAuth 값으로 본다. 그 경우 from 이 'apiKey' 이고, 구 v2 키로 동작하는
- * 기능(imweb_edit.js 의 B2B 상품 생성 등)은 그 키를 잃은 상태라는 뜻이다.
+ * apiKey 가 UUID 일 때만 OAuth 값으로 본다. 그 경우 from 이 'apiKey' 다. (B2B 상품 생성도 이제 OAuth — openapi/imweb_b2b.js.)
  * OAuth 값이 없으면 null.
  */
 export function oauthCredentialsFromConfig(cfg) {

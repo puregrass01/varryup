@@ -188,6 +188,30 @@ test('저장된 등급은 등급표 금액을 따라가고, 10% 넘게 바뀌면
   assert.match(store.rows().find(r => r.id === 'E').result, /자동 저장 안 함/);
 });
 
+test('손으로 다른 등급 가격으로 바꾼 상품은 그 등급으로 옮기고, 10% 초과는 환율 탭에서 고른 것만 본 가격 그대로일 때 저장한다', async t => {
+  const ids = ['M', 'K', 'L1', 'L2', 'L3'], prices = { M: '160', K: '115', L1: '90', L2: '90', L3: '90' };
+  const service = fakeService({ lists: { ebay: ids.map(id => ({ id, price: prices[id] })) },
+    live: Object.fromEntries(ids.map(id => ['ebay:' + id, prices[id]])) });
+  const { fx, store } = fixture(t, { service });
+  store.update({ assignments: Object.fromEntries(ids.map(id => ['ebay:' + id, { tier: 'tier-1' }])) });
+  fx.saveConfig({ scopes: { ebay: true } });
+  const result = await fx.run();
+  assert.equal(store.read().assignments['ebay:M'].tier, 'tier-2', '160 USD 는 220,000원 등급 범위 — 옮기고 그대로 둔다');
+  assert.equal(store.read().assignments['ebay:K'].tier, 'tier-1', '115 는 같은 등급 범위 — 등급 가격으로 되돌린다');
+  const saves = () => service.calls.filter(c => c[0] === 'save').map(c => c.slice(2));
+  assert.deepEqual(saves(), [['K', '110', '115']]);
+  assert.deepEqual(result.review.map(r => r.id), ['L1', 'L2', 'L3']);
+  service.live['ebay:L2'] = '95';   // 검토하는 사이 누가 바꿨다
+  const r = await fx.approve({ keys: ['ebay:L1', 'ebay:L2'] });
+  assert.deepEqual([r.counts.updated, r.counts.check], [1, 1]);
+  assert.deepEqual(saves().slice(1), [['L1', '110', '90']], '+22% 지만 고른 상품이라 저장, 바뀐 L2 는 보내지 않는다');
+  const last = store.read().lastRun;
+  assert.deepEqual(last.review.map(x => x.id), ['L3']);
+  assert.deepEqual([last.scopes.ebay.counts.large, last.scopes.ebay.counts.updated, last.scopes.ebay.counts.check], [1, 2, 1]);
+  assert.match(store.rows().find(x => x.id === 'L2').result, /검토한 뒤/);
+  assert.deepEqual(fx.links('ebay'), { on: false, links: { M: 'BSA 미러', K: '일반 미러', L1: '일반 미러', L2: '일반 미러', L3: '일반 미러' } });
+});
+
 test('등급을 못 찾으면 같은 SKU 가 다른 몰에서 받은 등급을 쓴다 (아마존 일본)', async t => {
   const service = fakeService({
     lists: { 'amazon-us': [{ id: 'S1', price: '109.32' }], 'amazon-jp': [{ id: 'S1', price: '18500' }] },

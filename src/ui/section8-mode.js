@@ -34,13 +34,14 @@ function setSection8Mode(mode, force = false) {
     if (mode === 'new') {
       cardArea.style.display = 'none';
       if (sec8Desc) sec8Desc.textContent = '신규등록 — 실행 로그';
-      if (btnClear) btnClear.title = '로그 지우기';
+      if (btnClear) { btnClear.title = '로그 지우기'; btnClear.textContent = '비우기'; }
       const emptyText = $('empty-state-text');
       if (emptyText) emptyText.textContent = '현황판에서 플랫폼을 클릭하면 등록 폼이 열립니다.';
     } else {
       cardArea.style.display = 'flex';
       if (sec8Desc) sec8Desc.textContent = '단일 상품 수정 — 상품 편집';
-      if (btnClear) btnClear.title = '선택한 폼 모두 닫기';
+      // 수정 모드에서는 로그가 아니라 현황판에서 켠 몰을 모두 끈다 — 이름이 '비우기'면 로그 지우기로 읽힌다.
+      if (btnClear) { btnClear.title = '선택한 폼 모두 닫기'; btnClear.textContent = '선택 해제'; }
       const emptyText = $('empty-state-text');
       if (emptyText) emptyText.textContent = '현황판에서 플랫폼을 클릭하면 상품 수정 폼이 열립니다.';
     }
