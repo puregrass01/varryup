@@ -133,6 +133,44 @@ function notMirror(text) {
   return null;
 }
 
+// 이름이 다른 이름 **안에** 들어 있는 경우를 가린다.
+//   '벤츠 GLA클래스' 에는 'A클래스' 가 통째로 들어 있다(gl‖a클래스) — 벤츠 A클래스가 아니다.
+// 그래서 단순 포함이 아니라 낱말 경계를 본다: 찾은 자리의 앞뒤가 같은 영문·숫자 덩어리의
+// 일부면 낱말 중간이므로 아니라고 본다. 한글·기호가 닿아 있으면 경계로 친다.
+// 공백을 지우고 비교하되, **공백이 있던 자리를 기억**해 둔다.
+// 안 그러면 'GMC Sierra' → 'gmcsierra' 가 되어 'sierra' 앞에 영문 c 가 닿아
+// 낱말 중간으로 오해한다(미국몰 67행이 이렇게 떨어졌다).
+function words(v) {
+  const parts = String(v ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+  const starts = new Set();
+  let s = '';
+  for (const p of parts) { starts.add(s.length); s += p; }
+  return { s, starts };
+}
+// 같은 종류(영문끼리 · 숫자끼리)가 맞닿아 있으면 낱말 중간으로 본다. 단 원래 낱말이
+// 시작하던 자리면 경계다.
+//   '벤츠 GLA클래스' 안의 'A클래스'  → 앞이 영문 l, 낱말 시작도 아님 → 중간 → 아니다
+//   'GMC Sierra' 안의 'Sierra'     → 원래 낱말이 시작하던 자리 → 경계 → 맞다
+//   'BMW 1Series' 안의 '1 Series'  → 종류가 영문→숫자로 바뀜 → 경계 → 맞다
+//   'x30' 안의 'x3'               → 뒤가 숫자 0, 이름 끝도 숫자 3 → 중간 → 아니다
+const kindOf = c => /[a-z]/.test(c) ? 'a' : (/[0-9]/.test(c) ? 'n' : '');
+function containsWord(hay, needle) {
+  const H = typeof hay === 'string' ? words(hay) : hay;
+  const n = typeof needle === 'string' ? words(needle).s : needle.s;
+  if (!H.s || !n) return false;
+  let i = H.s.indexOf(n);
+  while (i !== -1) {
+    const before = i > 0 ? H.s[i - 1] : '';
+    const after = H.s[i + n.length] || '';
+    const headCut = !H.starts.has(i) && kindOf(before) !== '' && kindOf(before) === kindOf(n[0]);
+    const tailCut = !H.starts.has(i + n.length) && i + n.length < H.s.length
+      && kindOf(after) !== '' && kindOf(after) === kindOf(n[n.length - 1]);
+    if (!headCut && !tailCut) return true;
+    i = H.s.indexOf(n, i + 1);
+  }
+  return false;
+}
+
 function cleanModel(s) {
   return String(s ?? '')
     .replace(/옵틱글래스|오토바이|광각|사이드|와이드미러|미러킷|미러|\(공동구매\)/g, ' ')
@@ -291,10 +329,16 @@ function naverRecords() {
   const seen = new Map();
   for (const r of rows) {
     const group = r['옵션그룹명'] || '';
-    // '제조사 선택' 구성은 전 차종 통합 상품이다 — 옵션에 차종이 없어 대조 대상이 아니다.
-    const bundle = /제조사\s*선택|브랜드/.test(group) && !/모델명|차량명/.test(group);
     const opt2 = r['옵션2_상품선택'] || '';
     const opt1 = r['옵션1_모델명'] || '';
+    // '제조사 선택 / 운전석·조수석 / BSA 여부' 처럼 **차종 축이 없는** 구성이 전 차종 통합상품이다.
+    // 축 이름만 보면 안 된다 — '브랜드 / 차종 / 운전석·조수석' 은 이름에 '브랜드' 가 들어가도
+    // 옵션1 에 차종이 들어 있는 정상 상품이다(BMW X7 등 86행이 통째로 빠져 있었다).
+    // 그래서 옵션에 부품번호가 적혀 있으면 통합상품으로 보지 않는다.
+    const hasPart = /No\.|\[\s*[BHKSRY]?\d{3,4}/i.test(`${opt1} ${opt2}`);
+    const bundle = !hasPart
+      && /제조사\s*선택|브랜드/.test(group)
+      && !/모델명|차량명|차종/.test(group);
     const stockQ = String(r['재고'] ?? '').trim();
     let state;
     if (r['사용'] === 'N') state = '품절(미사용)';
@@ -684,32 +728,36 @@ for (const rec of records) {
   if (rec.model) {
     // 해외 구역은 상품명이 영문·일문이라 코드표의 '모델명 (영문)' 칸(modelAlt)도 같이 보고,
     // 일문은 가타카나를 한글로 바꾼 것까지 함께 견준다.
-    const names = [norm(rec.model), norm(jpToKo(rec.model)), ...dictNames(rec.model).map(norm)]
-      .filter((v, i, a) => v && a.indexOf(v) === i);
-    // 제목은 제조사를 앞에 달고 오고(BMW MINI Cooper Hatch), 표기도 조금씩 다르다
-    // (제목 Hatch ↔ 코드표 Hatchback). 제조사를 떼고, 앞부분이 길게 일치해도 같은 것으로 본다.
-    // 제목은 제조사를 앞에 달고 온다(BMW MINI Cooper Hatch) — 떼고도 견준다.
-    // 앞부분만 일치하는 느슨한 비교는 영문·일문 이름에만 쓴다. 국문 모델명에까지 쓰면
-    // '싼타페' ↔ '싼타페 DM' 처럼 다른 차종이 서로 붙어 본사몰이 26행 깎였다(실측).
+    // 공백을 지운 값이 아니라 **원문**을 넘긴다 — containsWord 가 공백 자리를 낱말 경계로 쓴다.
+    const namesRaw = [rec.model, jpToKo(rec.model), ...dictNames(rec.model)]
+      .filter(Boolean).filter((v, i, a) => a.findIndex(x => norm(x) === norm(v)) === i);
+    const namesW = namesRaw.map(words);
+
     const hit = e => {
-      // 제조사를 떼고 견주는 것도 해 봤지만, 이름이 짧아져 엉뚱한 차종에 붙으면서
-      // 본사몰이 깎였다(한글 제목 −26행, 해외몰만 적용해도 −2행). 그래서 쓰지 않는다.
-      const mine = names;
-      const tight = n => mine.some(nmv => n === nmv || nmv.includes(n) || n.includes(nmv));
-      const loose = n => mine.some(nmv =>
-        n.length >= 8 && nmv.length >= 8 && (n.startsWith(nmv) || nmv.startsWith(n)));
-      if (tight(norm(e.model))) return true;
-      return rowAltNames(e).filter(Boolean).some(m => {
-        const n = norm(m);
-        return !!n && (tight(n) || loose(n));
-      });
+      // 이름이 서로 품고 있는 경우를 낱말 경계로 가린다 —
+      // '벤츠 GLA클래스' 가 '벤츠 A클래스' 로 잘못 붙던 것을 막는다.
+      const tight = raw => {
+        const W = words(raw);
+        return namesW.some(V => V.s === W.s || containsWord(V, W) || containsWord(W, V));
+      };
+      // 앞부분만 일치하는 느슨한 비교는 영문·일문 이름에만 쓴다. 국문 모델명에까지 쓰면
+      // '싼타페' ↔ '싼타페 DM' 처럼 다른 차종이 서로 붙어 본사몰이 26행 깎였다(실측).
+      const loose = raw => {
+        const n = norm(raw);
+        return namesRaw.some(v => {
+          const nmv = norm(v);
+          return n.length >= 8 && nmv.length >= 8 && (n.startsWith(nmv) || nmv.startsWith(n));
+        });
+      };
+      if (tight(e.model)) return true;
+      return rowAltNames(e).filter(Boolean).some(m => tight(m) || loose(m));
     };
     let f = pool.filter(hit);
     // 여럿이 걸리면 더 구체적인 이름이 이긴다 — '해치백 S' 는 '해치백' 도 품고 있어서 둘 다
     // 걸리는데, 제목이 'MINI 쿠퍼 해치백 S' 면 긴 쪽이 맞다. 제목 안에 통째로 든 이름만 견준다.
     if (f.length > 1) {
       const fit = e => Math.max(0, ...[e.model, ...rowAltNames(e)].filter(Boolean)
-        .map(norm).filter(n => n && names.some(v => v.includes(n))).map(n => n.length));
+        .filter(m => namesW.some(V => containsWord(V, m))).map(m => norm(m).length));
       const best = Math.max(...f.map(fit));
       if (best > 0) {
         const top = f.filter(e => fit(e) === best);
