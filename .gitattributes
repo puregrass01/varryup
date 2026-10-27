@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+# 배치 파일은 어디서 받아도(clone · GitHub Download ZIP) CRLF 로 — cmd 는 LF 배치 파일의 한글 줄을 잘못 읽는다(베리맵.bat).
+*.bat text eol=crlf
+*.cmd text eol=crlf
