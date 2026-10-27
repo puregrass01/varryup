@@ -45,6 +45,26 @@ test('selected folder, excluded items and ordering survive restart', t => {
   assert.equal(loaded.scan('amazon').items[1].name, '10.jpg');
   assert.equal(loaded.scan('amazon').items.find(i => i.name === '2.jpg').selected, false);
 });
+test('dropped ESM URLs append to the detail list; HTML saves keep order and exclusions of images that remain', t => {
+  const { lib } = fixture(t);
+  const url = name => `https://ai.esmplus.com/yhshma/${['기본값', '스마트스토어 상세페이지', name].map(encodeURIComponent).join('/')}`;
+  const details = () => lib.scan('domestic').items.slice(1).map(i => i.name + (i.selected ? '' : '(x)'));
+  lib.configure('domestic', { excluded: [url('1.jpg'), url('2.jpg')], order: [url('3.jpg'), url('0.jpg')] });
+  // 새 이미지는 끝에, 한글·공백 그대로인 0.jpg 는 이미 있는 것, 제외해 둔 2.jpg 는 다시 고른다
+  lib.configure('domestic', { addDetails: [url('new.jpg'), 'https://ai.esmplus.com/yhshma/기본값/스마트스토어 상세페이지/0.jpg', url('2.jpg')] });
+  assert.deepEqual(details(), ['3.jpg', '0.jpg', '1.jpg(x)', '2.jpg', '4.jpg', '5.jpg', 'new.jpg']);
+  assert.throws(() => lib.configure('domestic', { addDetails: ['https://im.esmplus.com/a.jpg'] }), /ai\.esmplus\.com/);
+  // HTML 편집기는 목록 순서(↑ 반영, 체크 끈 것 포함)로 열린다. 저장하면 그 줄 순서가 목록 순서, 제외는 남은 이미지 것만 남는다.
+  const editor = () => imageHtml(lib.scan('domestic').items.slice(1).map(i => i.path)).split('\n');
+  lib.configure('domestic', { detailHtml: editor().filter(line => !line.includes('3.jpg')).join('\n') });
+  assert.deepEqual(details(), ['0.jpg', '1.jpg(x)', '2.jpg', '4.jpg', '5.jpg', 'new.jpg']);
+  assert.deepEqual(lib.profile('domestic').order, []);
+  lib.configure('domestic', { order: [url('2.jpg'), url('0.jpg')] });   // ↑ 뒤 편집기에서 줄을 뒤집어 저장하면 뒤집힌 순서
+  lib.configure('domestic', { detailHtml: editor().reverse().join('\n') });
+  assert.deepEqual(details(), ['new.jpg', '5.jpg', '4.jpg', '1.jpg(x)', '0.jpg', '2.jpg']);
+  lib.configure('domestic', { resetDetails: true });
+  assert.deepEqual(details(), ['0.jpg', '1.jpg', '2.jpg', '3.jpg', '4.jpg', '5.jpg']);
+});
 test('prepare uploads once, assigns main and extras separately, reuses verified hashes', async t => {
   const { lib, uploads } = fixture(t);
   const { bundle } = await lib.prepare('amazon');

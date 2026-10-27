@@ -73,6 +73,47 @@ try {
   await page.waitForFunction(() => calls.some(c => c.channel === 'image-library-configure' && c.data.changes.thumbnail));
   assert.deepEqual(await page.evaluate(() => calls.findLast(c => c.channel === 'image-library-configure').data),
     { id: 'ebay', changes: { thumbnail: 'C:/ai_output/latest_korea.jpg', seed: false } });
+  // ESM 이미지호스팅(Edge)에서 끌어 온 썸네일: 브라우저 쪽 드롭(CDP)으로 넣는다 — 합성 DOM 이벤트가 아니라 Blink 드롭 경로.
+  // 썸네일이 <a href="#"> 안이면 uri-list 는 페이지 주소다 → html 의 <img src> 를 쓴다. http 는 https 로 올린다.
+  const cdp = await context.newCDPSession(page), box = await page.locator('#vu-image-list').boundingBox();
+  const esm = 'https://ai.esmplus.com/yhshma/' + ['기본값', '스마트스토어 상세페이지', '7.jpg'].map(encodeURIComponent).join('/');
+  const drag = { dragOperationsMask: 1 | 2 | 16, items: [{ mimeType: 'text/uri-list', data: 'https://im.esmplus.com/IHv2/ImgMain/ImgView#' },
+    { mimeType: 'text/html', data: '<a href="#"><img onerror="window.pwned=1" src="' + esm.replace('https:', 'http:') + '"></a>' }, { mimeType: 'text/plain', data: 'https://im.esmplus.com/IHv2/ImgMain/ImgView#' }] };
+  for (const type of ['dragEnter', 'dragOver', 'drop']) await cdp.send('Input.dispatchDragEvent', { type, x: box.x + 20, y: box.y + 20, data: drag });
+  await page.waitForFunction(() => calls.some(c => c.data?.changes?.addDetails));
+  assert.deepEqual(await page.evaluate(() => calls.findLast(c => c.channel === 'image-library-configure').data), { id: 'ebay', changes: { addDetails: [esm] } });
+  assert.equal(await page.evaluate(() => window.pwned), undefined, '끌어 온 마크업의 속성은 실행하지 않는다');
+  // ESM '태그복사' → 목록에서 Ctrl+V. HTML 편집 칸 안의 붙여넣기는 보통 붙여넣기 그대로.
+  await page.locator('#vu-image-list').focus();
+  await page.evaluate(() => { const dt = new DataTransfer(); dt.setData('text/plain', "<img src='https://ai.esmplus.com/yhshma/a.jpg' /><img src='https://ai.esmplus.com/yhshma/b.jpg' />");
+    document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); });
+  await page.waitForFunction(() => calls.findLast(c => c.channel === 'image-library-configure').data.changes.addDetails?.length === 2);
+  await page.locator('#vu-image-html-open').click();
+  const before = await page.evaluate(() => calls.length), html = await page.locator('#vu-image-html').inputValue();
+  await page.locator('#vu-image-html').evaluate(el => { const dt = new DataTransfer(); dt.setData('text/plain', '<img src="https://ai.esmplus.com/yhshma/c.jpg">'); el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); });
+  // 편집기가 열려 있을 때 끌어 놓으면 편집 중인 HTML 끝에 붙는다(목록은 'HTML 저장' 때) — 커서 자리에 끼어 들지 않는다.
+  const area = await page.locator('#vu-image-html').boundingBox();
+  for (const type of ['dragEnter', 'dragOver', 'drop']) await cdp.send('Input.dispatchDragEvent', { type, x: area.x + 10, y: area.y + 10, data: drag });
+  await page.waitForFunction(text => document.getElementById('vu-image-html').value !== text, html);
+  assert.equal(await page.locator('#vu-image-html').inputValue(), [html.trim(), '<p><img src="' + esm + '" /></p>'].filter(Boolean).join('\n'));
+  assert.equal(await page.evaluate(() => calls.length), before);
+  // 같은 이미지를 또 놓으면 건너뛴다. ESM 주소가 아닌 글자는 편집 칸이 그대로 받는다.
+  const once = await page.locator('#vu-image-html').inputValue();
+  for (const type of ['dragEnter', 'dragOver', 'drop']) await cdp.send('Input.dispatchDragEvent', { type, x: area.x + 10, y: area.y + 10, data: drag });
+  await page.waitForFunction(() => /이미 HTML/.test(document.getElementById('vu-image-status').textContent));
+  assert.equal(await page.locator('#vu-image-html').inputValue(), once);
+  const word = { dragOperationsMask: 1 | 2 | 16, items: [{ mimeType: 'text/plain', data: 'memo' }] };
+  for (const type of ['dragEnter', 'dragOver', 'drop']) await cdp.send('Input.dispatchDragEvent', { type, x: area.x + 10, y: area.y + 10, data: word });
+  await page.waitForFunction(() => document.getElementById('vu-image-html').value.includes('memo'));
+  // 편집 칸 안에서 줄을 끌어 옮기면(실제 마우스) 옮겨질 뿐 끝에 하나 더 붙지 않는다
+  const ta = page.locator('#vu-image-html'), a = '<p><img src="https://ai.esmplus.com/yhshma/a.jpg" /></p>', moved = a + '\n' + a.replace('a.jpg', 'b.jpg');
+  await ta.evaluate((el, v) => { el.style.cssText = 'width:700px;height:200px;font:14px/20px monospace;padding:0'; el.value = v; el.focus(); el.setSelectionRange(v.indexOf('\n') + 1, v.length); }, moved);
+  const tb = await ta.boundingBox();
+  await page.mouse.move(tb.x + 40, tb.y + 30); await page.mouse.down();
+  await page.mouse.move(tb.x + 30, tb.y + 32, { steps: 6 }); await page.mouse.move(tb.x + 1, tb.y + 4, { steps: 6 }); await page.mouse.up();
+  await page.waitForFunction(v => document.getElementById('vu-image-html').value !== v, moved);
+  assert.deepEqual((await ta.inputValue()).match(/\w\.jpg/g), ['b.jpg', 'a.jpg']);
+  await page.locator('#vu-image-html-cancel').click();
   assert.deepEqual(errors, []);
   assert.equal(await page.evaluate(() => calls.filter(c => /register|save-draft|publish/.test(c.channel)).length), 0);
   fs.mkdirSync('scratch', { recursive: true });

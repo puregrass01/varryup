@@ -443,6 +443,14 @@
   }));
   $('be-price-source').addEventListener('change', draw);
   $('be-image-value').addEventListener('input', e => { state().imageInput = e.target.value; });
+  // ESM 이미지호스팅 썸네일을 끌어 놓으면 기본 동작은 커서 자리에 구분자 없이 끼워 넣어 기존 주소를 깨뜨린다 → 끝에 붙인다.
+  $('be-image-value').addEventListener('drop', e => {
+    const urls = window.VUImages?.esmUrls?.(e.dataTransfer.getData('text/html'), e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')) || [];
+    if (!urls.length) return;
+    e.preventDefault();
+    const now = e.target.value.trim().replace(/[|\s]+$/, '');   // 'a|' 끝 구분자에 또 붙여 'a||u' 가 되지 않게
+    e.target.value = state().imageInput = /<img\b/i.test(now) ? [now, ...urls.map(u => `<img src="${u}">`)].join('') : [now, ...urls].filter(Boolean).join('|');
+  });
   // 이미지 적용: 교체(입력 목록으로 바꿈) · 끝에 추가 · 이 URL 제거(같은 URL 만 뺌). 상품마다 지금 목록을 기준으로 변경안을 만든다.
   $('be-image-apply').addEventListener('click', () => run(async () => {
     const picked = selected(), op = $('be-image-op').value;

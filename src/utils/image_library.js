@@ -75,14 +75,28 @@ export class ImageLibrary {
     if (this.busy) throw new Error('호스팅 작업이 끝난 뒤 설정을 바꿔주세요.');
     const p = this.profile(id);
     if (Object.hasOwn(changes, 'detailHtml')) esmImagesFromHtml(changes.detailHtml);
+    // ESM 호스팅 창에서 끌어다 놓거나 붙여 넣은 주소: 지금 HTML 끝에 붙인다. 이미 있으면 건너뛰고, 제외해 둔 것은 다시 고른다.
+    if (changes.addDetails) {
+      if (p.detailSource !== 'esm') throw new Error('ESM 상세 목록에서만 이미지를 추가할 수 있습니다.');
+      const add = esmImagesFromHtml(imageHtml(changes.addDetails)), have = esmImagesFromHtml(p.detailHtml);
+      const fresh = add.filter(u => !have.includes(u));
+      if (fresh.length) p.detailHtml += '\n' + imageHtml(fresh);
+      p.excluded = (p.excluded || []).filter(u => !add.includes(u));
+    }
     for (const key of ['folder', 'thumbnail', 'seed', 'excluded', 'order', 'detailHtml']) {
       if (Object.hasOwn(changes, key)) p[key] = changes[key];
     }
     // Local folders remain an explicit compatibility option, never the default.
     if (Object.hasOwn(changes, 'folder')) { p.detailSource = 'local'; p.excluded = []; p.order = []; }
     if (Object.hasOwn(changes, 'detailHtml') || changes.resetDetails) {
-      p.detailSource = 'esm'; p.folder = ''; p.excluded = []; p.order = [];
-      if (changes.resetDetails) p.detailHtml = this.defaults[id].detailHtml;
+      p.detailSource = 'esm'; p.folder = ''; p.order = [];
+      if (changes.resetDetails) { p.detailHtml = this.defaults[id].detailHtml; p.excluded = []; }
+      else {
+        // 편집기는 목록 순서(↑ 반영)로 열리니(ui/image-library.js) 저장한 HTML 의 줄 순서가 곧 목록 순서다.
+        // 체크 해제는 남아 있는 이미지 것만 지킨다.
+        const kept = new Set(esmImagesFromHtml(p.detailHtml));
+        p.excluded = (p.excluded || []).filter(u => kept.has(u));
+      }
     }
     this.state.profiles[id] = p; this.persist();
     return this.scan(id);
