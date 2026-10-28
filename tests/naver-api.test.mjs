@@ -442,3 +442,18 @@ test('외부 IP 확인 실패나 잘못된 IPv4가 인증 진단을 막지 않�
     await api.tokenRequest();
   }
 });
+
+test('FormData 본문은 multipart 로 그대로 보내고(Content-Type 비움) 프록시 경유는 거부한다', async () => {
+  const fetchImpl = mockFetch([tokenOk(), jsonResponse(200, { images: [{ url: 'https://shop-phinf.pstatic.net/a.jpg' }] })]);
+  const api = new NaverAPI(baseConfig, { fetchImpl, bcrypt: bcryptStub });
+  const form = new FormData();
+  form.append('imageFiles', new Blob([new Uint8Array([1])], { type: 'image/png' }), 'a.png');
+  assert.deepEqual(await api.request('POST', '/v1/product-images/upload', form), { images: [{ url: 'https://shop-phinf.pstatic.net/a.jpg' }] });
+  const sent = fetchImpl.calls[1];
+  assert.equal(sent.url, `https://api.commerce.naver.com${API_PREFIX}/v1/product-images/upload`);
+  assert.equal(sent.options.body, form);
+  assert.equal(sent.options.headers['Content-Type'], undefined);
+
+  const proxied = new NaverAPI(baseConfig, { fetchImpl: mockFetch([]), bcrypt: bcryptStub, proxy: { proxyUrl: 'https://admin.example', proxyToken: 't' } });
+  await assert.rejects(() => proxied.request('POST', '/v1/product-images/upload', form), /프록시/);
+});

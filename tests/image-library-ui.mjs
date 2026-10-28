@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { uploadRepresentative } from '../src/platforms/naver_managed_images.js';
 
 const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true, args: ['--allow-file-access-from-files'] });
 try {
@@ -131,17 +130,5 @@ try {
   assert.equal(await page.evaluate(() => calls.filter(c => /register|save-draft|publish/.test(c.channel)).length), 0);
   fs.mkdirSync('scratch', { recursive: true });
   await page.screenshot({ path: 'scratch/image-library-preview.png' });
-
-  // Native Naver uploads must stay within the representative-image control;
-  // absent/changed controls must stop without saving the product.
-  const naver = await context.newPage();
-  await naver.setContent('<input type="file" id="unrelated"><div data-field="representativeImage"><input type="file" id="main"><img></div>');
-  await naver.evaluate(() => document.getElementById('main').onchange = e => {
-    const image = e.target.parentElement.querySelector('img'); image.src = URL.createObjectURL(e.target.files[0]);
-  });
-  await uploadRepresentative(naver, path.resolve('src/ui/logos/naver.png'));
-  assert.equal(await naver.locator('#unrelated').evaluate(el => el.files.length), 0);
-  await naver.setContent('<button id="save">저장</button>');
-  await assert.rejects(uploadRepresentative(naver, path.resolve('src/ui/logos/naver.png')), /상품은 저장하지 않았습니다/);
-  console.log('PASS: defaults, marketplace switch, image order, manual URL preservation, exclusion, canceled representative picker, no listing writes, scoped Naver upload');
+  console.log('PASS: defaults, marketplace switch, image order, manual URL preservation, exclusion, canceled representative picker, no listing writes');
 } finally { await browser.close(); }

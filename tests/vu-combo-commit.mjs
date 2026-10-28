@@ -102,7 +102,7 @@ const read = page => page.evaluate(() => {
            sku: v('inp-sku'), usd: v('inp-usd'), cpid: v('inp-cpid') };
 });
 
-// 본사몰 상품 찾기 칸을 눌러 목록이 도착할 때까지 기다린다(처음 누를 때 읽는다).
+// 본사몰 상품 찾기 칸을 눌러 목록(차량 카탈로그 행)이 보일 때까지 기다린다.
 const openDb = async page => {
   await page.focus('#inp-db-search');
   await page.waitForFunction(() => document.querySelectorAll('.vu-combo-item').length >= 2, null, { timeout: 5000 });
@@ -112,7 +112,7 @@ const shownRows = page => page.evaluate(() => [...document.querySelectorAll('.vu
 const NEXO = { brand: '현대', carmodel: '넥쏘', gen: '1세대', year: '18~', code: 'FE', no: 'H119',
                sku: 'HY1001NH119', usd: '160.34', cpid: '13705865676' };
 
-const BYD_ROW = { year: '', gen: '1세대', code: 'BYD SF', no: '1702', sku: '', usd: '' };   // 카탈로그: 연식 빈 칸, SKU 없음
+const BYD_ROW = { year: '', gen: '1세대', code: 'BYD SF', no: '1702', sku: 'BY0201N1702', usd: '' };   // 카탈로그: 연식 빈 칸, SKU 없음 → 신규 등록이라 자동 생성(제조사 BY · 다음 차종 02)
 
 const cases = [
   ['연식 칸에 상품번호를 쳐서 찾고 Enter → 그 행을 고른다', async p => {
@@ -150,56 +150,60 @@ const cases = [
     await pick(p, 'inp-year', 'No.181');
     await pick(p, 'inp-sku', 'OBM2105N181');
     await type(p, 'inp-no', '182');
-  }, { no: '182', sku: '', usd: '' }],
-  ['본사몰 상품 목록은 시작 때 읽지 않고, 칸을 처음 누를 때 한 번 읽는다', async p => {
-    assert.equal(await p.evaluate(() => window.__bulkListCalls), 0, '시작 때 읽었다');
+  }, { no: '182', sku: 'BM2106N182', usd: '' }],   // 고른 SKU 는 버리고, 새 번호로 자동 생성(6GT = BM21, 다음 순번 06)
+  ['본사몰 상품 찾기는 차량 카탈로그 행이다 — 아임웹을 읽지 않고, 단어 여러 개로 거른다', async p => {
     await openDb(p);
-    await p.evaluate(() => document.getElementById('inp-db-search').blur());
-    await openDb(p);
-    assert.equal(await p.evaluate(() => window.__bulkListCalls), 1, '10분 안에 다시 읽었다');
-  }, {}],
-  ['본사몰 상품 찾기에 현대 를 치면 두 상품이 다 보인다', async p => {
-    await openDb(p);
-    await filter(p, 'inp-db-search', '현대');
-    const rows = await shownRows(p);
-    for (const x of products.slice(0, 2)) assert.ok(rows.includes(x.name), `${x.name} 이 없다: ${JSON.stringify(rows)}`);
-    assert.ok(rows.includes(products[2].name + ' · 숨김(판매 안 함)'), '판매상태를 이름 뒤에 적는다');
+    await filter(p, 'inp-db-search', 'F150 P415');
+    assert.deepEqual(await shownRows(p), ['No.1115번 · 포드 (Ford) · F150 · 12세대 전기형 · 08.10~12 · P415 (사다리꼴)',
+      'No.1120번 · 포드 (Ford) · F150 · 12세대 전기형 · 13~14 · P415 (직사각타입)']);
+    assert.equal(await p.evaluate(() => window.__bulkListCalls), 0, '아임웹 목록을 읽었다');
   }, {}],
   ['본사몰 상품 찾기에서 넥쏘를 고르면(신규) 브랜드·차종·세대·연식·코드·번호·SKU 가 채워진다', async p => {
     await openDb(p);
-    await pick(p, 'inp-db-search', '넥쏘 광각미러');
+    await pick(p, 'inp-db-search', 'No.H119번 · 현대 (Hyundai) · 넥쏘');
     assert.equal(await p.evaluate(() => document.querySelectorAll('.vu-combo').length), 0, '채운 칸의 목록이 열렸다');
   }, NEXO],
   ['아반떼N 을 고르고 SKU 를 목록으로 고른 뒤 넥쏘를 고르면 앞 차의 SKU 를 버린다', async p => {
     await openDb(p);
-    await pick(p, 'inp-db-search', '아반떼N');
+    await pick(p, 'inp-db-search', 'No.H131번 · 현대 (Hyundai) · 아반떼N');
     const avante = await read(p);
     assert.deepEqual([avante.carmodel, avante.code, avante.no], ['아반떼', 'CN7 N', 'H131'], '전제: 아반떼N 행');
     await pick(p, 'inp-sku', 'HY0107NH131');   // 사람이 고른 값 — 차가 바뀌어도 자동으로는 안 바뀌는 값이다
     assert.equal((await read(p)).sku, 'HY0107NH131', '전제: SKU 를 골랐다');
     await openDb(p);
-    await pick(p, 'inp-db-search', '넥쏘 광각미러');
+    await pick(p, 'inp-db-search', 'No.H119번 · 현대 (Hyundai) · 넥쏘');
   }, NEXO],
-  ['넥쏘 미러 다음에 번호 없는 넥쏘 사이드스텝을 고르면 — 차종이 같아도 앞 상품의 행·SKU 를 버린다', async p => {
+  ['C클래스 No.340 에서 SKU 를 목록으로 고른 뒤 같은 차종의 No.377 을 고르면 앞 SKU 를 버린다', async p => {
     await openDb(p);
-    await pick(p, 'inp-db-search', '넥쏘 광각미러');
-    assert.equal((await read(p)).sku, 'HY1001NH119', '전제: 미러의 SKU');
-    await openDb(p);
-    await pick(p, 'inp-db-search', '사이드스텝');
-  }, { brand: '현대', carmodel: '넥쏘', gen: '', year: '', code: '', no: '', sku: '', usd: '', cpid: '' }],
-  ['행을 못 정한 C클래스 No.340 에서 SKU 를 목록으로 고른 뒤 같은 차종의 No.377 을 고르면 앞 SKU 를 버린다', async p => {
-    await openDb(p);
-    await pick(p, 'inp-db-search', '(전기형)');
+    await pick(p, 'inp-db-search', 'No.340번 · 벤츠 (BENZ) · C클래스 · 2세대전기형');
     await pick(p, 'inp-sku', 'MB0301N340');
     assert.equal((await read(p)).sku, 'MB0301N340', '전제: SKU 를 골랐다');
     await openDb(p);
-    await pick(p, 'inp-db-search', '[No.377]');
+    await pick(p, 'inp-db-search', 'No.377번 · 벤츠 (BENZ) · C클래스');
     // MB0301N340 을 고를 때 BSA 가 X 로 넘어갔고, No.377 C클래스에는 BSA X 리스팅이 없다 → 비워 두고 사람이 고른다
-  }, { brand: '벤츠', carmodel: 'C클래스', gen: '4세대', no: '377', sku: '', usd: '' }],
+  }, { brand: '벤츠', carmodel: 'C클래스', gen: '4세대', no: '377', sku: 'MB0306N377', usd: '' }],   // BSA X 리스팅이 없어 자동 생성
+  ['DB 에 없는 차를 한 줄로 넣고 칸을 나가면 칸마다 나눠 넣고, 영문 · 일문은 자동 번역된다', async p => {
+    await p.evaluate(() => {
+      const el = document.getElementById('inp-db-search');
+      el.focus(); el.value = 'No.1108번   F150   12세대 중기형   11~14   P415';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.blur(); el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const en = await p.evaluate(() => ['inp-brand-en', 'inp-carmodel-en', 'inp-gen-en'].map(id => document.getElementById(id)?.value));
+    assert.ok(en.every(Boolean), '영문 칸이 비었다: ' + JSON.stringify(en));
+  }, { brand: '포드', carmodel: 'F150', gen: '12세대 중기형', year: '11~14', code: 'P415', no: '1108', sku: 'FD0905N1108' }],
+  ['수정 모드에서도 한 줄을 넣으면 칸마다 나눠 넣는다(찾는 열쇠 = 상품번호)', async p => {
+    await p.locator('label[for="mode-edit"]').click();
+    await p.evaluate(() => {
+      const el = document.getElementById('inp-db-search');
+      el.value = 'No.315번 S클래스 10세대 후기형 26년 9월~ W223 F/L';
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }, { brand: '벤츠', carmodel: 'S클래스', gen: '10세대 후기형', year: '26년 9월~', code: 'W223 F/L', no: '315', sku: '' }],   // 수정 모드는 SKU 가 찾는 열쇠라 만들지 않는다
   ['수정 모드에서도 넥쏘를 고르면 찾는 열쇠(번호·SKU)가 채워진다', async p => {
     await p.locator('label[for="mode-edit"]').click();
     await openDb(p);
-    await pick(p, 'inp-db-search', '넥쏘 광각미러');
+    await pick(p, 'inp-db-search', 'No.H119번 · 현대 (Hyundai) · 넥쏘');
   }, { brand: '현대', carmodel: '넥쏘', no: 'H119', sku: 'HY1001NH119', cpid: '13705865676' }],
 ];
 

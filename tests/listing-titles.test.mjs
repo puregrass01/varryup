@@ -7,7 +7,9 @@
 // 리터럴만 잘라내 평가한다 — 파일이 바뀌면 여기서 바로 깨지는 쪽이 낫다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync as readRaw } from 'node:fs';
+// git core.autocrlf=true 체크아웃은 CRLF 로 풀린다 — 아래 '\n}\n' 같은 경계로 자르니 줄바꿈을 맞춰 읽는다.
+const readFileSync = (...a) => readRaw(...a).replace(/\r\n/g, '\n');
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 

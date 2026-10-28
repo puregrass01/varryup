@@ -84,6 +84,17 @@ test('existing matching hosted file is reused without upload', async t => {
   const { lib, uploads } = fixture(t, { inspect: async () => true });
   await lib.prepare('amazon'); assert.equal(uploads.length, 0);
 });
+test('a hosted URL over 200 chars (Korean folder path) is not reused — a short vu_ copy is uploaded for Coupang', async t => {
+  const { lib, uploads, folder } = fixture(t, { inspect: async () => true });
+  const thumb = path.join(folder, '썸네일.jpg'); fs.writeFileSync(thumb, 'thumb');
+  lib.configure('domestic', { thumbnail: thumb, seed: false });
+  const sha = lib.scan('domestic').items[0].hash;
+  lib.state.hosted[sha] = { url: 'https://ai.esmplus.com/yhshma/' + encodeURIComponent('옵틱글래스 상세페이지/썸네일/이베이 썸네일/썸네일.jpg') };
+  const { bundle } = await lib.prepare('domestic');
+  assert.equal(uploads.length, 1);
+  assert.match(bundle.mainImageUrl, /\/uploaded\/vu_[0-9a-f]{64}\.jpg$/);
+  assert.ok(bundle.mainImageUrl.length <= 200);
+});
 test('404/non-image upload does not produce a ready bundle or success cache', async t => {
   const { lib } = fixture(t, { inspect: async () => false });
   await assert.rejects(lib.prepare('amazon'), /호스팅 이미지 응답/);

@@ -1,4 +1,4 @@
-// 네이버 커머스API 클라이언트. 상품 검색과 naver_products.js의 기존 상품 조회·수정을 담당한다.
+// 네이버 커머스API 클라이언트. 상품 검색과 naver_products.js의 신규 복사등록·기존 상품 조회·수정을 담당한다.
 //
 // eBay 와 다른 점 하나 — 토큰 발급도 프록시를 거친다.
 //   네이버는 '호출한 기기의 외부 IP'를 허용목록(앱당 최대 3개)으로 검사하고, 토큰 발급
@@ -239,15 +239,19 @@ export class NaverAPI {
   /**
    * 인증된 API 호출. path 는 /external 을 뺀 문서 표기 그대로 넘긴다.
    *   예) request('POST', '/v1/products/search', { ... })
+   * body 가 FormData 면 multipart 로 보낸다(이미지 업로드). 경계값은 fetch 가 정하므로 Content-Type 을 비운다.
    */
   async request(method, path, body, attempt = 0, authRetried = false) {
     if (!path.startsWith('/') || path.startsWith('//')) throw new Error('잘못된 API 경로입니다.');
+    const form = body instanceof FormData;
+    // 프록시 봉투는 JSON 문자열만 실어 나른다(server/proxy.py). 앱은 네이버를 직접 부르므로 verimap 스크립트에서만 걸린다.
+    if (form && this.proxyUrl) throw apiError('서버 프록시 경유로는 네이버에 파일을 올릴 수 없습니다. --direct 로 실행해주세요.', { proxyError: true });
     const headers = {
       Authorization: `Bearer ${await this.token()}`,
-      'Content-Type': 'application/json',
+      ...(form ? {} : { 'Content-Type': 'application/json' }),
       Accept: 'application/json'
     };
-    const bodyStr = body === undefined ? undefined : JSON.stringify(body);
+    const bodyStr = body === undefined || form ? body : JSON.stringify(body);
     const { status, data } = await this._send(method, `${API_PREFIX}${path}`, bodyStr, headers);
 
     if (status === 401 && !authRetried) {

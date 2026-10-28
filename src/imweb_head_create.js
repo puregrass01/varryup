@@ -66,19 +66,22 @@ export const convertWithRates = (rates, clock = Date.now) => async (currency, am
   return Number(fromKrw(from === 'KRW' ? amount : toKrw(amount, from, got.data), currency, got.data));
 };
 
-/** 미국 · 일본 구역 가격. 기본 판매가(1set): usd(셸 '판매가 (USD)' 자동완성)가 있으면 미국 = usd 그대로, 일본 = usd 를 환율 규칙으로 환산.
- *  없으면 둘 다 한국 기본가를 환산. 조합(1set · 운전석 · 조수석) 최종가는 늘 한국 조합가를 환산한다. 미리보기 · 등록이 같이 쓴다. */
-export async function planUnitPrices({ base, combos }, usd, convertPrice) {
-  const plan = {};
-  usd = Number(String(usd ?? '').replace(/[$,\s]/g, '')) || 0;
+/** 미국 · 일본 구역 가격. 기본 판매가와 조합(1set · 운전석 · 조수석) 최종가는 한국 값을 환율 규칙으로 환산한다.
+ *  1set 조합만 예외: usd(셸 '판매가 (USD)' 자동완성 · 탭 '미국 1set')가 있으면 미국 1set = usd, 일본 1set = usd 의 환율 환산.
+ *  jpy(탭 '일본 1set' 칸)가 있으면 일본 1set = jpy. 템플릿의 기본 판매가는 운전석 값이라 1set 칸과 따로 간다. 미리보기 · 등록이 같이 쓴다. */
+export async function planUnitPrices({ base, combos }, usd, convertPrice, jpy) {
+  const plan = {}, num = v => Number(String(v ?? '').replace(/[$¥,\s]/g, '')) || 0;
+  usd = num(usd); jpy = num(jpy);
   for (const c of ['USD', 'JPY']) {
     const check = v => {
       if (!(v >= MIN_TARGET[c])) throw new Error(`${LABEL[c]} 환산가 ${v} 가 하한(${MIN_TARGET[c]}) 아래입니다 — 가격을 확인하세요.`);
       return v;
     };
     const conv = async krw => check(Number(await convertPrice(c, krw)));
-    plan[c] = { base: usd ? check(c === 'USD' ? usd : Number(await convertPrice(c, usd, 'USD'))) : await conv(base), combos: [] };
+    plan[c] = { base: await conv(base), combos: [] };
     for (const krw of combos) plan[c].combos.push(await conv(krw));
+    const set = c === 'JPY' && jpy ? jpy : usd ? (c === 'USD' ? usd : Number(await convertPrice(c, usd, 'USD'))) : 0;
+    if (set && plan[c].combos.length) plan[c].combos[0] = check(set);
   }
   return plan;
 }
@@ -250,7 +253,10 @@ export function createImwebHeadCreate(client, {
       if (tplName && (text.includes(tplName[1]) || text.includes(tplName[2]))) throw new Error(`템플릿 상품 ${tplNo} 본문에 템플릿 차(${tplName[1]} ${tplName[2]})가 글로 적혀 있어 바꿀 수 없습니다 — 템플릿 본문을 확인하세요. 아무것도 만들지 않았습니다.`);
       return detail.length ? replaceDetailImages(html, detail) : html;
     };
-    const bodies = { KRW: bodyOf(specKr), USD: bodyOf(specEn), JPY: bodyOf(specEn) };
+    // 탭 '상세설명' 칸의 글은 세 구역 본문 맨 위에 덧붙인다(줄마다 <p>, HTML 은 글자 그대로).
+    const intro = String(data.intro || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+      .map(s => `<p>${s.replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]))}</p>`).join('');
+    const bodies = { KRW: intro + bodyOf(specKr), USD: intro + bodyOf(specEn), JPY: intro + bodyOf(specEn) };
 
     const tree = (await client.request('GET', '/products/shop-categories', { query: { unitCode: u.KRW } }))?.data;
     const root = (Array.isArray(tree) ? tree : []).find(n => norm(n.name) === norm(CATEGORY_ROOT));
@@ -259,8 +265,14 @@ export function createImwebHeadCreate(client, {
     if (!category && (category = child(CATEGORY_OTHER))) warn(`카테고리 '${CATEGORY_ROOT} > ${catBrand}' 가 없어 '${CATEGORY_OTHER}' 에 넣습니다(기존 본사 상품과 같은 방식).`);
     if (!category) throw new Error(`카테고리 '${CATEGORY_ROOT} > ${catBrand}' 가 없습니다 — 아임웹 관리자에서 만든 뒤 다시 등록하세요`);
 
-    const plan = { KRW: { base: Number(tpl.p.price), combos: tpl.prices } };
-    Object.assign(plan, await planUnitPrices(plan.KRW, data.usdPrice, convertPrice));
+    // 한국 가격: 탭 칸(1set · 운전석 · 조수석)을 쓴다. 칸 값이 없으면(셸 일괄 등록 등) 템플릿 가격.
+    const krw = (Array.isArray(data.krwPrices) ? data.krwPrices : []).map(Number);
+    const typed = krw.length === 3 && krw.every(v => v > 0);
+    if (Array.isArray(data.krwPrices) && data.krwPrices.some(v => String(v ?? '').trim()) && !typed) throw new Error('한국 판매가(1set · 운전석 · 조수석)를 모두 0보다 큰 숫자로 넣어 주세요.');
+    // 기본 판매가는 템플릿이 쓰는 조합(지금은 운전석)의 칸 값을 따른다.
+    const baseAt = Math.max(0, tpl.prices.indexOf(Number(tpl.p.price)));
+    const plan = { KRW: typed ? { base: krw[baseAt], combos: krw } : { base: Number(tpl.p.price), combos: tpl.prices } };
+    Object.assign(plan, await planUnitPrices(plan.KRW, data.usdPrice, convertPrice, data.jpyPrice));
     const image = await imageFile(data);
 
     const body = {

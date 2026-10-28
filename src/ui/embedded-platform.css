@@ -33,6 +33,9 @@
 .embedded-platform:not(.vu-new) .ih-new {
     display: none !important;
 }
+/* 판매가 칸: 한국 1set · 운전석 · 조수석 한 줄, 미국 · 일본 한 줄 */
+#imwebHeadTab .ih-new .dual-input { width: 100%; max-width: 100%; }
+#imwebHeadTab .ih-new .dual-input > .input-col { flex: 1 1 0; min-width: 0; }
 
 /* ── Compact layout ─────────────────────────────────────────────
    The shell already halves .form-input, but the panel stayed the full

@@ -4,7 +4,7 @@
 // 단일 상품 수정은 상품 일괄 수정의 채널을 그대로 탄다: bulk-price-list(찾기) · bulk-price-load-many(가격 줄 + 상세 이미지)
 // · bulk-save-batch(저장). 그래서 저장은 일괄 수정 · 환율 자동 변경과 한 줄로 서고(BUSY) 아임웹 잠금 · 토큰도 같다.
 // 신규 등록(.ih-new)은 상품 하나에 세 구역을 만든다(main imweb-head-register → imweb_head_create.js). 칸은 셸 좌측이 채우고
-// (.shell-fed, index_up.html fillFrame), 탭은 이름 · 가격 · 조견표 미리보기만 보인다. 모드별 보이기는 embedded-platform.css(.ih-new / .ih-edit).
+// (.shell-fed, index_up.html fillFrame), 탭은 생성될 상품명 · 판매가 칸 · 상세설명 · 조견표를 보인다. 모드별 보이기는 embedded-platform.css(.ih-new / .ih-edit).
 (() => {
   const ipc = (typeof require !== 'undefined' ? require : window.parent.require)('electron').ipcRenderer;
   const UNITS = { 'imweb-ko': ['한국', 'KRW'], 'imweb-en': ['미국', 'USD'], 'imweb-jp': ['일본', 'JPY'] };
@@ -31,13 +31,18 @@
         <div class="form-group row dual-input"><div class="input-col"><label class="form-label" for="ihBrandEn">영문 제조사</label><input id="ihBrandEn" class="form-input" autocomplete="off"></div><div class="input-col"><label class="form-label" for="ihModelEn">영문 차종</label><input id="ihModelEn" class="form-input" autocomplete="off"></div></div>
         <div class="form-group row dual-input"><div class="input-col"><label class="form-label" for="ihBrandJp">일문 제조사</label><input id="ihBrandJp" class="form-input" autocomplete="off"></div><div class="input-col"><label class="form-label" for="ihModelJp">일문 차종</label><input id="ihModelJp" class="form-input" autocomplete="off"></div></div>
         <div class="form-group row dual-input"><div class="input-col"><label class="form-label" for="ihSpecUrl">조견표 URL (국내용)</label><input id="ihSpecUrl" class="form-input" autocomplete="off"></div><div class="input-col"><label class="form-label" for="ihSpecUrlEn">조견표 URL (해외용)</label><input id="ihSpecUrlEn" class="form-input" autocomplete="off"></div></div>
-        <div class="form-group"><label class="form-label" for="ihUsd">판매가 (USD) — 미국 1set</label><input id="ihUsd" class="form-input" inputmode="decimal" autocomplete="off"></div>
       </div>
-      <div class="step-indicator"><div class="step-number">1</div><span>상품명 미리보기 (한국 · 미국 · 일본 구역)</span></div>
-      <div class="form-group"><div id="ihNames"></div><p class="help-text" id="ihNameWarn" style="color:#b45309"></p></div>
+      <div class="step-indicator"><div class="step-number">1</div><span>생성될 상품명 (한국 · 미국 · 일본 구역)</span></div>
+      ${['Ko:한국', 'En:미국', 'Jp:일본'].map(x => x.split(':')).map(([k, c]) => `<div class="form-group"><label class="form-label" for="ihName${k}">${c}</label><input type="text" id="ihName${k}" class="form-input" readonly></div>`).join('')}
+      <p class="help-text" id="ihNameWarn" style="color:#b45309"></p>
       <div class="step-indicator"><div class="step-number">2</div><span>판매가</span></div>
+      <div class="form-group row dual-input ih-row"><div class="input-col"><label class="form-label" for="ihKrwSet">한국 1set (원)</label><input type="number" min="0" id="ihKrwSet" class="form-input"></div><div class="input-col"><label class="form-label" for="ihKrwLeft">운전석 (원)</label><input type="number" min="0" id="ihKrwLeft" class="form-input"></div><div class="input-col"><label class="form-label" for="ihKrwRight">조수석 (원)</label><input type="number" min="0" id="ihKrwRight" class="form-input"></div></div>
+      <div class="form-group row dual-input"><div class="input-col"><label class="form-label" for="ihUsd">미국 1set (USD)</label><input id="ihUsd" class="form-input" inputmode="decimal" autocomplete="off"></div><div class="input-col"><label class="form-label" for="ihJpy">일본 1set (JPY)</label><input id="ihJpy" class="form-input" inputmode="numeric" autocomplete="off"></div></div>
       <p class="help-text" id="ihPricePlan"></p>
-      <div class="step-indicator"><div class="step-number">3</div><span>상세정보</span></div>
+      <p class="help-text">재고 수량: 아임웹 API는 옵션 상품 재고를 받지 않습니다.</p>
+      <div class="step-indicator"><div class="step-number">3</div><span>상세설명</span></div>
+      <div class="form-group"><label class="form-label" for="ihIntro">본문 맨 위에 덧붙일 글 (세 구역 공통 · 비우면 템플릿 본문 그대로)</label><textarea id="ihIntro" class="form-input" rows="3"></textarea></div>
+      <div class="step-indicator"><div class="step-number">4</div><span>조견표</span></div>
       <div id="ihSpecPlan"></div>
       <p class="help-text">본문은 템플릿 상품 본문에서 조견표와 상세 이미지(이미지 목록)만 바꿉니다. 숨김으로 만들고 세 구역을 다시 읽어 모두 맞을 때만 판매중으로 바꿉니다 — 어긋나면 숨김으로 두고 상품번호를 알립니다(Open API 로는 지울 수 없습니다).</p>
       <div class="submit-section"><button type="button" class="btn btn-gradient w-full" id="ihRegisterBtn">🚀 아임웹 자사몰 상품 등록 (한국 · 미국 · 일본)</button></div>
@@ -45,6 +50,7 @@
     <div class="ih-edit">
       <p class="help-text" id="ihUnit"></p>
       <div class="form-group shell-owned"><label class="form-label" for="ihEditNo">상품번호</label><input id="ihEditNo" class="form-input" placeholder="예: 445, K123" autocomplete="off"></div>
+      <div class="form-group"><label class="form-label" for="ihUrl">본사몰 상품 URL (넣으면 그 상품을 찾음)</label><input id="ihUrl" class="form-input" placeholder="예: https://optic-glass.co.kr/shop_view/?idx=1096" autocomplete="off"></div>
       <div class="submit-section"><button type="button" class="btn btn-outline w-full" id="ihFindBtn">🔍 상품 불러오기</button></div>
       <div id="ihResults" style="margin:6px 0"></div>
       <div id="ihLoaded" hidden>
@@ -60,6 +66,7 @@
   document.querySelector('.tab-content-area').append(panel);
   const $ = id => document.getElementById(id);
   const key = () => $('ihEditNo').value.trim();
+  const urlIdx = () => $('ihUrl').value.match(/[?&]idx=(\d+)/)?.[1] || '';
   // #ihLog 는 없다 — 줄마다 셸 로그로 넘긴다('[아임웹 자사몰] ' 머리말).
   const log = (message, type = 'info') => window.forwardLogToShell?.('imwebHead', message, type);
   // scope: 지금 칸의 구역. loaded: 불러온 상품 { scope, key, id, name, base, combos:[{optionId, label, price}], images, imageRevision }.
@@ -100,10 +107,18 @@
   async function search() {
     const code = key();
     loaded = null; images = []; $('ihLoaded').hidden = true; $('ihResults').textContent = code ? '찾는 중...' : '전체 목록 읽는 중...';
-    const res = await ipc.invoke('bulk-price-list', { scope: 'imweb-ko', query: code ? 'no.' + code : '' });
+    const res = await ipc.invoke('bulk-price-list', { scope: 'imweb-ko', query: code && !urlIdx() ? 'no.' + code : '' });
     $('ihResults').replaceChildren();
     if (!res?.success) throw new Error('찾기 실패: ' + (res?.error || '알 수 없는 오류'));
     if (key() !== code) throw new Error('찾는 사이 상품번호가 바뀌어 결과를 버렸습니다. 다시 불러오세요.');
+    // 상품 URL 칸(…/shop_view/?idx=1096)이 있으면 상품번호 칸보다 먼저 — idx 가 곧 prodNo 다(세 구역 같음).
+    const idx = urlIdx();
+    if (idx) {
+      const items = (res.data?.items || []).filter(p => String(p.id) === idx);
+      if (!items.length) $('ihResults').textContent = `본사몰에 상품 ${idx}(URL idx) 이 없습니다.`;
+      log(`본사몰 상품 URL idx=${idx} ${items.length}건`, items.length ? 'success' : 'error');
+      return { items, code };
+    }
     if (!code) {
       const items = res.data?.items || [];
       log(`본사몰 전체 ${items.length}건 — 수정할 상품을 고르세요.`, items.length ? 'success' : 'error');
@@ -213,15 +228,23 @@
     scope = next; render();
   };
   // ── 신규 등록 ──
-  // 미리보기는 main(imweb_head_create.js)과 같은 형식 · 템플릿이다. 실제 이름 · 가격은 등록할 때 main 이 다시 만든다(템플릿에서 읽음).
+  // 상품명 형식은 main(imweb_head_create.js)과 같다. 가격 칸의 처음 값은 템플릿 가격 · 환율 환산이고, 등록은 칸 값으로 한다.
   const TEMPLATE = { X: ['2153', [150000, 80000, 70000]], O: ['2116', [220000, 115000, 105000]] };
   const UNIT_NAME = { en: ['미국', '영문', 'Wide View Side Mirror'], jp: ['일본', '일문', '広角ドアミラー'] };
+  const KRW_IDS = ['ihKrwSet', 'ihKrwLeft', 'ihKrwRight'];
+  // 자동 값은 칸이 비었거나 지난번 자동 값 그대로일 때만 넣는다 — 사람이 고친 값은 둔다.
+  const autoFill = (id, value) => {
+    const el = $(id), v = String(value ?? '');
+    if (el.value === '' || el.value === el.dataset.auto) el.value = v;
+    el.dataset.auto = v;
+  };
   function newData() {
     const v = id => $(id).value.trim(), bsa = $('ihBsa').checked;
     return { brand: v('ihBrand'), model: v('ihModel'), titleBrand: v('ihBrand'), titleModel: v('ihModel'),
       code: v('ihCode').replace(/^No\.\s*/i, ''), bsaO: bsa, bsaX: !bsa,
       titleBrandEn: v('ihBrandEn'), titleModelEn: v('ihModelEn'), titleBrandJp: v('ihBrandJp'), titleModelJp: v('ihModelJp'),
-      specImageUrl: v('ihSpecUrl'), specImageUrlEn: v('ihSpecUrlEn'), usdPrice: v('ihUsd') };
+      specImageUrl: v('ihSpecUrl'), specImageUrlEn: v('ihSpecUrlEn'),
+      krwPrices: KRW_IDS.map(v), usdPrice: v('ihUsd'), jpyPrice: v('ihJpy'), intro: $('ihIntro').value };
   }
   function renderNew() {
     const d = newData(), kr = `옵틱글래스 ${d.brand} ${d.model} 광각미러 [No.${d.code}]`, warns = [];
@@ -233,19 +256,21 @@
       return kr;
     };
     const names = [['한국', kr], ['미국', unit('en', d.titleBrandEn, d.titleModelEn)], ['일본', unit('jp', d.titleBrandJp, d.titleModelJp)]];
-    $('ihNames').replaceChildren(...names.map(([c, n]) => Object.assign(document.createElement('p'), { className: 'help-text', textContent: `${c}: ${n}` })));
+    names.forEach(([c, n], i) => { $('ihName' + ['Ko', 'En', 'Jp'][i]).value = n; });
     $('ihNameWarn').textContent = warns.map(w => '⚠ ' + w).join(' ');
-    const [no, [set, left, right]] = TEMPLATE[d.bsaO ? 'O' : 'X'], won = n => n.toLocaleString('ko-KR') + '원';
-    const head = `템플릿 ${no} (BSA ${d.bsaO ? 'O' : 'X'}): 1set ${won(set)} · 운전석 ${won(left)} · 조수석 ${won(right)}.`;
-    $('ihPricePlan').textContent = head + ' 미국 · 일본 계산 중...';
-    // 미국 · 일본 1set 은 main 이 등록과 같은 계산으로 낸다(판매가 (USD) 가 있으면 미국 = 그 값, 일본 = 그 값의 환율 환산).
-    // 칸을 칠 때마다 묻는다 — 늦게 온 옛 답은 버린다.
+    const [no, tpl] = TEMPLATE[d.bsaO ? 'O' : 'X'];
+    KRW_IDS.forEach((id, i) => autoFill(id, tpl[i]));
+    const krw = KRW_IDS.map(id => Number($(id).value) || 0);
+    d.krwPrices = KRW_IDS.map(id => $(id).value.trim());
+    const head = `처음 값: 템플릿 ${no} (BSA ${d.bsaO ? 'O' : 'X'}) 가격. 미국 1set = 좌측 판매가(USD), 일본 1set = 그 환율 환산. 미국 · 일본 운전석 · 조수석은 한국가를 환율 환산합니다.`;
+    $('ihPricePlan').textContent = head;
+    // 일본 1set 처음 값 · 미국이 비었을 때의 환산값은 main 이 등록과 같은 계산(planUnitPrices)으로 낸다. 늦게 온 옛 답은 버린다.
     const ask = ++priceAsk;
-    ipc.invoke('imweb-head-price-preview', { krw: { base: set, combos: [set, left, right] }, usd: d.usdPrice }).then(r => {
+    if (krw.every(v => v > 0)) ipc.invoke('imweb-head-price-preview', { krw: { base: krw[0], combos: krw }, usd: d.usdPrice }).then(r => {
       if (ask !== priceAsk) return;
-      $('ihPricePlan').textContent = head + (r?.success
-        ? ` 미국 ${r.plan.USD.base} USD. 일본 ${r.plan.JPY.base} Yen.${d.usdPrice ? '' : ' (판매가 (USD) 가 비어 한국가를 환산)'} 운전석 · 조수석은 환율 환산. 등록할 때 템플릿 상품에서 다시 읽습니다.`
-        : ` 미국 · 일본 가격을 계산하지 못했습니다: ${r?.error || '알 수 없는 오류'}`);
+      if (!r?.success) { $('ihPricePlan').textContent = `${head} 미국 · 일본 가격을 계산하지 못했습니다: ${r?.error || '알 수 없는 오류'}`; return; }
+      autoFill('ihJpy', r.plan.JPY.combos[0]);
+      $('ihUsd').placeholder = `비우면 ${r.plan.USD.combos[0]} (한국가 환산)`;
     }, () => {});
     $('ihSpecPlan').replaceChildren(...[['국내용(한국)', d.specImageUrl || '없음 — 등록할 수 없습니다'], ['해외용(미국 · 일본)', d.specImageUrlEn || '없음 — 국내용을 씁니다']]
       .map(([k, u]) => Object.assign(document.createElement('p'), { className: 'help-text', textContent: `조견표 ${k}: ${u}` })));
@@ -255,7 +280,7 @@
   window.registerImwebHead = () => run(async () => {
     const { d, kr } = renderNew();
     if (!d.brand || !d.model || !d.code) throw new Error('제조사 · 차종 · 상품번호를 모두 입력해 주세요.');
-    if (!d.specImageUrl) throw new Error('조견표 이미지 URL(국내용)을 입력해 주세요.');
+    if (!d.specImageUrl) throw new Error('국내용 조견표가 없습니다 — 좌측 🇰🇷 KOREA 사진 불러오기로 조견표를 넣어 주세요.');
     log(`본사몰 신규 등록(한국 · 미국 · 일본): ${kr}`, 'process');
     const res = await window.invokeForm(() => window.invokeWithImages(ipc, 'imweb-head-register', d));
     if (!res.success) throw new Error(res.error || '알 수 없는 오류');
@@ -267,6 +292,9 @@
   $('ihRegisterBtn').addEventListener('click', () => window.registerImwebHead());
   renderNew();
   $('ihFindBtn').addEventListener('click', () => window.findImwebHead());
+  // URL 을 붙여 넣으면(idx 가 바뀌면) 바로 찾아 그 상품 줄을 [선택] 표로 보인다.
+  let lastIdx = '';
+  $('ihUrl').addEventListener('input', () => { const idx = urlIdx(); if (idx && idx !== lastIdx) { lastIdx = idx; window.findImwebHead(); } else if (!idx) lastIdx = ''; });
   $('ihUpdateBtn').addEventListener('click', () => window.updateImwebHead());
   render();
 })();

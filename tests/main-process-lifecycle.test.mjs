@@ -34,7 +34,7 @@ try { ts = require('typescript'); } catch { /* 아래에서 알린다 */ }
 // 검사기가 모르는 '있는 이름'. @types/node 없이 돌리므로 Node 전역은 여기 적는다.
 const NODE_GLOBALS = new Set(['process', 'Buffer', 'setImmediate', 'clearImmediate', 'global']);
 // page.evaluate(...) 안의 코드는 쇼핑몰 페이지에서 돈다 — 그 페이지의 전역이다.
-const PAGE_GLOBALS = { 'src/platforms/naver_smartstore.js': new Set(['angular']) };
+const PAGE_GLOBALS = {};
 
 test('메인 프로세스·플랫폼·유틸 모듈에 선언 안 된 이름이 없다', { skip: !ts && 'typescript 모듈이 없어 검사하지 못했다' }, () => {
   const rel = [

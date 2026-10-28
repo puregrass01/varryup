@@ -320,14 +320,28 @@ test('중복 검사: 이름에 [No.코드] · [No.코드(옵)] 와 한국 차종
   assert.deepEqual((await apiOf(client).findExisting({ code: '113', titleModel: 'S5' })).rows, []);
 });
 
-test('미국 · 일본 1set: 판매가(USD)가 있으면 미국 = 그 값, 일본 = 그 값의 환율 환산 · 조합은 늘 한국가 환산', async () => {
-  const krw = { base: 220000, combos: [220000, 115000, 105000] };
+test('미국 · 일본 1set: 판매가(USD)가 있으면 미국 1set = 그 값, 일본 1set = 그 값의 환율 환산(또는 일본 칸) · 나머지는 한국가 환산', async () => {
+  const krw = { base: 115000, combos: [220000, 115000, 105000] };
   const fx = await planUnitPrices(krw, '', convertPrice);
   const usd = await planUnitPrices(krw, '$90', convertPrice);
-  assert.equal(usd.USD.base, 90);
-  assert.equal(usd.JPY.base, await convertPrice('JPY', 90, 'USD'));
-  assert.notEqual(usd.JPY.base, fx.JPY.base, '일본은 한국가가 아니라 달러에서 환산');
-  assert.deepEqual([usd.USD.combos, usd.JPY.combos], [fx.USD.combos, fx.JPY.combos]);
-  assert.equal(fx.USD.base, await convertPrice('USD', 220000));
+  assert.equal(usd.USD.combos[0], 90);
+  assert.equal(usd.JPY.combos[0], await convertPrice('JPY', 90, 'USD'));
+  assert.notEqual(usd.JPY.combos[0], fx.JPY.combos[0], '일본은 한국가가 아니라 달러에서 환산');
+  assert.deepEqual([usd.USD.base, usd.JPY.base, usd.USD.combos.slice(1), usd.JPY.combos.slice(1)],
+    [fx.USD.base, fx.JPY.base, fx.USD.combos.slice(1), fx.JPY.combos.slice(1)], '기본가(운전석) · 운전석 · 조수석은 한국가 환산 그대로');
+  assert.equal(fx.USD.combos[0], await convertPrice('USD', 220000));
+  assert.equal((await planUnitPrices(krw, '90', convertPrice, '9,900')).JPY.combos[0], 9900, '일본 칸 값이 이긴다');
   await assert.rejects(planUnitPrices(krw, '0.5', convertPrice), /하한/);
+});
+
+test('탭 칸 값으로 등록: 한국 1set · 운전석 · 조수석 · 미국 · 일본 1set · 본문 맨 위 덧붙임 글', async () => {
+  const client = fakeHead();
+  const r = await apiOf(client).register({ ...DATA(), bsaO: true, bsaX: false,
+    krwPrices: ['230000', '120000', '110000'], usdPrice: '170', jpyPrice: '26000', intro: '정품 <6개월> 보증\n두 번째 줄' });
+  assert.equal(r.ok, true, r.error);
+  const p = client.store.get(String(r.no));
+  assert.equal(p.units.uKR.price, 120000, '기본가 = 운전석 칸(템플릿과 같은 자리)');
+  assert.deepEqual([comboPrices(p).uKR, comboPrices(p).uUS[0], comboPrices(p).uJP[0]], [[230000, 120000, 110000], 170, 26000]);
+  assert.ok(postBody(client).body.productBaseInfo.unitShopProductInfo.map(x => x.description).every(html => html.startsWith('<p>정품 &lt;6개월&gt; 보증</p><p>두 번째 줄</p>')), '세 구역 본문 맨 위');
+  await assert.rejects(apiOf(fakeHead()).register({ ...DATA(), krwPrices: ['150000', '', '70000'] }).then(x => { if (!x.ok) throw new Error(x.error); }), /한국 판매가/);
 });

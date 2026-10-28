@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { parseFragment } from 'parse5';
 import { markPreSend } from '../utils/api_error.js';
 
@@ -156,24 +158,153 @@ export function buildNaverProductUpdate(body, data) {
   return next;
 }
 
-/** Browser-free product editing; all credentials and transport stay in NaverAPI. */
+// ── 신규 복사등록 ────────────────────────────────────────────────
+// 판매자센터 '복사등록' 화면에서 하던 일을 원상품 본문으로 옮겼다(옛 naver_smartstore.js — 2026-10-28 삭제).
+// 상품명·판매가·재고·옵션·상세설명·대표이미지만 바꾸고 배송·반품·고시정보·원산지는 템플릿 값을 쓴다.
+const splitValues = text => [...new Set(String(text ?? '').split(',').map(s => s.trim()).filter(Boolean))];
+const OPTION_LABELS = ['모델명', '상품선택', '운전석/조수석'];
+const PASSENGER_SEAT_PRICE = -10000;   // 자동차 조수석 옵션가 — 판매자센터에서 넣던 값 그대로
+
+/** 상세설명에 ESM 이미지를 넣는다. 첫 이미지를 지우고 자동차는 그 자리, 오토바이는 맨 위에 넣는다. 전체 교체도 지원한다. */
+export function insertNaverDetail(html, insert, { category = '', replaceAll = false } = {}) {
+  const piece = String(insert ?? '').trim();
+  if (!piece) return html;
+  if (replaceAll) return piece;
+  const tag = /<img/i.test(piece) ? piece : `<img src="${escapeAttr(piece)}" />`;
+  const [first] = imageBlocks(html);
+  if (!first) return tag + html;
+  const rest = html.slice(0, first.start) + html.slice(first.end);
+  return /오토바이|바이크/.test(category) ? tag + rest : html.slice(0, first.start) + tag + html.slice(first.end);
+}
+
+function copyOptions(oi, data, stock) {
+  const groups = combinationGroups(oi);
+  if (!groups.length || oi.optionSimple?.length || oi.optionStandards?.length) {
+    throw new Error('템플릿 상품에 조합형 옵션이 없어 옵션을 바꿀 수 없습니다. 템플릿 번호를 확인해주세요.');
+  }
+  const typed = [data.optionModel, data.optionProduct, data.optionSeat].map(splitValues);
+  typed.forEach((values, i) => {
+    if (values.length && i >= groups.length) throw new Error(`템플릿 옵션 그룹이 ${groups.length}개라 "${OPTION_LABELS[i]}" 값을 넣을 수 없습니다.`);
+  });
+  // 비운 칸은 템플릿 값을 유지한다(판매자센터에서 입력칸을 건드리지 않던 것과 같다).
+  const values = groups.map((_, i) => typed[i]?.length ? typed[i]
+    : [...new Set((oi.optionCombinations || []).map(o => o[`optionName${i + 1}`]).filter(Boolean))]);
+  let combos = [[]];
+  for (const list of values) combos = combos.flatMap(c => list.map(v => [...c, v]));
+  if (!combos.length) throw new Error('옵션 값이 비어 있습니다.');
+  const car = data.category === '자동차';
+  oi.optionCombinations = combos.map(names => ({
+    ...Object.fromEntries(names.map((name, i) => [`optionName${i + 1}`, name])),
+    stockQuantity: stock,
+    price: car && names.some(n => n.includes('조수석')) ? PASSENGER_SEAT_PRICE : 0,
+    usable: true
+  }));
+}
+
+/** 템플릿 원상품 응답 → 새 상품 등록 본문. 네트워크 없이 검사할 수 있게 순수 함수로 둔다. */
+export function buildNaverCopyProduct(template, data) {
+  const next = clone(template);
+  const p = next.originProduct;
+  if (!p || typeof p.detailContent !== 'string') throw new Error('네이버 템플릿 원상품 응답 형식을 확인할 수 없습니다.');
+  const title = String(data.title ?? '').trim();
+  if (!title) throw new Error('상품명을 입력해주세요.');
+  // 옵션을 못 바꾸면 템플릿(다른 차종) 옵션이 붙은 상품이 생긴다 → 모델명 없이는 등록하지 않는다.
+  if (!splitValues(data.optionModel).length) throw new Error('옵션 > 모델명을 입력해주세요.');
+  p.name = title;
+  if (String(data.price ?? '').trim()) {
+    p.salePrice = integer(data.price, '판매가');
+    if (p.salePrice <= 0) throw new Error('판매가는 0보다 커야 합니다.');
+  }
+  const stock = integer(String(data.stock ?? '').trim() || '999', '재고');
+  p.statusType = 'SALE';
+  const oi = p.detailAttribute?.optionInfo || {};
+  copyOptions(oi, data, stock);
+  p.stockQuantity = oi.useStockManagement ? oi.optionCombinations.reduce((sum, o) => sum + o.stockQuantity, 0) : stock;
+  const detail = [data.esmHtml, data.detailHtml].filter(Boolean).join('\n');
+  p.detailContent = insertNaverDetail(p.detailContent, detail, { category: data.category, replaceAll: !!data.detailHtml });
+  // 조회 응답에만 있는 필드(등록 명세에 없음)와 템플릿의 카탈로그 연결을 뺀다 — 남기면 새 상품이 템플릿 모델로 묶인다.
+  delete next.groupProduct;
+  delete next.windowChannelProduct;
+  delete p.customerBenefit?.promotionDiscountPolicies;
+  const search = p.detailAttribute?.naverShoppingSearchInfo;
+  if (search) { delete search.catalogMatchingYn; delete search.matchedCatalogId; delete search.modelId; }
+  const channel = next.smartstoreChannelProduct;
+  if (!channel) throw new Error('네이버 템플릿 응답에 스마트스토어 채널 정보가 없습니다.');
+  delete channel.channelProductName;   // 남기면 원상품명보다 먼저 노출된다
+  channel.channelProductDisplayStatusType = 'ON';
+  return next;
+}
+
+// 업로드 파트의 Content-Type 은 확장자가 아니라 실제 형식이어야 한다(커머스API: JPG·GIF·PNG·BMP 만).
+function imageType(bytes) {
+  const hex = bytes.subarray(0, 4).toString('hex');
+  if (hex.startsWith('ffd8ff')) return 'image/jpeg';
+  if (hex === '89504e47') return 'image/png';
+  if (hex.startsWith('474946')) return 'image/gif';
+  if (hex.startsWith('424d')) return 'image/bmp';
+  return '';
+}
+
+/** Browser-free product registration and editing; all credentials and transport stay in NaverAPI. */
 export class NaverProducts {
   constructor(api) { this.api = api; this.busy = false; }
 
-  async loadProductForEdit(inputNo) {
-    const no = productNo(inputNo);
-    let originNo = no, body;
-    try { body = await this.api.originProduct(no); }
+  // 원상품번호 또는 채널상품번호 → { originNo, body }
+  async _origin(no) {
+    try { return { originNo: no, body: await this.api.originProduct(no) }; }
     catch (error) {
       // An auth, proxy or network error is never evidence of a channel number.
       if (error.status !== 404 || error.proxyError) throw error;
       const found = await this.api.searchProducts({ searchKeywordType: 'CHANNEL_PRODUCT_NO', channelProductNos: [Number(no)], page: 1, size: 100 });
       const match = (found?.contents || []).find(row => (row.channelProducts || []).some(c => String(c.channelProductNo) === no));
       if (!match?.originProductNo) throw new Error(`상품번호 ${no}에 해당하는 원상품 또는 채널상품을 찾을 수 없습니다.`);
-      originNo = productNo(match.originProductNo);
-      body = await this.api.originProduct(originNo);
+      const originNo = productNo(match.originProductNo);
+      return { originNo, body: await this.api.originProduct(originNo) };
     }
+  }
+
+  async loadProductForEdit(inputNo) {
+    const no = productNo(inputNo);
+    const { originNo, body } = await this._origin(no);
     return naverEditProduct(body, originNo, no);
+  }
+
+  /** 상품 이미지 업로드 → 네이버 이미지 서버 주소. 상품 본문의 대표이미지는 이 주소만 받는다. */
+  async uploadImage(file) {
+    let bytes;
+    try { bytes = await fs.promises.readFile(file); }
+    catch { throw new Error('네이버 대표 이미지 파일을 찾을 수 없습니다.'); }
+    const type = imageType(bytes);
+    if (!type) throw new Error(`네이버는 JPG·PNG·GIF·BMP 이미지만 받습니다: ${path.basename(file)}`);
+    if (bytes.length >= 10_000_000) throw new Error('네이버 이미지 업로드는 10MB 미만이어야 합니다.');
+    const form = new FormData();
+    form.append('imageFiles', new Blob([bytes], { type }), path.basename(file));
+    const result = await this.api.request('POST', '/v1/product-images/upload', form);
+    const url = result?.images?.[0]?.url;
+    if (!url) throw new Error('네이버 이미지 업로드 응답에 주소가 없습니다. 상품은 등록하지 않았습니다.');
+    return url;
+  }
+
+  /**
+   * 신규 복사등록: 템플릿 원상품 조회 → 본문 수정 → 새 상품 등록. 브라우저를 쓰지 않는다.
+   * @returns {Promise<string>} 스마트스토어 상품 주소 (duplicate_guard.recordNaver 가 채널상품번호를 읽는다)
+   */
+  async copyRegister(data) {
+    if (this.busy) throw new Error('네이버 상품 저장이 진행 중입니다. 완료 후 다시 시도해주세요.');
+    const templateNo = productNo(data?.templateId);
+    this.busy = true;
+    try {
+      const { body } = await this._origin(templateNo);
+      const product = buildNaverCopyProduct(body, data);   // 입력 오류는 이미지 업로드 전에 걸러진다
+      if (data.mainImagePath) product.originProduct.images = { ...product.originProduct.images, representativeImage: { url: await this.uploadImage(data.mainImagePath) } };
+      const created = await this.api.request('POST', '/v2/products', product);
+      this.api.invalidateProducts();
+      const channelNo = created?.smartstoreChannelProductNo;
+      if (!channelNo) {
+        throw new Error(`등록 응답에 스마트스토어 채널상품번호가 없습니다 (원상품 ${created?.originProductNo ?? '?'}). 다시 등록하지 말고 판매자센터에서 확인해주세요.`);
+      }
+      return `https://smartstore.naver.com/main/products/${channelNo}`;
+    } finally { this.busy = false; }
   }
 
   /**

@@ -531,6 +531,9 @@
       cursor: not-allowed;
     }
 
+    /* 자동 생성 SKU(vu-suggest applyGeneratedSku) — 몰에 있는 SKU 와 구분되게 */
+    input.vu-generated { font-style: italic; color: #2563eb; }
+
     /* ── 판매자 콘솔 아이콘 버튼 ── */
     .console-btn {
       width: 30px; height: 30px; padding: 0;
@@ -792,11 +795,12 @@
     <div id="section7">
       <!-- 판매자 콘솔 — 로그인 버튼과 합쳤다. 예전에는 '네이버 로그인'(자동화 세션 준비)과
            '네이버 …'(콘솔 열기)가 따로 있었는데, 콘솔도 같은 계정으로 자동 로그인하게 된
-           뒤로는 둘이 같은 일을 한다. 누르면 로그인하고 그 몰의 상품 목록까지 열어준다. -->
+           뒤로는 둘이 같은 일을 한다. 누르면 로그인하고 그 몰의 상품 목록까지 열어준다.
+           네이버·아임웹은 앱이 로그인하지 않는다(API 전용) — 기본 브라우저로 목록 주소만 연다. -->
       <div id="login-buttons" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 12px;">
         <span style="font-size:11px;color:var(--text-muted);margin-right:2px;">판매자 콘솔</span>
         <button type="button" class="console-btn" onclick="openSellerSite('naver')"
-          title="네이버 스마트스토어 — 로그인 후 상품목록"><img src="logos/naver.png" alt="네이버" /></button>
+          title="네이버 스마트스토어 상품목록 (기본 브라우저)"><img src="logos/naver.png" alt="네이버" /></button>
         <button type="button" class="console-btn" onclick="openSellerSite('imweb')"
           title="아임웹 B2B몰 상품목록 (기본 브라우저)"><img src="logos/b2b.png" alt="B2B몰" /></button>
         <button type="button" class="console-btn" onclick="openSellerSite('coupang')"
@@ -847,11 +851,11 @@
       <!-- 상품 정보 (현황판 아래로 이동) -->
       <div class="section-title" id="product-info-title" style="margin-top:16px;">상품 정보</div>
       <div class="field-group">
-        <!-- 본사몰(아임웹 한국) 상품명으로 찾아 아래 칸을 채운다(vu-suggest.js pickTitle). 신규·수정 모두 보인다.
-             목록은 처음 누를 때 읽는다(loadProductNames). -->
+        <!-- 차량 DB(카탈로그) 행으로 찾아 아래 칸을 모두 채운다(vu-suggest.js setDbRows · pickRow). 신규·수정 모두 보인다.
+             '기아 P415' 처럼 단어 여러 개로 찾는다. 아임웹은 읽지 않는다. -->
         <div class="field wide">
           <label for="inp-db-search">본사몰 상품 찾기</label>
-          <input type="text" id="inp-db-search" placeholder="예: 현대 · 넥쏘 · H131" />
+          <input type="text" id="inp-db-search" placeholder="예: 1108 · 기아 P415 · S클래스 W223" />
         </div>
         <!-- 브랜드·차종명·세대는 나라마다 표기가 다르다. 현황판에서 체크한 나라의
              언어 칸만 나타난다(updateLangFields). 한국어 칸의 id 는 예전 그대로라
@@ -1486,22 +1490,6 @@ async function loadLiveValues({ force = false } = {}) {
     if (res && res.success && res.live) window.VUSuggest?.setLiveValues(document, res.live);
   } catch (e) {
     // 오프라인·테스트 스텁 환경에서는 표 값만 보인다.
-  }
-}
-
-// '본사몰 상품 찾기' 목록 — 본사몰 한국 상품명(bulk-price-list imweb-ko, 1,600여 개·3~5초). 읽을 때마다 아임웹 잠금을
-// 150초 잡으므로 앱 시작 때가 아니라 그 칸을 처음 누를 때 읽고, 그 뒤로는 10분에 한 번까지. 실패·BUSY 면 다음에 다시.
-let productNamesAt = 0;
-async function loadProductNames() {
-  if (Date.now() - productNamesAt < 600000) return;
-  productNamesAt = Date.now();
-  try {
-    const res = await ipc.invoke('bulk-price-list', { scope: 'imweb-ko' });
-    if (res && res.success && Array.isArray(res.data?.items)) return window.VUSuggest?.setProducts(document, res.data.items);
-    productNamesAt = 0;
-    if (res && res.error) addLog(`본사몰 상품 목록을 못 읽었습니다: ${res.error}`, 'warn');   // BUSY(가격 저장 중)·아임웹 연결 끊김
-  } catch (e) {
-    productNamesAt = 0;   // 오프라인·테스트 스텁 — 목록 없이 둔다
   }
 }
 
@@ -2736,8 +2724,7 @@ function openDetailSidebar() {
 ══════════════════════════════════════════════ */
 let isBulkRunning = false;
 let bulkKind = '';   // 진행 중인 일: '일괄 등록' | '일괄 수정' (한 번에 하나만 돈다)
-// 일괄 등록의 시간 한도. 네이버는 브라우저를 띄워 사람처럼 누르고(로그인 대기 포함), 이베이는 이미지
-// 호스팅이 끝나야 초안을 저장해서 몇 분씩 걸린다 — 넉넉히 잡는다. 넘기면 그 몰은 실패로 세고 다음 몰로 간다.
+// 일괄 등록의 시간 한도. 이베이는 이미지 호스팅이 끝나야 초안을 저장해서 몇 분씩 걸린다 — 넉넉히 잡는다. 넘기면 그 몰은 실패로 세고 다음 몰로 간다.
 // 예전에는 응답 없는 몰 하나가 '진행 중' 버튼을 영영 잠갔다. (테스트가 줄여 쓸 수 있게 객체로 둔다.)
 const bulkTiming = { stepMs: 10 * 60 * 1000, frameMs: 20 * 1000, pauseMs: 800 };
 const bulkDuration = ms => (ms >= 60000 ? `${Math.round(ms / 60000)}분` : `${Math.max(1, Math.round(ms / 1000))}초`);
@@ -3199,7 +3186,6 @@ $('section7').addEventListener('input', scheduleFrameSync);
 $('section7').addEventListener('change', scheduleFrameSync);
 for (const { id } of Object.values(EDIT_PRICES)) $(id)?.addEventListener('focus', () => loadPriceTiers());
 for (const id of ['inp-sku', 'inp-amz-sku', 'inp-usd', 'inp-cpid', ...Object.values(EDIT_PRICES).map(p => p.id)]) $(id)?.addEventListener('focus', () => loadLiveValues());
-$('inp-db-search')?.addEventListener('focus', () => loadProductNames());   // 시작 때는 읽지 않는다(아임웹 잠금)
 
 // 초기화 버튼
 if (btnClear) {

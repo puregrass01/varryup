@@ -17,7 +17,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { localPathKey } from './utils/file_url.js';
 import fs from 'fs';
-import { NaverSmartStore } from './platforms/naver_smartstore.js';
 import { NaverProducts } from './platforms/naver_products.js';
 import { ImwebEdit } from './platforms/imweb_edit.js';
 import { ESMPlusHosting } from './platforms/esmplus_hosting.js';
@@ -365,19 +364,8 @@ function getESM() {
     return esmInstance;
 }
 
-// ── Naver instance (singleton) ──
-let naverInstance = null;
-function getNaver() {
-    if (!naverInstance) {
-        const sessionPath = path.join(app.getPath('userData'), 'session_naver.json');
-        naverInstance = new NaverSmartStore(getBrowserSync, sessionPath);
-    }
-    naverInstance.autoLogin = serverCreds['naver'] || null;
-    return naverInstance;
-}
-
 // ── Naver 커머스API (공식 API) ────────────────────────────────
-// 기존 상품 조회·수정은 커머스API만 사용한다. 실패해도 브라우저로 전환하지 않는다.
+// 신규 복사등록·기존 상품 조회·수정 모두 커머스API만 사용한다. 브라우저 경로는 2026-10-28 삭제.
 const USE_NAVER_API = process.env.USE_NAVER_API !== '0';
 // 시작 시 한 줄로 어느 코드가 로드됐는지 못 박는다. 이 줄이 없으면 옛 빌드다.
 console.log('[네이버] 커머스API 경로 적용됨 — '
@@ -786,8 +774,8 @@ ipcMain.handle('open-seller-site', async (event, platform) => {
         ? `${amazonSellerCentralUrl()}/inventory`
         : SELLER_SITES[platform];
     if (!url) return { ok: false, error: `알 수 없는 플랫폼입니다: ${platform}` };
-    // 아임웹은 앱이 관리자 로그인을 하지 않는다(게시판 크롤링을 지우며 세션도 뺐다) → 기본 브라우저로 연다.
-    if (platform === 'imweb') {
+    // 아임웹·네이버는 앱이 판매자 로그인을 하지 않는다(브라우저 자동화를 지우며 세션도 뺐다) → 기본 브라우저로 연다.
+    if (platform === 'imweb' || platform === 'naver') {
         return shell.openExternal(url).then(() => ({ ok: true, url, fallback: true }),
             e => ({ ok: false, error: `브라우저를 열지 못했습니다: ${e.message}` }));
     }
@@ -797,13 +785,7 @@ ipcMain.handle('open-seller-site', async (event, platform) => {
     try {
         await getBrowser();
 
-        // 네이버·ESM은 각자 로그인 절차가 따로 있다. 네이버는 '네이버 아이디로 로그인'
-        // 이 새 팝업으로 열려서 일반적인 폼 자동입력으로는 잡히지 않는다. 그래서 각자의 로그인을
-        // 그대로 쓴다 — 예전 '네이버 로그인' 버튼이 하던 일과 같다.
-        if (platform === 'naver') {
-            const ok = await getNaver().login();   // 로그인 후 상품목록까지 이동한다
-            return ok ? { ok: true, url } : { ok: false, error: '네이버 로그인을 완료하지 못했습니다.' };
-        }
+        // ESM은 로그인 절차가 따로 있다 — 일반적인 폼 자동입력 대신 그 로그인을 그대로 쓴다.
         if (platform === 'esm') {
             const ok = await getESM().login();
             return ok ? { ok: true, url } : { ok: false, error: 'ESM 로그인을 완료하지 못했습니다.' };
@@ -1000,7 +982,6 @@ app.on('window-all-closed', async () => {
 //  tests/main-process-lifecycle.test.mjs 가 지킨다.)
 function dropBrowserBoundInstances() {
     esmInstance = null;
-    naverInstance = null;
 }
 
 async function getBrowser() {
@@ -1285,32 +1266,17 @@ ipcMain.handle('esm-upload', async (event, { filePath, category, targetFolder, c
 // Naver SmartStore Handlers
 ipcMain.handle('naver-register', async (event, data) => {
     try {
-        // 중복 판정은 브라우저를 띄우기 전에 끝낸다(커머스API 로 조회). 조회를 못 해도 등록은
-        // 진행한다(fail-open) — 등록은 커머스API 없이 되고, 판매자센터에서 되돌릴 수 있다.
-        let api = null, apiError = null;
-        if (USE_NAVER_API) {
-            try { api = getNaverAPI(); } catch (e) { apiError = e.message; }
-        } else apiError = 'USE_NAVER_API=0';
+        // 등록·중복 조회 모두 커머스API 다(브라우저 없음). 인증정보가 없으면 여기서 바로 멈춘다.
+        // 중복 조회만 실패하면 등록은 진행한다(fail-open) — 판매자센터에서 되돌릴 수 있다.
+        const products = getNaverProducts();
         const plan = planNaver(data, { brands: guardBrands() });
         const { result: resultUrl, notices } = await runGuardedRegistration({
             channel: 'naver', data, plan, inflight: registerInflight,
-            check: (p, opts) => checkNaver(p, opts, { ledger: getRegistrationLedger(), api, apiError }),
-            register: async () => {
-                await getBrowser();
-                const naver = getNaver();
-                const loginSuccess = await naver.login();
-                if (!loginSuccess) {
-                    throw new Error('스마트스토어 로그인이 필요합니다. 먼저 로그인 창을 열어 로그인해주세요.');
-                }
-                // 옵션 변경·저장 실패, 저장 확인 실패(아직 복사등록 양식)는 copyAndRegisterProduct 가 던진다.
-                // runGuardedRegistration 은 register 가 값을 돌려줄 때만 record 를 부르므로, 실패가 원장에
-                // '등록됨'으로 남아 최대 24시간 재시도를 막는 일이 없다.
-                return naver.copyAndRegisterProduct(data);
-            },
-            record: (p, url, opts) => {
-                try { naverApiInstance?.invalidateProducts(); } catch { /* 캐시 무효화 실패는 무시 */ }
-                return recordNaver(getRegistrationLedger(), p, url, opts);
-            },
+            check: (p, opts) => checkNaver(p, opts, { ledger: getRegistrationLedger(), api: products.api }),
+            // 옵션·등록 실패는 copyRegister 가 던진다. runGuardedRegistration 은 register 가 값을 돌려줄 때만
+            // record 를 부르므로, 실패가 원장에 '등록됨'으로 남아 최대 24시간 재시도를 막는 일이 없다.
+            register: () => products.copyRegister(data),
+            record: (p, url, opts) => recordNaver(getRegistrationLedger(), p, url, opts),
         });
         for (const message of notices) sendToUI('naver-log', { message, level: 'warn' });
 

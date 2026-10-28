@@ -101,11 +101,11 @@
   function filterValues(values, query) {
     const q = String(query || '').trim().toLowerCase();
     if (!q) return values.slice();
-    const starts = [], contains = [];
+    const words = q.split(/\s+/), starts = [], contains = [];
     for (const v of values) {
       const lower = labelOf(v).toLowerCase();
       if (lower.indexOf(q) === 0) starts.push(v);
-      else if (lower.indexOf(q) !== -1) contains.push(v);
+      else if (words.every(w => lower.indexOf(w) !== -1)) contains.push(v);   // '기아 P415' — 단어마다 어디든
     }
     return starts.concat(contains);
   }
@@ -535,23 +535,106 @@
     return { brand, model, no, variant: one };
   }
 
-  // 브랜드·차종부터 넣는다 — bindShell 의 sync·onModel 이 앞 차의 행·SKU 를 버리고 행 목록을 이 차로 다시 만든다.
-  // pickVariant 는 그 뒤라야 방금 채운 칸이 지워지지 않는다. 행을 못 정하면 브랜드·차종·번호만 넣는다. 이때 앞 차의
-  // 행·SKU 는 직접 버린다 — 브랜드·차종이 앞 상품과 같으면 sync·onModel 이 버리지 않아 앞 상품의 SKU 로 올라간다.
-  function pickTitle(doc, title) {
-    const r = resolveTitle(title);
-    setField(doc, 'inp-brand', r.brand);
-    setField(doc, 'inp-carmodel', r.model);
-    if (r.variant) {
-      // 앞 상품이 행 없이 들어갔으면(C클래스 No.340) pickVariant 의 prev 가 비어, 거기서 사람이 고른 SKU 가 새 행(No.377)에 남는다
-      if (store(doc).variant !== r.variant) forgetCar(doc);
-      return pickVariant(doc, r.variant);
+  // 새 차 SKU(이베이 · 아마존 같음) = 제조사 2자 + 차종 2자리 + 순번 2자리 + N + 상품번호 (FD0905N1108).
+  // 제조사 · 차종 코드는 같은 차종의 기존 SKU 에서, 없으면 그 제조사에서 안 쓴 다음 차종 번호. 순번은 그 제조사+차종의 가장 큰 순번 + 1
+  // (BSA 판도 따로 순번을 받는다 — 기존 데이터가 그렇다). 기존 SKU 앞의 'O' · BSA 판 끝의 '1' 은 생성 오류라 붙이지 않는다(10-28 결정).
+  // 같은 SKU 가 몰에 이미 있으면 등록 단계가 막는다(duplicate_guard checkAmazon · ebay.js saveDraft).
+  const SKU_RE = /^O?([A-Z]{2})(\d{2})(\d{2})N/;
+  const pad2 = n => String(n).padStart(2, '0');
+  // bsa: 좌측 BSA(true/false, 모르면 null). 같은 차종 · 같은 상품번호 · 같은 BSA 의 리스팅이 이미 있으면 새로 만들지 않는다('' — 목록에서 고른다).
+  function suggestSku(brand, model, no, bsa = null) {
+    if (!vehicle || !no) return '';
+    const skusOf = rows => rows.flatMap(v => [...(v.skus || []), ...(v.amazonSkus || [])]).map(s => s.match(SKU_RE)).filter(Boolean);
+    const bk = vehicleBrandKey(brand), m = squash(model);
+    const brandRows = (vehicle.variants || []).filter(v => vehicleBrandKey(v.brand) === bk);
+    const brandCodes = skusOf(brandRows);
+    if (!brandCodes.length) return '';
+    // 같은 차종의 SKU: 카탈로그 행에 이어진 것(좌측 표기 차이는 variantsFor 가 맞춘다) + 이베이 표 리스팅의 영문 차종이 같은 것
+    // (6GT 는 카탈로그 행에 SKU 가 안 이어져 있고 표에만 OBM2105N181 · '6GT' 로 있다). 영문 비교는 글자 · 숫자만(F-150 = F150).
+    const rows = m ? variantsFor(brand, model).filter(v => v.source !== 'japan') : [];
+    const key = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const names = new Set([key(model), ...rows.map(v => key(v.modelEn))].filter(Boolean));
+    const own = m ? [...skusOf(rows), ...(vehicle.listings || []).filter(l => names.has(key(l.modelEn))).map(l => l.sku.match(SKU_RE)).filter(Boolean)] : [];
+    const ownKeys = new Set(own.map(c => c[1] + c[2]));
+    const listed = (listingsByNo.get(no) || []).some(l => {
+      const c = l.sku.match(SKU_RE);
+      return c && ownKeys.has(c[1] + c[2]) && (bsa === null || !!l.bsa === bsa);
+    });
+    if (listed) return '';
+    const count = {};
+    for (const c of brandCodes) count[c[1]] = (count[c[1]] || 0) + 1;
+    const bc = own[0]?.[1] || Object.keys(count).sort((a, b) => count[b] - count[a])[0];
+    const all = [...(vehicle.listings || []).map(l => l.sku), ...brandCodes.map(c => c.input)]
+      .map(s => String(s).match(SKU_RE)).filter(c => c && c[1] === bc);
+    const top = list => Math.max(0, ...list);
+    const mc = own.find(c => c[1] === bc)?.[2] || pad2(top(all.map(c => +c[2])) + 1);
+    return bc + mc + pad2(top(all.filter(c => c[2] === mc).map(c => +c[3])) + 1) + 'N' + no;
+  }
+  // 신규 등록 모드에서 좌측 이베이 · 아마존 SKU 칸이 비었으면(이어진 리스팅 없음) 만든 SKU 를 넣고 '자동 생성' 표시를 단다.
+  // 리스팅 SKU · 사람이 적은 값은 건드리지 않는다. 수정 모드는 SKU 가 찾는 열쇠라 만들지 않는다.
+  function applyGeneratedSku(doc) {
+    if (doc.getElementById('mode-new')?.checked === false) return;
+    const val = id => nz(doc.getElementById(id)?.value);
+    const sku = suggestSku(val('inp-brand'), val('inp-carmodel'), bareNoOf(val('inp-no')), shellBsa(doc));
+    for (const id of ['inp-sku', 'inp-amz-sku']) {
+      const el = doc.getElementById(id);
+      if (!el || (el.value.trim() && el.dataset.vuGenerated !== '1')) continue;
+      if (el.value !== sku) setField(doc, id, sku, true);
+      el.dataset.vuGenerated = sku ? '1' : '';
+      el.classList.toggle('vu-generated', !!sku);
+      el.title = sku ? '자동 생성 SKU — 같은 SKU 가 몰에 이미 있으면 등록이 막힙니다' : '';
     }
+  }
+
+  // 신규 등록할 차(DB 에 없음)는 한 줄로 붙여 넣는다: 'No.1108번  F150  12세대 중기형  11~14  P415'
+  // = 상품번호 · 차종 · 세대 · 연식 · 차량코드. 시트에서 복사한 탭(또는 두 칸 이상 띄움)으로 나누고, 한 칸씩 띄운 줄은
+  // 연식 모양(11~14 · 12.03~19.05 · 26년 9월~)을 기준으로 나눈다(차종은 한 낱말). 'No.' 로 시작하지 않으면 null.
+  const YEAR = String.raw`(?:\d{2}년\s*\d{1,2}월|\d{2}(?:\.\d{1,2})?)\s*~\s*(?:\d{2}년\s*\d{1,2}월|\d{2}(?:\.\d{1,2})?)?`;
+  function parseDbLine(text) {
+    const raw = nz(text);
+    if (!/^No\.?\s*[A-Za-z]?\d/i.test(raw)) return null;
+    let parts = raw.split(/\t+|\s{2,}/).map(nz).filter(Boolean);
+    if (parts.length < 3) {
+      const m = raw.replace(/\s+/g, ' ').match(new RegExp(String.raw`^(\S+)\s+(\S+)\s*(.*?)\s*(${YEAR})\s*(.*)$`));
+      if (!m) return null;
+      parts = m.slice(1).map(nz);
+    }
+    const [no, model, gen = '', year = '', code = ''] = parts;
+    return { no: bareNoOf(no), model, gen, year, code };
+  }
+  // 차종으로 제조사를 정한다 — 좌측 목록(카테고리)이나 카탈로그에서 그 차종을 가진 제조사가 하나일 때만.
+  function brandOfModel(model) {
+    const m = squash(model);
+    const hits = new Set(brandList.filter(b => api.modelsOf(b).some(x => squash(x) === m)));
+    if (!hits.size) for (const v of vehicle?.variants || []) if (squash(v.model) === m) {
+      const b = brandList.find(x => vehicleBrandKey(x) === vehicleBrandKey(v.brand)); if (b) hits.add(b);
+    }
+    return hits.size === 1 ? [...hits][0] : '';
+  }
+  function fillDbLine(doc, row) {
+    const brand = brandOfModel(row.model);
+    if (brand) setField(doc, 'inp-brand', brand);
+    setField(doc, 'inp-carmodel', row.model);
     forgetRow(doc);
     forgetCar(doc);
-    setField(doc, 'inp-no', r.no);
-    refreshListingLists(doc);   // 번호를 손으로 바꿀 때(bindShell noEl)와 같은 일 — setField 는 vuChoosing 이라 거기 안 걸린다
+    for (const [id, key] of [['inp-gen', 'gen'], ['inp-year', 'year'], ['inp-code', 'code'], ['inp-no', 'no']]) setField(doc, id, row[key]);
+    applyGeneratedSku(doc);
+    refreshListingLists(doc);
     refreshCoupangList(doc);
+  }
+
+  // 본사몰 상품 찾기 칸: 차량 DB(카탈로그) 한 행 → 좌측 칸 전부. 브랜드·차종은 좌측 목록의 표기로 넣는다(resolveTitle 과 같다).
+  // 브랜드·차종부터 넣는다 — bindShell 의 sync·onModel 이 앞 차의 행·SKU 를 버리고 행 목록을 이 차로 다시 만든다.
+  // pickVariant 는 그 뒤라야 방금 채운 칸이 지워지지 않는다. 같은 브랜드·차종이면 sync 가 안 버리니 여기서 버린다.
+  const dbLabel = v => [v.no ? `No.${v.no}번` : '', v.brand, v.model, v.gen, v.year, v.code].filter(Boolean).join(' · ');
+  function pickRow(doc, v) {
+    const bk = vehicleBrandKey(v.brand), m = squash(v.model);
+    const brand = brandList.find(b => vehicleBrandKey(b) === bk) || v.brand;
+    const model = api.modelsOf(brand).filter(x => m.includes(squash(x))).sort((x, y) => squash(y).length - squash(x).length)[0] || v.model;
+    setField(doc, 'inp-brand', brand);
+    setField(doc, 'inp-carmodel', model);
+    if (store(doc).variant !== v) forgetCar(doc);
+    pickVariant(doc, v);
   }
 
   // 고른 차와 BSA 여부에 맞는 SKU·판매가를 채운다. 사람이 직접 적은 값(vuAuto 없음)은
@@ -570,7 +653,9 @@
       if (!el) continue;
       if (el.value.trim() && el.dataset.vuAuto !== '1') continue;
       setField(doc, id, val, true);
+      delete el.dataset.vuGenerated;   // 리스팅 값(또는 빈 칸) — 아래에서 비었으면 다시 만든다
     }
+    applyGeneratedSku(doc);
     refreshListingLists(doc);
   }
 
@@ -847,11 +932,11 @@
     },
     variantsFor,
     resolveTitle,
-    // 본사몰 상품 찾기 칸(inp-db-search)의 목록. items 는 bulk-price-list(imweb-ko) 의 { name, variant? } — variant 는 판매상태 글.
-    setProducts(doc, items) {
-      api.setOptions(doc, 'vu-db', (items || []).filter(p => p && p.name).map(p => ({
-        label: p.name + (p.variant ? ' · ' + p.variant : ''), value: p.name, pick: () => pickTitle(doc, p.name),
-      })));
+    parseDbLine,
+    suggestSku,
+    // 본사몰 상품 찾기 칸(inp-db-search)의 목록 = 차량 DB 전체 행. 아직 없는 차(신규 등록)도 나오고 아임웹은 읽지 않는다.
+    setDbRows(doc) {
+      api.setOptions(doc, 'vu-db', (vehicle?.variants || []).map(v => ({ label: dbLabel(v), value: dbLabel(v), pick: () => pickRow(doc, v) })));
     },
     // 표의 SKU 는 전부 대문자다. 소문자로 친 SKU 도 같은 리스팅으로 찾아야 BSA 확인·이베이 제목 후보가 빠지지 않는다.
     listing(sku) { return listingBySku.get(nz(sku).toUpperCase()) || null; },
@@ -932,7 +1017,7 @@
       if (!doc || !doc.body) return false;
       if (doc.body.dataset.vuShellBound === '1') { api.refreshShell(doc); return true; }
 
-      api.attach(doc, 'inp-db-search', 'vu-db', []);   // 목록은 셸이 처음 누를 때 읽어 넣는다(setProducts)
+      api.attach(doc, 'inp-db-search', 'vu-db', []);   // 목록은 카탈로그가 오면 refreshShell 이 넣는다(setDbRows)
       const brandEl = api.attach(doc, 'inp-brand', 'vu-brand', api.brands());
       api.attach(doc, 'inp-carmodel', 'vu-carmodel', []);
       api.attach(doc, 'inp-gen', 'vu-gen', GEN_PRESETS);
@@ -963,24 +1048,39 @@
         carEl.addEventListener('change', onModel);
       }
 
+      // 본사몰 상품 찾기에 DB 에 없는 차를 한 줄로 넣고 Enter · 칸 나가기 → 칸마다 나눠 넣는다(parseDbLine).
+      // 영문 · 일문 칸은 셸의 자동 번역(autoFillLang)이 채운다. 목록에서 고를 때(vuChoosing)는 pickRow 가 한다.
+      const dbEl = doc.getElementById('inp-db-search');
+      if (dbEl) dbEl.addEventListener('change', () => {
+        if (dbEl.dataset.vuChoosing === '1') return;
+        const row = parseDbLine(dbEl.value);
+        if (row) fillDbLine(doc, row);
+      });
       // 상품번호를 손으로 바꾸면 고른 차는 더 이상 믿을 수 없다 — 그 차로 채웠던 SKU·판매가를
       // 비우고 SKU 후보를 새 번호로 바꾼다. (목록에서 고를 때는 vuChoosing 이라 여기 안 걸린다.)
       const noEl = doc.getElementById('inp-no');
       if (noEl) noEl.addEventListener('input', () => {
         if (noEl.dataset.vuChoosing === '1') return;
         forgetCar(doc);   // 번호가 바뀌면 다른 차다 — 사람이 고른 SKU 도 앞 번호의 것이다
+        applyGeneratedSku(doc);
         refreshListingLists(doc);
         refreshCoupangList(doc);
       });
       // SKU·판매가·쿠팡 상품ID 를 손으로 고치면 그 뒤로는 자동으로 갈아 끼우지 않는다.
       for (const id of ['inp-sku', 'inp-amz-sku', 'inp-usd', 'inp-cpid']) {
         const el = doc.getElementById(id);
-        if (el) el.addEventListener('input', () => { if (el.dataset.vuChoosing !== '1') delete el.dataset.vuAuto; });
+        if (el) el.addEventListener('input', () => {
+          if (el.dataset.vuChoosing === '1') return;
+          delete el.dataset.vuAuto; delete el.dataset.vuGenerated; el.classList.remove('vu-generated'); el.title = '';
+        });
         // 변경 판매가 목록 맨 위의 '지금 몰 판매가' 는 이 칸들의 SKU·상품 것이다 — 바뀌면 다시 만든다.
         if (el && id !== 'inp-usd') el.addEventListener('input', () => refreshEditPriceLists(doc));
       }
       // BSA 를 바꾸면 같은 차의 BSA 판 / 일반 판 SKU·판매가로 갈아 끼운다.
-      doc.querySelectorAll('input[name="bsa"]').forEach(r => r.addEventListener('change', () => reapplyListing(doc)));
+      // 행 없이 친 차는 reapplyListing 이 건너뛰니 자동 생성 SKU 만 다시 정한다(BSA 에 따라 '이미 있음' 이 바뀐다).
+      doc.querySelectorAll('input[name="bsa"]').forEach(r => r.addEventListener('change', () => {
+        if (store(doc).variant) reapplyListing(doc); else applyGeneratedSku(doc);
+      }));
 
       if (brandEl) {
         let lastBrand = null;
@@ -1038,6 +1138,7 @@
       const brandEl = doc.getElementById('inp-brand');
       if (brandEl) api.setOptions(doc, 'vu-carmodel', api.modelsOf(brandEl.value));
       api.refreshVehicleLists(doc);
+      api.setDbRows(doc);
     },
 
     // iframe(index.html) 안의 제목 표기 칸.

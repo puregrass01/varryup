@@ -48,3 +48,27 @@ test("코드표 브랜드가 '기타' 면 상품명의 브랜드를 쓴다", () 
   assert.equal(r.brand, 'GMC');
   assert.equal(r.variant?.no, '5587');
 });
+
+test('신규 등록 한 줄(DB 에 없는 차): 탭 · 두 칸 띄움 · 한 칸 띄움 모두 상품번호 · 차종 · 세대 · 연식 · 차량코드로 나눈다', () => {
+  const f150 = { no: '1108', model: 'F150', gen: '12세대 중기형', year: '11~14', code: 'P415' };
+  assert.deepEqual(vu.parseDbLine('No.1108번\tF150\t12세대 중기형\t11~14\tP415'), f150);
+  assert.deepEqual(vu.parseDbLine('No.1108번   F150   12세대 중기형   11~14   P415'), f150);
+  assert.deepEqual(vu.parseDbLine('No.1108번 F150 12세대 중기형 11~14 P415'), f150);
+  assert.deepEqual(vu.parseDbLine('No.315번 S클래스 10세대 후기형 26년 9월~ W223 F/L'),
+    { no: '315', model: 'S클래스', gen: '10세대 후기형', year: '26년 9월~', code: 'W223 F/L' });
+  assert.equal(vu.parseDbLine('기아 P415'), null, 'No. 로 시작하지 않으면 검색어');
+});
+
+test('새 차 SKU: 제조사 2자 + 차종 2자리 + 순번 2자리 + N + 상품번호, 앞 O · 끝 1 없음, 기존 SKU 와 겹치지 않음', () => {
+  assert.equal(vu.suggestSku('포드', 'F150', '1108'), 'FD0905N1108', 'F150 = FD09, 기존 01~04 다음');
+  assert.equal(vu.suggestSku('BMW', '6GT', '182'), 'BM2106N182', '카탈로그에 안 이어진 6GT 도 표의 영문 차종(6GT)으로 BM21');
+  assert.equal(vu.suggestSku('포드', '새차종', '999'), 'FD1601N999', '처음 나오는 차종은 그 제조사에서 안 쓴 다음 번호');
+  assert.equal(vu.suggestSku('없는제조사', 'x', '1'), '', '그 제조사 SKU 가 하나도 없으면 만들지 않는다');
+  assert.equal(vu.suggestSku('포드', 'F150', ''), '', '상품번호 없으면 만들지 않는다');
+});
+
+test('같은 차종 · 같은 상품번호 · 같은 BSA 의 리스팅이 이미 있으면 새 SKU 를 만들지 않는다(목록에서 고른다)', () => {
+  assert.equal(vu.suggestSku('기아', 'EV3', 'K138', true), '', 'KI1501NK138(BSA) 가 있다');
+  assert.equal(vu.suggestSku('혼다', '시빅', '1213', false), '', 'NH0701N1213 이 있다');
+  assert.match(vu.suggestSku('기아', 'EV3', 'K138', false), /^KI15\d{2}NK138$/, 'BSA 없는 판은 아직 없다 → 새 순번');
+});

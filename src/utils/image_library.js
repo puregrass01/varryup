@@ -6,6 +6,7 @@ import { DEFAULT_IMAGE_HTML, esmImagesFromHtml } from './image_defaults.js';
 import { writeJsonAtomic } from './json_file.js';
 
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp)$/i;
+export const MAX_URL = 200;   // 쿠팡 업체이미지경로 최대 길이 — 몰 가운데 가장 짧다
 const LABELS = { domestic: '네이버 · 쿠팡 · 아임웹', amazon: 'Amazon', ebay: 'eBay' };
 const hash = value => createHash('sha256').update(value).digest('hex');
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -151,10 +152,13 @@ export class ImageLibrary {
           }
           continue;
         }
-        let url = item.url;
+        // 쿠팡은 이미지 주소(업체이미지경로)를 200자까지만 받는다. 한글 폴더 · 파일 이름은 %XX 로 세 배가 돼
+        // ('…/옵틱글래스 상세페이지/썸네일/이베이 썸네일/썸네일.jpg' = 241자) 넘으니, 긴 주소는 다시 쓰지 않고 짧은 이름(vu_해시)으로 올린다.
+        const short = u => u && u.length <= MAX_URL;
+        let url = short(item.url) ? item.url : '';
         if (url && !(await this.inspect(url).catch(() => false))) url = '';
         if (!url) {
-          for (const candidate of esmCandidates(item.path, snapshot)) {
+          for (const candidate of esmCandidates(item.path, snapshot).filter(short)) {
             if (await this.inspect(candidate, item.hash).catch(() => false)) { url = candidate; break; }
           }
         }
@@ -167,6 +171,7 @@ export class ImageLibrary {
           if (hash(fs.readFileSync(uploadFile)) !== item.hash) throw new Error('이미지가 변경됐습니다. 새로고침 후 다시 적용해주세요.');
           url = await this.upload(uploadFile);
           if (!(await this.inspect(url))) throw new Error(`${item.name}: 호스팅 이미지 응답을 확인하지 못했습니다.`);
+          if (!short(url)) throw new Error(`${item.name}: 호스팅 주소가 ${url.length}자라 쿠팡 한도(${MAX_URL}자)를 넘습니다 — ESM 업로드 폴더 이름을 줄여 주세요.`);
         }
         this.state.hosted[item.hash] = { url, checkedAt: new Date().toISOString() };
         this.persist(); item.url = url;

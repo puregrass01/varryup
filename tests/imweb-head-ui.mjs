@@ -37,7 +37,7 @@ try {
         return { success: true, data: { items: [{ id: data.ids[0], rows: rows(data.scope) }], blocked: '' } };
       }
       if (channel === 'bulk-save-batch') return window.saveReply(data);
-      if (channel === 'imweb-head-price-preview') return { success: true, plan: { USD: { base: data.usd ? Number(data.usd) : 160 }, JPY: { base: data.usd ? 14000 : 25000 } } };
+      if (channel === 'imweb-head-price-preview') return { success: true, plan: { USD: { combos: [data.usd ? Number(data.usd) : 160] }, JPY: { combos: [data.usd ? 14000 : 25000] } } };
       if (channel === 'imweb-head-register') {
         if (window.registerReply?.__reject) throw new Error(window.registerReply.__reject);
         return window.registerReply;
@@ -53,6 +53,15 @@ try {
   await page.evaluate(() => { switchTab('imwebHeadTab'); return findImwebHead(); });
   assert.deepEqual(await callsOf('bulk-price-list'), [{ scope: 'imweb-ko', query: '' }]);
   assert.equal(await page.locator('#ihResults tbody tr').count(), 2, '전체 목록은 이름으로 거르지 않는다');
+  // 상품 URL 을 넣으면 idx(= 상품번호)의 줄 하나를 [선택] 표로 보이고(1건이라 바로 불러온다), 상품번호 칸보다 먼저다
+  await page.evaluate(() => { calls.length = 0; document.getElementById('ihEditNo').value = '104';
+    const u = document.getElementById('ihUrl'); u.value = 'https://optic-glass.co.kr/shop_view/?idx=12'; u.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.locator('#ihLoaded').waitFor({ state: 'visible' });
+  assert.deepEqual(await callsOf('bulk-price-list'), [{ scope: 'imweb-ko', query: '' }]);
+  assert.deepEqual(await page.locator('#ihResults tbody tr .vu-product-select').count(), 1);
+  assert.match(await page.locator('#ihResults tbody tr').textContent(), /1041/);
+  assert.deepEqual((await callsOf('bulk-price-load-many')).map(d => d.ids), [['12']]);
+  await page.evaluate(() => { const u = document.getElementById('ihUrl'); u.value = ''; u.dispatchEvent(new Event('input', { bubbles: true })); });
   await page.evaluate(() => { calls.length = 0; document.getElementById('ihEditNo').value = '104'; return findImwebHead(); });
   assert.deepEqual(await callsOf('bulk-price-list'), [{ scope: 'imweb-ko', query: 'no.104' }]);
   // (옵) 상품 1건만 남아 표가 바로 고른다 → 한국 구역으로 불러온다
@@ -169,26 +178,35 @@ try {
       ['ihBrandJp', 'ヒュンダイ'], ['ihModelJp', 'サンタフェ (일본)'], ['ihSpecUrl', 'https://img/chart-kr.jpg'], ['ihSpecUrlEn', ''], ['ihUsd', '90']]) set(id, v);
     const bsa = document.getElementById('ihBsa'); bsa.checked = true; bsa.dispatchEvent(new Event('change', { bubbles: true }));
   });
-  assert.deepEqual(await np.locator('#ihNames p').allTextContents(), [
-    '한국: 옵틱글래스 현대 싼타페 광각미러 [No.H152]',
-    '미국: 옵틱글래스 현대 싼타페 광각미러 [No.H152]',   // 영문이 없으면 한국 이름(막지 않음)
-    '일본: Optic-glass ヒュンダイ サンタフェ 広角ドアミラー [No.H152]',   // 한글 괄호는 뺀다(imweb_unit_names 와 같음)
+  const vals = ids => np.evaluate(ids => ids.map(id => document.getElementById(id).value), ids);
+  assert.deepEqual(await vals(['ihNameKo', 'ihNameEn', 'ihNameJp']), [
+    '옵틱글래스 현대 싼타페 광각미러 [No.H152]',
+    '옵틱글래스 현대 싼타페 광각미러 [No.H152]',   // 영문이 없으면 한국 이름(막지 않음)
+    'Optic-glass ヒュンダイ サンタフェ 広角ドアミラー [No.H152]',   // 한글 괄호는 뺀다(imweb_unit_names 와 같음)
   ]);
+  assert.equal(await np.locator('#ihNameKo').getAttribute('readonly'), '', '상품명은 읽기 전용');
   assert.match(await np.locator('#ihNameWarn').textContent(), /⚠ 미국 구역 상품명: 영문 제조사 · 차종이 없어 한국 이름으로 올라갑니다/);
   assert.doesNotMatch(await np.locator('#ihNameWarn').textContent(), /일본 구역/);
-  assert.match(await np.locator('#ihPricePlan').textContent(), /^템플릿 2116 \(BSA O\): 1set 220,000원 · 운전석 115,000원 · 조수석 105,000원\. 미국 90 USD\. 일본 14000 Yen\. 운전석 · 조수석은 환율 환산/);
+  // 판매가 칸: 한국은 템플릿 가격, 미국은 좌측 판매가(USD), 일본은 그 환율 환산(main planUnitPrices — 여기선 stub)
+  await np.waitForFunction(() => document.getElementById('ihJpy').value === '14000');
+  assert.deepEqual(await vals(['ihKrwSet', 'ihKrwLeft', 'ihKrwRight', 'ihUsd', 'ihJpy']), ['220000', '115000', '105000', '90', '14000']);
+  assert.match(await np.locator('#ihPricePlan').textContent(), /^처음 값: 템플릿 2116 \(BSA O\) 가격/);
   assert.deepEqual(await np.evaluate(() => calls.filter(c => c.channel === 'imweb-head-price-preview').at(-1).data),
     { krw: { base: 220000, combos: [220000, 115000, 105000] }, usd: '90' });
   assert.deepEqual(await np.locator('#ihSpecPlan p').allTextContents(), ['조견표 국내용(한국): https://img/chart-kr.jpg', '조견표 해외용(미국 · 일본): 없음 — 국내용을 씁니다']);
-  await np.evaluate(() => { const b = document.getElementById('ihBsa'); b.checked = false; b.dispatchEvent(new Event('change', { bubbles: true })); });
-  assert.match(await np.locator('#ihPricePlan').textContent(), /^템플릿 2153 \(BSA X\): 1set 150,000원 · 운전석 80,000원 · 조수석 70,000원/);
+  // 사람이 고친 운전석 가격은 BSA 를 바꿔도 지킨다 — 손대지 않은 칸만 새 템플릿 가격으로
+  await np.evaluate(() => { const l = document.getElementById('ihKrwLeft'); l.value = '99000'; l.dispatchEvent(new Event('input', { bubbles: true }));
+    const b = document.getElementById('ihBsa'); b.checked = false; b.dispatchEvent(new Event('change', { bubbles: true })); });
+  assert.deepEqual(await vals(['ihKrwSet', 'ihKrwLeft', 'ihKrwRight']), ['150000', '99000', '70000']);
+  assert.match(await np.locator('#ihPricePlan').textContent(), /^처음 값: 템플릿 2153 \(BSA X\) 가격/);
+  await np.evaluate(() => { const i = document.getElementById('ihIntro'); i.value = '정품 보증 6개월'; i.dispatchEvent(new Event('input', { bubbles: true })); });
 
   const headCalls = () => np.evaluate(() => calls.filter(c => c.channel === 'imweb-head-register').map(c => c.data));
   const lastLog = () => np.evaluate(() => window.headLogs.at(-1));
   // 입력 검사 거부: IPC 없이 { ok:false, error } 이고 그 문장이 로그에도 남는다
   await np.evaluate(() => { document.getElementById('ihSpecUrl').value = ''; });
-  assert.deepEqual(await np.evaluate(() => registerImwebHead()), { ok: false, error: '조견표 이미지 URL(국내용)을 입력해 주세요.' });
-  assert.deepEqual(await lastLog(), { target: 'imwebHead', message: '조견표 이미지 URL(국내용)을 입력해 주세요.', type: 'error' });
+  assert.deepEqual(await np.evaluate(() => registerImwebHead()), { ok: false, error: '국내용 조견표가 없습니다 — 좌측 🇰🇷 KOREA 사진 불러오기로 조견표를 넣어 주세요.' });
+  assert.deepEqual(await lastLog(), { target: 'imwebHead', message: '국내용 조견표가 없습니다 — 좌측 🇰🇷 KOREA 사진 불러오기로 조견표를 넣어 주세요.', type: 'error' });
   assert.equal((await headCalls()).length, 0);
   await np.evaluate(() => { document.getElementById('ihSpecUrl').value = 'https://img/chart-kr.jpg'; });
 
@@ -196,7 +214,8 @@ try {
   await np.evaluate(() => { window.registerReply = { success: true, result: { ok: true, no: 2405, title: '옵틱글래스 현대 싼타페 광각미러 [No.H152]', warnings: [] }, message: '등록 — 세 구역 확인 뒤 판매중' }; });
   assert.deepEqual(await np.evaluate(() => registerImwebHead()), { ok: true });
   assert.deepEqual(await headCalls(), [{ brand: '현대', model: '싼타페', titleBrand: '현대', titleModel: '싼타페', code: 'H152', bsaO: false, bsaX: true,
-    titleBrandEn: '', titleModelEn: '', titleBrandJp: 'ヒュンダイ', titleModelJp: 'サンタフェ (일본)', specImageUrl: 'https://img/chart-kr.jpg', specImageUrlEn: '', usdPrice: '90' }]);
+    titleBrandEn: '', titleModelEn: '', titleBrandJp: 'ヒュンダイ', titleModelJp: 'サンタフェ (일본)', specImageUrl: 'https://img/chart-kr.jpg', specImageUrlEn: '',
+    krwPrices: ['150000', '99000', '70000'], usdPrice: '90', jpyPrice: '14000', intro: '정품 보증 6개월' }]);
   assert.deepEqual(await lastLog(), { target: 'imwebHead', message: '✓ 상품번호 2405 등록 — 세 구역 확인 뒤 판매중', type: 'success' });
 
   // 만들었지만 확인이 어긋나 숨김: { ok:false, error(상품번호 포함) } / 중복 차단 / invoke 가 던짐 — 모두 던지지 않고 버튼이 풀린다

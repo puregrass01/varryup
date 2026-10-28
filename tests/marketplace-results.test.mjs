@@ -8,8 +8,7 @@
 //     옵션을 지우고 한 번 더 저장하면 한 옵션이 사라지고 한 옵션이 두 번 들어갔다.
 //   · 아임웹: 판매중 전환·그룹가격 상속 실패를 로그로만 남기고, main 이 요약 문자열을 무조건
 //     success:true 로 감쌌다("일부 실패"도 성공).
-//   · 네이버: 옵션 변경·저장 실패를 삼키고, 성공 팝업이 없으면 열린 페이지 주소(아직 복사등록
-//     양식)를 결과 URL 로 돌려줬다 → 원장에 '등록됨'이 남아 24시간 재시도가 막혔다.
+//   (네이버 복사등록은 2026-10-28 커머스API 로 옮겼다 — tests/naver-products.test.mjs)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -20,7 +19,6 @@ import { AmazonStore } from '../src/platforms/amazon_store.js';
 import { Coupang } from '../src/platforms/coupang.js';
 import { ImwebEdit } from '../src/platforms/imweb_edit.js';
 import { imwebRunResponse } from '../src/platforms/imweb.js';
-import { NaverSmartStore, judgeNaverSave } from '../src/platforms/naver_smartstore.js';
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
 
@@ -305,58 +303,3 @@ test('아임웹 실행: B2B 준비 단계가 던지면 요청한 개별·세트 
 
 // B2B 등록 · 수정의 단계별 판정(판매중 전환 거부 · 확인 불일치 등)은 tests/imweb-b2b.test.mjs 에 있다(Open API).
 
-// ── 네이버 ──────────────────────────────────────────────────────────────
-
-test('네이버 저장 판정: 저장 API 거부 · 양식에 머묾 · 로그인 튕김은 실패', () => {
-  const rejected = judgeNaverSave({ saveStatus: 400, saveText: JSON.stringify({ message: '대표이미지는 필수입니다' }), url: 'https://sell.smartstore.naver.com/#/products/copy/123' });
-  assert.equal(rejected.ok, false);
-  assert.match(rejected.error, /HTTP 400.*대표이미지는 필수/);
-
-  const stuck = judgeNaverSave({ url: 'https://sell.smartstore.naver.com/?_=1#/products/copy/123', modalText: '필수 항목을 입력해 주세요' });
-  assert.equal(stuck.ok, false);
-  assert.match(stuck.error, /양식/);
-  assert.match(stuck.error, /필수 항목/);
-
-  assert.equal(judgeNaverSave({ url: 'https://sell.smartstore.naver.com/#/products/edit/123' }).ok, false);
-  assert.equal(judgeNaverSave({ url: 'https://nid.naver.com/nidlogin.login' }).ok, false);
-  assert.equal(judgeNaverSave({ url: 'https://sell.smartstore.naver.com/#/products/copy/1', modalText: '상품 등록이 완료되지 않았습니다' }).ok, false);
-});
-
-test('네이버 저장 판정: 성공 링크 · 저장 API 2xx · 성공 문구 · 양식을 벗어남은 성공', () => {
-  const copyUrl = 'https://sell.smartstore.naver.com/#/products/copy/123';
-  assert.deepEqual(judgeNaverSave({ href: 'https://smartstore.naver.com/store/products/999', url: copyUrl }),
-    { ok: true, url: 'https://smartstore.naver.com/store/products/999', basis: '성공 팝업 링크' });
-  assert.equal(judgeNaverSave({ saveStatus: 200, url: copyUrl }).ok, true);
-  assert.equal(judgeNaverSave({ url: copyUrl, modalText: '상품 등록이 완료되었습니다.' }).ok, true);
-  assert.equal(judgeNaverSave({ url: 'https://sell.smartstore.naver.com/#/products/origin-list' }).ok, true);
-});
-
-// Playwright page 흉내: 모든 locator 가 '없음'(count 0)
-function emptyPage(url = 'https://sell.smartstore.naver.com/#/products/copy/123') {
-  const none = { count: async () => 0, first() { return none; }, isVisible: async () => false, nth() { return none; } };
-  return { url: () => url, locator: () => none, evaluate: async () => '', on() {}, off() {} };
-}
-
-test('네이버 옵션: 옵션 입력칸을 못 찾으면 삼키지 않고 던진다 (템플릿 옵션 그대로 저장 방지)', async t => {
-  t.mock.method(console, 'log', () => {});
-  const naver = new NaverSmartStore(() => null, null);
-  naver.page = emptyPage();
-  await assert.rejects(naver._updateOptions({ optionModel: '아반떼' }), /옵션 변경 실패.*저장하지 않았습니다/);
-});
-
-test('네이버 저장: 저장하기 버튼이 없으면 던진다 (예전엔 로그만 남기고 성공)', async t => {
-  t.mock.method(console, 'log', () => {});
-  const naver = new NaverSmartStore(() => null, null);
-  naver.page = emptyPage();
-  naver._dismissModals = async () => {};
-  await assert.rejects(withFakeTimers(t, () => naver._saveProduct()), /저장하기 버튼을 찾지 못했습니다/);
-});
-
-test('네이버 결과: 성공 신호 없이 복사등록 양식에 머물면 던진다 (원장에 성공으로 남지 않게)', async t => {
-  t.mock.method(console, 'log', () => {});
-  const naver = new NaverSmartStore(() => null, null);
-  naver.page = emptyPage();
-  await assert.rejects(withFakeTimers(t, () => naver._extractResultUrl({ status: 0 }, { modalText: '' })), /저장 완료를 확인하지 못했습니다/);
-  naver.page = emptyPage('https://sell.smartstore.naver.com/#/products/origin-list');
-  assert.equal(await withFakeTimers(t, () => naver._extractResultUrl({ status: 0 })), 'https://sell.smartstore.naver.com/#/products/origin-list');
-});

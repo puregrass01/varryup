@@ -336,6 +336,11 @@ export class ESMPlusHosting extends BasePlatform {
     console.log(`Uploading to ESM Image Hosting: ${filePath}`);
     console.log(`Target path: ${folderPath.join(' > ')}`);
     
+    // 앞 업로드의 업로드 창(#ajax_upload)이 열린 채 남아 있으면 그 창이 업로드 버튼 · 폴더 트리를 덮어
+    // click 이 30초 'intercepts pointer events' 로 실패했다(10-28 이베이 등록). 그 창(앞 폴더 · 남은 파일)을 다시 쓰지 않고
+    // 페이지를 새로 연다 — _currentPath 를 비우면 _navigateToFolder 가 goto 로 새 화면에서 폴더를 찾는다.
+    if (await this.page.locator('#ajax_upload').isVisible().catch(() => false)) this._currentPath = null;
+
     // Navigate to target folder
     await this._navigateToFolder(folderPath);
     await sleep(1000);
@@ -345,7 +350,7 @@ export class ESMPlusHosting extends BasePlatform {
     const uploadBtn = this.page.locator('#fileUploadButton, button:has-text("업로드"), [id*="upload"]').first();
     await uploadBtn.click();
     await sleep(2000);
-    
+
     // Handle File Chooser
     const [fileChooser] = await Promise.all([
       this.page.waitForEvent('filechooser'),
@@ -355,8 +360,16 @@ export class ESMPlusHosting extends BasePlatform {
     await sleep(2000);
 
     // Check auto-close and Start Upload
+    // 자동 닫기는 켜져 있지 않을 때만 누른다. 예전에는 매번 눌러 켜짐 · 꺼짐이 번갈아 바뀌었고, 꺼진 차례에는
+    // 업로드 창이 남아 다음 업로드의 버튼을 덮었다. 체크 상태를 못 읽으면(화면이 바뀜) 누르지 않는다 — 남은 창은 위에서 새로 연다.
     const autoClose = await this.page.$('text=전송 완료 시, 업로드 창 자동 닫기');
-    if (autoClose) {
+    const autoCloseOn = autoClose && await autoClose.evaluate(el => {
+        const box = el.control || el.querySelector('input[type=checkbox]')
+          || (el.previousElementSibling?.matches('input[type=checkbox]') ? el.previousElementSibling : null)
+          || el.parentElement?.querySelector('input[type=checkbox]');
+        return box ? box.checked : null;
+    }).catch(() => null);
+    if (autoClose && autoCloseOn === false) {
         await autoClose.click();
     }
     const startBtn = await this.page.$('text=전송시작');
