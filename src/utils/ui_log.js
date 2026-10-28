@@ -1,8 +1,8 @@
 // 옛 로그 채널 → 현재 화면이 듣는 채널로 번역.
 //
 // 사연
-//   런처 구조로 바뀌기 전에는 단일 창(index.html)이 'log' · 'imweb-log' ·
-//   'imweb-board-log' 를 직접 들었다. 지금 화면(index_up.html)이 듣는 것은
+//   런처 구조로 바뀌기 전에는 단일 창(index.html)이 'log' · 'imweb-log' 등을
+//   직접 들었다. 지금 화면(index_up.html)이 듣는 것은
 //   **'veryup-log' 하나뿐**이고 형식도 {message, level} 로 다르다.
 //
 //   그런데 main_process 에는 옛 채널로 보내는 코드가 11곳 남아 있었고,
@@ -19,7 +19,6 @@ export const VERYUP_LOG_CHANNEL = 'veryup-log';
 const PREFIX = {
     'log': '',                       // 업데이트 알림 등. 메시지에 이미 [업데이트] 가 붙어 온다.
     'imweb-log': '[아임웹] ',
-    'imweb-board-log': '[아임웹 게시판] ',
     'naver-log': '[네이버] ',
 };
 

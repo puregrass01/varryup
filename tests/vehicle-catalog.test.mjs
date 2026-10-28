@@ -99,16 +99,13 @@ test('상품번호 읽기 — 빌드·셸·자동완성이 같은 입력에 같�
 });
 
 // 셸이 상품번호를 대문자로 보내게 되면서(위 테스트), 아임웹 수정 탭의 검색도 대소문자를 가리지 않아야
-// 한다. 예전에 소문자로 등록된 제목('[No.h131]')을 대문자 'H131' 로 못 찾으면 수정할 글이 안 나온다.
+// 한다. 예전에 소문자로 등록된 제목('[No.h131]')을 대문자 'H131' 로 못 찾으면 수정할 상품이 안 나온다.
 test('아임웹 수정 검색은 상품번호의 대소문자를 가리지 않는다', async () => {
-  const { titleHasCode } = await import('../src/platforms/imweb_edit.js');
+  const { titleHasCode } = await import('../src/platforms/openapi/imweb_b2b.js');
   assert.equal(titleHasCode('HYUNDAI 아반떼 [No.h131]', 'H131'), true);
   assert.equal(titleHasCode('HYUNDAI 아반떼 [No.H131]', 'h131'), true);
   assert.equal(titleHasCode('HYUNDAI 아반떼 [No.H131]', 'H132'), false);
-  // 두 검색이 모두 이 규칙을 쓴다 — 한쪽만 includes 로 돌아가면 다시 어긋난다.
-  // B2B 상품 검색은 imweb_b2b.js(Open API), 게시글 검색은 imweb_edit.js 에 있다.
+  // B2B 상품 검색(imweb_b2b.js, Open API)이 이 규칙을 쓴다 — includes 로 돌아가면 다시 어긋난다.
   const b2b = readFileSync(path.join(ROOT, 'src/platforms/openapi/imweb_b2b.js'), 'utf-8');
-  const board = readFileSync(path.join(ROOT, 'src/platforms/imweb_edit.js'), 'utf-8');
   assert.match(b2b, /titleHasCode\(i\.name, code\)/);
-  assert.match(board, /titleHasCode\(r\.subject, code\)/);
 });

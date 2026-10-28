@@ -15,7 +15,7 @@
 (() => {
   'use strict';
 
-  // imweb_categories.json 에 없는 이륜차 브랜드(아임웹 게시판 매핑에만 존재).
+  // imweb_categories.json 에 없는 이륜차 브랜드.
   // 이 브랜드를 고르면 상품 카테고리 select 는 건드리지 않고 차량 종류만 오토바이로 잡는다.
   const BIKE_BRANDS = [
     '야마하', '스즈키', '가와사키', '할리데이비슨', '두카티', '트라이엄프',
@@ -511,6 +511,49 @@
     reapplyCoupang(doc);
   }
 
+  // 본사몰 상품명('옵틱글래스 현대 넥쏘 광각미러 [No.H119]') → 좌측 칸. [No.] 의 번호로 카탈로그 행을 찾고, 같은 번호를
+  // 여러 차가 쓰면(H131: 아반떼CN7·아반떼N) 상품명에 든 브랜드, 이어서 가장 긴 차종으로 좁힌다.
+  // 한 행으로 안 좁혀지면 variant 는 null — 추측하지 않는다(listingFor 와 같은 원칙). 브랜드·차종은 좌측 목록의 표기로 돌려준다.
+  function resolveTitle(title) {
+    const raw = String(title || ''), m = raw.match(/\[No\.?\s*([^\]]+)\]/i), no = m ? bareNoOf(m[1]) : '';
+    const t = squash(raw.replace(/\[No\.?[^\]]*\]/gi, ' '));   // 번호 괄호는 빼고 찾는다 — 'h131' 안의 'h1' 같은 짧은 이름이 걸리지 않게
+    const all = no && vehicle ? vehicle.variants.filter(v => v.no === no) : [];
+    let rows = all.filter(v => t.includes(vehicleBrandKey(v.brand)));
+    if (!rows.length) rows = all;
+    const len = v => squash(v.model).length;
+    const named = rows.filter(v => t.includes(squash(v.model)));
+    if (named.length) rows = named.filter(v => len(v) === Math.max(...named.map(len)));
+    const longest = a => a.sort((x, y) => squash(y).length - squash(x).length)[0] || '';
+    // 행들이 한 브랜드면 그 브랜드. 코드표의 '기타'(GMC·피아트…)처럼 좌측 목록에 없으면 상품명에 든 브랜드.
+    const bks = new Set(rows.map(v => vehicleBrandKey(v.brand)));
+    const brand = (bks.size === 1 && brandList.find(b => vehicleBrandKey(b) === [...bks][0]))
+      || longest(brandList.filter(b => t.includes(squash(b))));
+    const one = rows.length === 1 ? rows[0] : null;
+    // 차종 칸은 좌측 목록의 이름('아반떼')이다. 행이 정해졌으면 그 행의 차종('아반떼N')에 든 것만 — 손으로 행을 고를 때와 같다.
+    const model = longest(api.modelsOf(brand).filter(x => one ? squash(one.model).includes(squash(x)) : t.includes(squash(x))))
+      || (one ? one.model : '');
+    return { brand, model, no, variant: one };
+  }
+
+  // 브랜드·차종부터 넣는다 — bindShell 의 sync·onModel 이 앞 차의 행·SKU 를 버리고 행 목록을 이 차로 다시 만든다.
+  // pickVariant 는 그 뒤라야 방금 채운 칸이 지워지지 않는다. 행을 못 정하면 브랜드·차종·번호만 넣는다. 이때 앞 차의
+  // 행·SKU 는 직접 버린다 — 브랜드·차종이 앞 상품과 같으면 sync·onModel 이 버리지 않아 앞 상품의 SKU 로 올라간다.
+  function pickTitle(doc, title) {
+    const r = resolveTitle(title);
+    setField(doc, 'inp-brand', r.brand);
+    setField(doc, 'inp-carmodel', r.model);
+    if (r.variant) {
+      // 앞 상품이 행 없이 들어갔으면(C클래스 No.340) pickVariant 의 prev 가 비어, 거기서 사람이 고른 SKU 가 새 행(No.377)에 남는다
+      if (store(doc).variant !== r.variant) forgetCar(doc);
+      return pickVariant(doc, r.variant);
+    }
+    forgetRow(doc);
+    forgetCar(doc);
+    setField(doc, 'inp-no', r.no);
+    refreshListingLists(doc);   // 번호를 손으로 바꿀 때(bindShell noEl)와 같은 일 — setField 는 vuChoosing 이라 거기 안 걸린다
+    refreshCoupangList(doc);
+  }
+
   // 고른 차와 BSA 여부에 맞는 SKU·판매가를 채운다. 사람이 직접 적은 값(vuAuto 없음)은
   // 건드리지 않고, 우리가 채웠던 값만 갈아 끼우거나 비운다 — 차를 바꿨는데 앞 차의 SKU 가
   // 남아 있으면 그 SKU 로 올라가 앞 차 리스팅을 덮어쓴다.
@@ -803,6 +846,13 @@
         && val('inp-gen') === v.gen && val('inp-year') === v.year && val('inp-code') === v.code ? v : null;
     },
     variantsFor,
+    resolveTitle,
+    // 본사몰 상품 찾기 칸(inp-db-search)의 목록. items 는 bulk-price-list(imweb-ko) 의 { name, variant? } — variant 는 판매상태 글.
+    setProducts(doc, items) {
+      api.setOptions(doc, 'vu-db', (items || []).filter(p => p && p.name).map(p => ({
+        label: p.name + (p.variant ? ' · ' + p.variant : ''), value: p.name, pick: () => pickTitle(doc, p.name),
+      })));
+    },
     // 표의 SKU 는 전부 대문자다. 소문자로 친 SKU 도 같은 리스팅으로 찾아야 BSA 확인·이베이 제목 후보가 빠지지 않는다.
     listing(sku) { return listingBySku.get(nz(sku).toUpperCase()) || null; },
     coupangFor,
@@ -882,6 +932,7 @@
       if (!doc || !doc.body) return false;
       if (doc.body.dataset.vuShellBound === '1') { api.refreshShell(doc); return true; }
 
+      api.attach(doc, 'inp-db-search', 'vu-db', []);   // 목록은 셸이 처음 누를 때 읽어 넣는다(setProducts)
       const brandEl = api.attach(doc, 'inp-brand', 'vu-brand', api.brands());
       api.attach(doc, 'inp-carmodel', 'vu-carmodel', []);
       api.attach(doc, 'inp-gen', 'vu-gen', GEN_PRESETS);
@@ -990,13 +1041,11 @@
     },
 
     // iframe(index.html) 안의 제목 표기 칸.
-    // 브랜드/차종 컨텍스트는 셸의 입력값을 1순위로 읽는다 — iwBoardBrand select 는
+    // 브랜드/차종 컨텍스트는 셸의 입력값을 1순위로 읽는다 — 폼의 브랜드 select 는
     // 빈 placeholder 옵션이 없어 항상 첫 브랜드가 선택돼 있으므로 신뢰할 수 없다.
     bindFrame(doc) {
       if (!doc || !doc.body) return false;
       if (doc.body.dataset.vuFrameBound === '1') { api.refreshFrame(doc); return true; }
-      api.attach(doc, 'iwBoardTitleBrand', 'vu-title-brand', brandList);
-      api.attach(doc, 'iwBoardTitleModel', 'vu-title-model', api.modelsOf(api.shellBrand(doc)));
       api.attach(doc, 'iwTitleBrand', 'vu-title-brand', brandList);
       api.attach(doc, 'iwTitleModel', 'vu-title-model', api.modelsOf(api.shellBrand(doc)));
       doc.body.dataset.vuFrameBound = '1';

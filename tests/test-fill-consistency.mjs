@@ -85,17 +85,6 @@ const 차량들 = [
       ['아임웹 B2B', 'iwCode',       '상품 코드 (상품번호)', 'K138'],
       ['아임웹 B2B', 'iwBsaO',       'BSA O',                true],
       ['아임웹 B2B', 'iwBsaX',       'BSA X',                false],
-
-      ['아임웹 게시판', 'iwBoardBrand',        '게시판 제조사',        '기아'],
-      ['아임웹 게시판', 'iwBoardCode',         '상품 코드 (상품번호)', 'K138'],
-      ['아임웹 게시판', 'iwBoardTitleBrand',   '한글 제조사',          '기아'],
-      ['아임웹 게시판', 'iwBoardTitleModel',   '한글 차종',            'EV3'],
-      ['아임웹 게시판', 'iwBoardTitleBrandEn', '영문 제조사',          'Kia'],
-      ['아임웹 게시판', 'iwBoardTitleModelEn', '영문 차종',            'EV3'],
-      ['아임웹 게시판', 'iwBoardGeneration',   '영문 세대',            '2nd gen Early'],
-      ['아임웹 게시판', 'iwBoardTitleBrandJp', '일문 제조사',          'キア'],
-      ['아임웹 게시판', 'iwBoardTitleModelJp', '일문 차종',            'EV3'],
-      ['아임웹 게시판', 'iwBoardGenerationJp', '일문 세대',            '2世代 前期型'],
       // 셸이 폼 칸에 값을 넣으며 쏜 이벤트를 폼의 자동완성이 사람 입력으로 알고 목록을 열었다
       // (아임웹 제목 칸들) — 좌측에 한 글자 칠 때마다 폼 안에 '일치하는 항목이 없습니다' 가 떴다.
       ['쇼핑몰 폼', 'combos:frame', '폼 안에 저절로 열린 목록', 0],
@@ -127,9 +116,6 @@ const 차량들 = [
       ['아임웹 B2B', 'iwCode',  '상품 코드 (상품번호)', '1213'],
       ['아임웹 B2B', 'iwBsaO',  'BSA O',                false],
       ['아임웹 B2B', 'iwBsaX',  'BSA X',                true],
-
-      ['아임웹 게시판', 'iwBoardTitleModelEn', '영문 차종', 'Civic'],
-      ['아임웹 게시판', 'iwBoardGeneration',   '영문 세대', '8th gen'],
     ],
   },
   {
@@ -223,7 +209,6 @@ const 차량들 = [
       // 탭 안의 같은 칸은 숨었다 — 좌측이 대신한다.
       ['쇼핑몰 폼', 'owned:ebSku',          '이베이 SKU 칸 숨김',        true],
       ['쇼핑몰 폼', 'owned:amzProductType', '아마존 Product Type 칸 숨김', true],
-      ['쇼핑몰 폼', 'owned:iwTargetHead',   '게시판 대상 체크 숨김(현황판이 대신)', true],
       ['아마존', 'amzProductType', 'Product Type (좌측에서)', 'AUTO_PART'],
       ['이베이', 'ebSku',   'SKU',    'OBM0103N101'],
       ['이베이', 'ebTitle', '상품명', EBAY + 'BMW 1 Series 2nd gen 12.03~19.05'],
@@ -333,8 +318,6 @@ const 차량들 = [
       ['좌측 상품정보', 'inp-sku',          'SKU',              'NH0701N1213'],
       ['아마존',        'amzSku',           'SKU 기준 불러오기 칸', 'NH0701N1213'],
       ['이베이',        'ebEditSku',        'SKU 조회 칸',      'NH0701N1213'],
-      ['아임웹 게시판', 'iwBoardEditCodeInput', '검색할 상품 코드', '1213'],
-      ['아임웹 게시판', 'iwBoardEditBrand',     '검색 브랜드',      '혼다'],
       // 수정 폼의 나머지는 불러온 상품의 값이다 — 좌측 차로 덮으면 안 된다.
       ['아마존',        'amzTitle',         '상품명 (건드리지 않음)', AMZ + 'BMW 1 Series 2nd gen 12.03~19 F20' + AMZ_END],
     ],
@@ -364,7 +347,7 @@ const 차량들 = [
       ['아마존', 'amzSku',           '좌측이 바뀌어 새 차 SKU', 'OBM0103N101'],
       ['쿠팡',   'calls:coupang-update', '쿠팡 수정 요청 안 나감',   0],
       ['아마존', 'calls:amazon-update',  '아마존 수정 요청 안 나감', 0],
-      ['셸 로그', 'log:불러온 상품(ID 13675461669)과 입력칸의 ID(13675654028)가 다릅니다', '쿠팡 거부 알림',   true],
+      ['셸 로그', 'log:불러온 상품(ID 13675461669)과 지금 고른 쿠팡 상품ID(13675654028)가 다릅니다', '쿠팡 거부 알림',   true],
       ['셸 로그', 'log:불러온 상품(SKU NH0701N1213)과 지금 SKU 칸(OBM0103N101)',          '아마존 거부 알림', true],
     ],
   },
@@ -383,6 +366,14 @@ const 차량들 = [
     모드: ['new', 'edit'],
     기대: [
       ['쿠팡', 'cpProductIdInput', '좌측 차의 ID', '13675654028'],
+    ],
+  },
+  {
+    이름: '└ 좌측 쿠팡 상품ID 를 비움 — 셸이 넣었던 ID 는 숨은 칸에서도 지운다',
+    // 칸이 숨어 있어 앞 차 ID 가 남으면 '상품 불러오기' 가 그 상품을 조용히 불러왔다. [선택]한 ID 는 위에서처럼 남는다.
+    입력: { 'inp-cpid': '' },
+    기대: [
+      ['쿠팡', 'cpProductIdInput', '빈칸', ''],
     ],
   },
   {
@@ -512,11 +503,11 @@ try {
   await page.waitForFunction(() => window.VUSuggest?.brandEn?.('기아') === 'Kia', null, { timeout: 15000 });
   await page.waitForFunction(() => (window.VUSuggest?.variantsFor?.('BMW', '1시리즈') || []).length > 0, null, { timeout: 15000 });
 
-  // 쇼핑몰을 모두 켠다. 일본은 자사몰만 — 일본 아마존을 켜면 아마존이 일본어로 바뀌어
+  // 쇼핑몰을 모두 켠다. 일본은 켜지 않는다 — 일본 아마존을 켜면 아마존이 일본어로 바뀌어
   // 미국 아마존 제목을 검사할 수 없다(그 경로는 따로 봐야 한다).
   await page.evaluate(() => {
-    for (const [c, t] of [['KOREA', 'own'], ['KOREA', 'b2b'], ['KOREA', 'open1'], ['KOREA', 'open2'],
-                          ['USA', 'open1'], ['USA', 'open2'], ['JAPAN', 'own']]) {
+    for (const [c, t] of [['KOREA', 'b2b'], ['KOREA', 'open1'], ['KOREA', 'open2'],
+                          ['USA', 'open1'], ['USA', 'open2']]) {
       handleCheck(c, t, true);
     }
   });
@@ -899,7 +890,7 @@ try {
   await 폼.evaluate(() => {
     window.__bulk = [];
     window.__bulkPlan = {};
-    for (const fn of ['registerNaver', 'registerCoupang', 'registerImwebB2b', 'registerImwebBoard', 'registerAmazon']) {
+    for (const fn of ['registerNaver', 'registerCoupang', 'registerImwebB2b', 'registerAmazon']) {
       window[fn] = () => {
         window.__bulk.push({ fn, cpMode: document.querySelector('input[name="cpWorkMode"]').value,
           amzMode: document.querySelector('input[name="amzWorkMode"]').value,
@@ -921,15 +912,14 @@ try {
     return 로그();
   };
   const 다성공 = { registerNaver: { ok: true }, registerCoupang: { ok: true }, registerImwebB2b: { ok: true },
-                  registerImwebBoard: { ok: true }, registerAmazon: { ok: true } };
+                  registerAmazon: { ok: true } };
   const 이베이성공 = { success: true, data: { sku: 'OBM0103N101', offerId: 'OFF-1' } };
   {
     const log = await 일괄({
       registerNaver: { ok: true },
       registerCoupang: { ok: false, error: '쿠팡 거부: 옵션 형식 오류' },
       registerImwebB2b: { ok: false, partial: true, error: '세트 상품: 이미지 업로드 실패' },
-      registerImwebBoard: undefined,   // 예전 모양 — 아무것도 안 돌려줌
-      registerAmazon: { ok: true },
+      registerAmazon: undefined,   // 예전 모양 — 아무것도 안 돌려줌
     }, 이베이성공);
     const drafts = await 폼.evaluate(() => (window.__callArgs || []).filter(([c]) => c === 'ebay-save-draft').length);
     // 던지는 등록 함수(예전 코드)는 따로 — 계획표는 JSON 으로만 넘어가서 함수를 못 담는다.
@@ -938,7 +928,7 @@ try {
       await 폼.evaluate(() => {
         window.__bulk = [];
         window.__bulkPlan = { registerNaver: { ok: true }, registerCoupang: { ok: true }, registerImwebB2b: { ok: true },
-          registerImwebBoard: { ok: true }, registerAmazon: () => { throw new Error('아마존 폼 오류'); } };
+          registerAmazon: () => { throw new Error('아마존 폼 오류'); } };
       });
       await page.evaluate(() => runBulkRegister());
       return 로그();
@@ -947,13 +937,13 @@ try {
       ['셸 로그', '네이버 성공',            log.includes('[네이버] 등록 완료'), true],
       ['셸 로그', '쿠팡 거부 = 실패',       log.includes('[쿠팡] 등록 실패: 쿠팡 거부: 옵션 형식 오류'), true],
       ['셸 로그', 'B2B 일부만',             log.includes('⚠ [아임웹 B2B몰] 일부만 등록: 세트 상품: 이미지 업로드 실패'), true],
-      ['셸 로그', '결과 없음 = 실패',       log.includes('[아임웹 자사몰/게시판] 등록 실패: 등록 결과를 받지 못했습니다'), true],
+      ['셸 로그', '결과 없음 = 실패',       log.includes('[아마존 미국] 등록 실패: 등록 결과를 받지 못했습니다'), true],
       ['셸 로그', '이베이 초안 저장됨',      log.includes('[eBay 미국] 초안 저장 완료'), true],
-      ['셸 로그', '요약',                   log.includes('일괄 등록 완료 (성공: 3건, 실패: 3건 · 그중 일부만 등록 1건)'), true],
-      ['셸 로그', '다시 볼 몰',             log.includes('다시 확인할 몰: 쿠팡, 아임웹 B2B몰, 아임웹 자사몰/게시판'), true],
+      ['셸 로그', '요약',                   log.includes('일괄 등록 완료 (성공: 2건, 실패: 3건 · 그중 일부만 등록 1건)'), true],
+      ['셸 로그', '다시 볼 몰',             log.includes('다시 확인할 몰: 쿠팡, 아임웹 B2B몰, 아마존 미국'), true],
       ['이베이',  '초안 요청 한 번 나감',    drafts, 1],
       ['셸 로그', '던진 아마존 = 실패',      log2.includes('[아마존 미국] 등록 실패: 아마존 폼 오류'), true],
-      ['셸 로그', '던져도 끝까지 감',        log2.includes('일괄 등록 완료 (성공: 5건, 실패: 1건)'), true],
+      ['셸 로그', '던져도 끝까지 감',        log2.includes('일괄 등록 완료 (성공: 4건, 실패: 1건)'), true],
     ]);
   }
   {
@@ -974,7 +964,7 @@ try {
     await 폼.evaluate(() => {
       window.__bulk = [];
       window.__bulkPlan = { registerNaver: () => new Promise(() => {}), registerCoupang: { ok: true }, registerImwebB2b: { ok: true },
-        registerImwebBoard: { ok: true }, registerAmazon: { ok: true } };
+        registerAmazon: { ok: true } };
       window.__script = { 'ebay-save-draft': { success: false, error: 'eBay 거부: 카테고리 ID 가 없습니다' } };
     });
     await page.evaluate(() => runBulkRegister());
@@ -984,7 +974,7 @@ try {
     판정('일괄 등록 — 응답 없는 몰 · 이베이 거부', [
       ['셸 로그', '시간 한도 = 실패',        log.includes('[네이버] 등록 실패: 1초 안에 끝나지 않았습니다'), true],
       ['셸 로그', '이베이 거부 이유',        log.includes('[eBay 미국] 등록 실패: eBay 거부: 카테고리 ID 가 없습니다'), true],
-      ['셸 로그', '요약',                   log.includes('일괄 등록 완료 (성공: 4건, 실패: 2건)'), true],
+      ['셸 로그', '요약',                   log.includes('일괄 등록 완료 (성공: 3건, 실패: 2건)'), true],
       ['셸',      '진행 중 풀림',            after.running, false],
       ['셸',      '버튼 다시 켜짐',          after.disabled, false],
     ]);
@@ -1011,15 +1001,15 @@ try {
     await 폼.evaluate(() => window.__release());
     await page.evaluate(() => window.__bulkRun);
     const log = await 로그();
-    const later = await 폼.evaluate(() => window.__bulk.filter(b => ['registerImwebB2b', 'registerImwebBoard', 'registerAmazon'].includes(b.fn))
+    const later = await 폼.evaluate(() => window.__bulk.filter(b => ['registerImwebB2b', 'registerAmazon'].includes(b.fn))
       .map(b => `${b.cpMode}/${b.amzMode}`));
     판정('일괄 등록 — 도중 모드 전환 거절', [
       ['셸', '모드 그대로 신규',              during.mode, 'new'],
       ['셸', '신규 라디오로 되돌림',          during.newChecked, true],
       ['셸', '메인에 신규로 다시 알림',       during.resync, true],
       ['셸 로그', '거절 알림',                log.includes('일괄 등록 중에는 모드를 바꿀 수 없습니다'), true],
-      ['쇼핑몰 폼', '남은 몰은 신규 등록으로', later.join(' '), 'copy/register copy/register copy/register'],
-      ['셸 로그', '요약',                     log.includes('일괄 등록 완료 (성공: 6건, 실패: 0건)'), true],
+      ['쇼핑몰 폼', '남은 몰은 신규 등록으로', later.join(' '), 'copy/register copy/register'],
+      ['셸 로그', '요약',                     log.includes('일괄 등록 완료 (성공: 5건, 실패: 0건)'), true],
     ]);
   }
   {
@@ -1078,6 +1068,106 @@ try {
       ['셸 로그', '미국은 안 올렸다고 알림',   jp.includes('미국 아마존은 이번에 올리지 않았습니다'), true],
       ['셸',      '일본 마켓 → 현황판 일본 아마존 칸만 열림', jpViewing, 'JAPAN-open1'],
       ['셸',      '미국 마켓 → 현황판 미국 아마존 칸만 열림', usViewing, 'USA-open1'],
+    ]);
+  }
+  {
+    // 아임웹 자사몰: 칸 셋(KR · US · JP 구역)을 다 켜도 상품 하나 — 일괄 등록 대상은 한 번, 좌측 값 · 이미지 목록(domestic)이
+    // imweb-head-register 한 번으로 간다. 사전에 없는 차종이면 영문 · 일문 이름이 없다고 경고한다(막지 않는다).
+    await page.evaluate(() => {
+      for (const c of ['KOREA', 'USA', 'JAPAN']) handleCheck(c, 'own', true);
+      const ebayPrep = window.__script['image-library-prepare'];
+      window.__script['image-library-prepare'] = arg => (arg?.id === 'domestic' ? { success: true,
+        profile: { id: 'domestic', label: '국내', folder: '', items: [], errors: [] },
+        bundle: { imageUrls: ['https://img.example/d-1.jpg'], mainImagePath: 'C:/img/main.jpg', mainImageUrl: 'https://img.example/main.jpg',
+          detailHtml: '<img src="https://img.example/d-1.jpg">' } } : ebayPrep);
+    });
+    await 좌측({ 'inp-brand-en': '', 'inp-carmodel-en': '', 'inp-brand-ja': '', 'inp-carmodel-ja': '',
+      'inp-brand': '현대', 'inp-carmodel': '사전에없는차', 'inp-no': 'No.H152' });
+    const 경고 = await page.evaluate(() => syncFrame().missed.filter(m => m.startsWith('아임웹 자사몰')));
+    const 칸 = await 폼.evaluate(() => Object.fromEntries(['ihBrand', 'ihModel', 'ihCode', 'ihModelEn', 'ihModelJp']
+      .map(id => [id, document.getElementById(id).value])));
+    await 로그비우기();
+    await 폼.evaluate(([plan, ebay]) => {
+      window.__bulk = [];
+      window.__bulkPlan = plan;
+      window.__callArgs = [];
+      window.__script = { 'ebay-save-draft': ebay,
+        'imweb-head-register': { success: true, result: { ok: true, no: 2405, warnings: [] }, message: '등록 — 세 구역 확인 뒤 판매중' } };
+    }, [다성공, 이베이성공]);
+    await page.evaluate(() => runBulkRegister());
+    const log = await 로그();
+    const sent = await 폼.evaluate(() => window.__callArgs.filter(([c]) => c === 'imweb-head-register').map(([, a]) => a));
+    await page.evaluate(() => { for (const c of ['KOREA', 'USA', 'JAPAN']) handleCheck(c, 'own', false); });
+    await 채우기끝();
+    판정('일괄 등록 — 아임웹 자사몰 칸 셋 = 상품 하나', [
+      ['자사몰 탭', '제조사',               칸.ihBrand, '현대'],
+      ['자사몰 탭', '차종',                 칸.ihModel, '사전에없는차'],
+      ['자사몰 탭', '상품번호 본체',         칸.ihCode, 'H152'],
+      ['자사몰 탭', '영문 차종 없음',        칸.ihModelEn, ''],
+      ['셸 경고',   '영문 없음 경고',        경고.some(m => m.startsWith('아임웹 자사몰: 영문')), true],
+      ['셸 경고',   '일문 없음 경고',        경고.some(m => m.startsWith('아임웹 자사몰: 일문')), true],
+      ['IPC',       '등록 요청 한 번',       sent.length, 1],
+      ['IPC',       '상품번호 · 차종',       `${sent[0]?.code} ${sent[0]?.brand} ${sent[0]?.model}`, 'H152 현대 사전에없는차'],
+      ['IPC',       'BSA 두 칸',             typeof sent[0]?.bsaO === 'boolean' && sent[0]?.bsaX === !sent[0]?.bsaO, true],
+      ['IPC',       '영문 차종 빈 값',       sent[0]?.titleModelEn, ''],
+      ['IPC',       '대표 이미지(domestic)', sent[0]?.mainImagePath, 'C:/img/main.jpg'],
+      ['IPC',       '상세 이미지(domestic)', sent[0]?.detailHtml, '<img src="https://img.example/d-1.jpg">'],
+      ['셸 로그',   '상품번호 로그',         log.includes('[아임웹 자사몰] ✓ 상품번호 2405 등록'), true],
+      ['셸 로그',   '자사몰 성공 한 줄',     log.split('✅ [아임웹 자사몰] 등록 완료').length - 1, 1],
+      ['셸 로그',   '요약(몰 6곳)',          log.includes('일괄 등록 완료 (성공: 6건, 실패: 0건)'), true],
+    ]);
+  }
+  {
+    // 자사몰 칸 하나만 켜도(신규) 세 구역을 만들고 일문 칸 값을 넘기므로 일문 칸이 보인다 — 숨은 칸의 앞 차 값이 몰래 나가지 않게.
+    // 일본 카탈로그 모드는 자사몰과 무관하다(켜면 모드를 바꿀 때 setJapanMode(false) 가 좌측 일본 카탈로그 차를 지웠다).
+    const 일문칸 = () => page.evaluate(() => !document.getElementById('inp-brand-ja').closest('.lang-col').hidden);
+    const 전 = await 일문칸();
+    await page.evaluate(() => handleCheck('KOREA', 'own', true));
+    const 후 = await 일문칸();
+    await page.evaluate(() => { handleCheck('KOREA', 'own', false); handleCheck('JAPAN', 'own', true); });
+    const 일본모드 = await page.evaluate(() => VUSuggest.japanMode());
+    await page.evaluate(() => handleCheck('JAPAN', 'own', false));
+    await 채우기끝();
+    판정('자사몰 칸 하나 — 일문 칸 보임, 일본 카탈로그와 무관', [
+      ['좌측 상품정보', '일본 칸 없으면 일문 칸 숨음',   전, false],
+      ['좌측 상품정보', '한국 자사몰만 켜도 일문 칸 보임', 후, true],
+      ['좌측 상품정보', '일본 자사몰만 → 일본 카탈로그 꺼짐', 일본모드, false],
+    ]);
+  }
+  {
+    // 앞 차에 손으로 적은 영문 차종은 차를 바꾸면 지워지고 사전 값이 들어간다. 같은 차면 손 값을 그대로 둔다.
+    await 좌측({ 'inp-brand-en': '', 'inp-carmodel-en': '', 'inp-brand': '현대', 'inp-carmodel': '사전에없는차' });
+    await page.locator('#inp-carmodel-en').fill('Hand A');   // 진짜 input 이벤트
+    await 좌측({ 'inp-brand': '현대' });                    // 같은 차 — 한국어 그대로
+    const 같은차 = await page.locator('#inp-carmodel-en').inputValue();
+    await 좌측({ 'inp-carmodel': '싼타페' });               // 다른 차
+    const 바뀐차 = await page.locator('#inp-carmodel-en').inputValue();
+    const 사전 = await page.evaluate(() => enTitleCase(vuEn('model', '현대', '싼타페')));
+    await page.locator('#inp-carmodel-en').fill('Hand B');
+    await 좌측({ 'inp-carmodel': '싼타페' });
+    const 같은차2 = await page.locator('#inp-carmodel-en').inputValue();
+    // 타이핑 중간 값(input 만, change 없음)으로는 지우지 않는다 — IME 조합·지우고 다시 치기.
+    await page.evaluate(() => { const el = document.getElementById('inp-carmodel'); el.value = '싼'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    const 중간값 = await page.locator('#inp-carmodel-en').inputValue();
+    await 좌측({ 'inp-carmodel': '싼타페' });
+    const 확정후 = await page.locator('#inp-carmodel-en').inputValue();
+    // 한국어 차종보다 먼저 적은 영문은 확정된 차종에 묶인다.
+    await 좌측({ 'inp-carmodel-en': '', 'inp-carmodel': '' });
+    await page.locator('#inp-carmodel-en').fill('Hand C');
+    await 좌측({ 'inp-carmodel': '사전에없는차' });
+    const 먼저적음 = await page.locator('#inp-carmodel-en').inputValue();
+    await 좌측({ 'inp-carmodel': '사전에없는차' });
+    const 먼저적음2 = await page.locator('#inp-carmodel-en').inputValue();
+    await 좌측({ 'inp-carmodel-en': '', 'inp-carmodel': '' });
+    판정('좌측 영문 칸 — 손으로 적은 앞 차 값', [
+      ['좌측 상품정보', '타이핑 중간 값으로는 안 지움',   중간값, 'Hand B'],
+      ['좌측 상품정보', '같은 차로 확정되면 유지',        확정후, 'Hand B'],
+      ['좌측 상품정보', '한국어보다 먼저 적은 값 유지',   먼저적음, 'Hand C'],
+      ['좌측 상품정보', '그 차에 묶여 다시 입력해도 유지', 먼저적음2, 'Hand C'],
+      ['좌측 상품정보', '같은 차면 손 값 유지',          같은차, 'Hand A'],
+      ['좌측 상품정보', '차를 바꾸면 앞 차 손 값 없음',  바뀐차 === 'Hand A', false],
+      ['좌측 상품정보', '차를 바꾸면 사전 값',           바뀐차, 사전],
+      ['좌측 상품정보', '새 차에 적은 손 값은 유지',      같은차2, 'Hand B'],
     ]);
   }
 

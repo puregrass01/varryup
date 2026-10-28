@@ -192,7 +192,7 @@ export function planOptionValues(oldValues, wantNames) {
   return { renames, hide: restOld, add: restWant };
 }
 
-const mimeOf = name => {
+export const mimeOf = name => {
   const ext = String(name).toLowerCase().split('?')[0].split('.').pop();
   return { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp' }[ext] || 'image/jpeg';
 };

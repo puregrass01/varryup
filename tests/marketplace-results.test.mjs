@@ -253,50 +253,38 @@ test('아임웹 응답: 일부 실패는 success:false · partial:true · 대상
   assert.match(r.error, /안내$/);
   assert.match(r.message, /일부 실패/);
 
-  const all = imwebRunResponse({ summary: 's', results: [{ target: '본사몰(한국어)', ok: false, error: 'x' }] });
+  const all = imwebRunResponse({ summary: 's', results: [{ target: 'B2B 개별', ok: false, error: 'x' }] });
   assert.equal(all.success, false);
   assert.equal(all.partial, false);
 
-  const ok = imwebRunResponse({ summary: '본사몰(한국어) 포스팅 성공', results: [{ target: '본사몰(한국어)', ok: true }] });
-  assert.deepEqual(ok, { success: true, message: '본사몰(한국어) 포스팅 성공', results: [{ target: '본사몰(한국어)', ok: true }] });
+  const ok = imwebRunResponse({ summary: 'B2B몰 등록 성공 (개별)', results: [{ target: 'B2B 개별', ok: true }] });
+  assert.deepEqual(ok, { success: true, message: 'B2B몰 등록 성공 (개별)', results: [{ target: 'B2B 개별', ok: true }] });
 
   assert.equal(imwebRunResponse({ summary: '', results: [] }).success, false, '아무것도 안 했으면 성공이 아니다');
 });
 
 function imwebStub(t) {
-  const dir = tmpDir(t, 'imweb-results-');
-  const imweb = new ImwebEdit(path.join(dir, 'imweb_config.json'), () => null);
+  const imweb = new ImwebEdit();
   imweb.logCallback = null;
   t.mock.method(console, 'log', () => {});
-  imweb.initBrowserSession = async () => {};
-  imweb.openAdminAt = async () => {};
-  imweb.close = async () => {};
   return imweb;
 }
 
-test('아임웹 실행: B2B 한쪽·게시판 한 곳 실패 → 대상별 결과, 만들어진 것은 모두 원장 대상', async t => {
+test('아임웹 실행: B2B 한쪽 실패 → 대상별 결과, 만들어진 것은 모두 원장 대상', async t => {
   const imweb = imwebStub(t);
   imweb.registerB2bViaApi = async () => ([
     { type: 'indiv', ok: true, no: 101, title: '개별' },
     { type: 'set', ok: false, no: 102, title: '세트', error: '판매중 전환 실패 — 숨김 상태로 남았습니다' },
   ]);
-  imweb.createBoardPostViaApi = async (data, lang) => {
-    if (lang === 'en') throw new Error('게시글 작성 실패(Hyundai): 권한 없음');
-    imweb._lastPost = { boardCode: 'b1', boardName: '현대', subject: 's', postCode: 'p1' };
-    return true;
-  };
   const run = await imweb.executeAutomation({
-    targetB2b: true, registerIndiv: true, registerSet: true,
-    targetHead: true, targetUs: true, targetJp: false, code: 'H1', bsaX: true,
+    targetB2b: true, registerIndiv: true, registerSet: true, code: 'H1', bsaX: true,
   });
   assert.deepEqual(run.results, [
     { target: 'B2B 개별', ok: true },
     { target: 'B2B 세트', ok: false, error: '판매중 전환 실패 — 숨김 상태로 남았습니다' },
-    { target: '본사몰(한국어)', ok: true },
-    { target: '해외몰(영문)', ok: false, error: '게시글 작성 실패(Hyundai): 권한 없음' },
   ]);
   // 숨김으로 남은 세트도 '만들어진 상품'이다 — 원장에 적어야 재시도가 또 만들지 않는다.
-  assert.deepEqual(imweb.lastRegistered.map(r => r.no || r.postCode), [101, 102, 'p1']);
+  assert.deepEqual(imweb.lastRegistered.map(r => r.no), [101, 102]);
   const res = imwebRunResponse(run);
   assert.equal(res.success, false);
   assert.equal(res.partial, true);

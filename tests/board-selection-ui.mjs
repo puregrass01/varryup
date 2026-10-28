@@ -17,7 +17,8 @@ const KEY = 'veryup.board.selection.v1';
 const CELLS = {
   KOREA: ['own', 'b2b', 'open1', 'open2'],
   USA: ['own', 'open1', 'open2'],
-  JAPAN: ['own', 'open1'],   // 라쿠텐(JAPAN-open2)·쇼피파이(ARAB-own)는 연동이 없어 비활성 칸이다(10-26)
+  // 라쿠텐(JAPAN-open2)·쇼피파이(ARAB-own)는 연동이 없어 비활성 칸이다(10-26). 아임웹 자사몰(own)은 10-28 Open API 탭으로 다시 켰다.
+  JAPAN: ['own', 'open1'],
 };
 const ALL = Object.entries(CELLS).flatMap(([c, ts]) => ts.map(t => `${c}-${t}`));
 const rowOf = (...countries) => countries.flatMap(c => CELLS[c].map(t => `${c}-${t}`)).sort();
@@ -81,7 +82,7 @@ try {
 
   await countTabSwitches();
   await preset('all');
-  assert.deepEqual(await selected(), [...ALL].sort(), '전체 = 켤 수 있는 아홉 칸');
+  assert.deepEqual(await selected(), [...ALL].sort(), '전체 = 켤 수 있는 열두 칸');
   assert.deepEqual(await pressed(), ['all']);
   assert.ok(await page.evaluate(() => window.tabSwitches) <= 1,
     `칸 여러 개를 바꿔도 폼 탭은 한 번만 옮긴다 (${await page.evaluate(() => window.tabSwitches)}번)`);
@@ -108,16 +109,8 @@ try {
   assert.deepEqual(await selected(), before, '다시 열면 지난번 선택 그대로다');
   assert.deepEqual(await pressed(), [], '어느 칩과도 같지 않으면 눌린 칩이 없다');
 
-  // 앱처럼 접힌 채로 떠도 복원된다. 폼은 숨은 채로 미리 떠 있고, 창 크기는 안 바꾼다.
-  await page.evaluate(() => { window.resizeCalls.length = 0; });
-  await open('?mode=new&panels=collapsed');
-  assert.deepEqual(await selected(), before, '접힌 채로 떠도 복원된다');
-  assert.equal(await page.locator('#section8').isVisible(), false, '복원했다고 패널이 열리지는 않는다');
-  assert.deepEqual(await page.evaluate(() => window.resizeCalls), [], '복원은 창 크기를 안 바꾼다');
-  assert.ok((await page.locator('#form-frame').getAttribute('src') || '').includes('index.html'),
-    '켜진 몰의 폼이 숨은 채로 미리 떠 있다 — 열기를 누르면 바로 보인다');
-  await page.locator('#btn-toggle-detail').click();
-  assert.equal(await page.locator('#form-frame').isVisible(), true, '열면 폼이 바로 보인다');
+  // 복원하면 켜진 몰의 폼이 바로 보인다(접기/열기 버튼은 10-28 삭제).
+  assert.equal(await page.locator('#form-frame').isVisible(), true, '복원하면 폼이 바로 보인다');
 
   // ── 깨진 값 · 없는 칸 · 비활성 칸은 무시한다 ──────────────────────────────
   await page.evaluate(k => localStorage.setItem(k, '{not json'), KEY);
@@ -127,10 +120,12 @@ try {
   await page.evaluate(k => localStorage.setItem(k, JSON.stringify({
     KOREA: { open1: true, bogus: true },   // 없는 칸
     USA: { b2b: true },                    // 비활성 칸 (미국엔 B2B 가 없다)
+    JAPAN: { own: true },                  // 아임웹 자사몰 — 다시 켜는 칸이라 되살린다
     MARS: { own: true },                   // 없는 나라
   })), KEY);
   await open();
-  assert.deepEqual(await selected(), ['KOREA-open1'], '켤 수 있는 칸만 되살린다');
+  assert.deepEqual(await selected(), ['JAPAN-own', 'KOREA-open1'], '켤 수 있는 칸만 되살린다');
+  assert.equal(await page.evaluate(() => checked.USA.b2b), false, '비활성 칸은 화면에 없어도 상태에서 켜지면 안 된다');
 
   await page.evaluate(k => localStorage.setItem(k, '[true,true]'), KEY);
   await open();

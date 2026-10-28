@@ -450,18 +450,6 @@ export class Amazon {
     return cache;
   }
 
-  getCachedListingsSummary(marketplaceId) {
-    if (!this.api) this.loadConfig();
-    const mp = marketplaceId || this.config.marketplaceId || 'ATVPDKIKX0DER';
-    const cache = this.getCachedListings(mp);
-    return {
-      marketplaceId: mp,
-      count: cache?.items?.length || 0,
-      total: cache?.total || 0,
-      updatedAt: cache?.updatedAt || null
-    };
-  }
-
   clearListingsCache() {
     if (typeof this.store?.clearListingsCache === 'function') this.store.clearListingsCache();
   }

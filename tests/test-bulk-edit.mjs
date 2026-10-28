@@ -4,8 +4,8 @@
 //   · 불러온 몰(쿠팡·아마존·이베이)은 그 탭의 수정 저장이 나간다
 //   · 불러온 상품이 없는 몰(네이버, 검색 결과가 없는 라쿠텐 카드)은 저장 함수를 부르지 않고
 //     EditItemMissingError 로 '상품 없음' 실패가 된다
-//   · 아임웹 B2B 는 Open API 저장이라 같이 돈다(불러온 상품이 없으면 '상품 없음'). 자사몰 게시판은 저장할 때
-//     브라우저를 띄우므로 건너뛴다
+//   · 아임웹 B2B 는 Open API 저장이라 같이 돈다(불러온 상품이 없으면 '상품 없음')
+//   · 아임웹 자사몰은 탭에 불러온 구역 하나만 고친다(칸이 여럿이면 한 줄 알림, 안 바꿨으면 '변경 없음' · 보내지 않음)
 //   · 탭의 저장 실패는 실패로 센다(카드 몰은 고를 상품이 없어 늘 '상품 없음' — 카드 수정 길은 10-23 지웠다)
 //   · 도는 중 모드 전환은 거절, 신규 모드에서는 일괄 수정을 거절
 // IPC 는 가짜다 — 채널마다 정해 둔 답을 주고 무엇이 나갔는지 적어 둔다. 실제 수정은 없다.
@@ -73,7 +73,7 @@ try {
       el.value = sku;
       el.dispatchEvent(new Event('input', { bubbles: true }));
     }
-    for (const [c, t] of [['KOREA', 'open1'], ['KOREA', 'open2'], ['KOREA', 'b2b'], ['KOREA', 'own'],
+    for (const [c, t] of [['KOREA', 'open1'], ['KOREA', 'open2'], ['KOREA', 'b2b'],
                           ['USA', 'open1'], ['USA', 'open2']]) handleCheck(c, t, true);
   }, [SKU]);
   await page.waitForFunction(() => {
@@ -127,13 +127,12 @@ try {
     has(`[네이버] 상품 없음: 수정할 상품이 없습니다 — 네이버 탭에서 상품을 먼저 불러오세요`);
     has(`[쿠팡 ${CPID}] 수정 완료`);
     has('[아임웹 B2B몰] 상품 없음: 수정할 상품이 없습니다 — 아임웹 B2B몰 탭에서 상품을 먼저 불러오세요');
-    has('[아임웹 자사몰/게시판] 게시판 글은 Open API 가 없어(저장할 때 브라우저를 띄움) 일괄 수정에서 뺍니다 — 그 탭의 저장 버튼으로 수정하세요');
     has(`[아마존 ${SKU} · 미국] 수정 완료`);
     has(`[eBay 미국 ${SKU}] 수정 완료`);
-    has('일괄 수정 완료 (성공: 3건, 실패: 2건 · 그중 상품 없음 2건, 건너뜀: 1건)');
+    has('일괄 수정 완료 (성공: 3건, 실패: 2건 · 그중 상품 없음 2건)');
     has('수정할 상품이 없는 몰: 네이버, 아임웹 B2B몰');
-    // 상품이 없는 몰·건너뛴 몰은 저장 요청이 안 나간다.
-    for (const ch of ['smartstore-update-product', 'imweb-update-group', 'imweb-update-post']) {
+    // 상품이 없는 몰은 저장 요청이 안 나간다.
+    for (const ch of ['smartstore-update-product', 'imweb-update-group']) {
       assert.equal(formCalls.filter(c => c === ch).length, 0, `${ch} 가 나갔다`);
     }
     for (const ch of ['coupang-update', 'amazon-update', 'ebay-update']) {
@@ -150,7 +149,7 @@ try {
     const { card } = await bulk();
     assert.ok(card.includes(`[쿠팡 ${CPID}] 수정 실패: 쿠팡 거부: 옵션 형식 오류`), card);
     assert.ok(card.includes('다시 확인할 몰: 쿠팡'), card);
-    assert.ok(card.includes('일괄 수정 완료 (성공: 2건, 실패: 3건 · 그중 상품 없음 2건, 건너뜀: 1건)'), card);
+    assert.ok(card.includes('일괄 수정 완료 (성공: 2건, 실패: 3건 · 그중 상품 없음 2건)'), card);
   }
 
   // ── 도는 중 모드 전환은 거절한다 ──
@@ -174,7 +173,7 @@ try {
     assert.equal(during.mode, 'edit');
     assert.equal(during.editChecked, true);
     assert.match(during.card, /일괄 수정 중에는 모드를 바꿀 수 없습니다 — 끝난 뒤 바꾸세요\. 도중에 바꾸면 남은 몰이 신규 등록으로 넘어갑니다/);
-    assert.match(await page.locator('#bulk-edit-rows').innerText(), /일괄 수정 완료 \(성공: 3건, 실패: 2건 · 그중 상품 없음 2건, 건너뜀: 1건\)/);
+    assert.match(await page.locator('#bulk-edit-rows').innerText(), /일괄 수정 완료 \(성공: 3건, 실패: 2건 · 그중 상품 없음 2건\)/);
   }
 
   // ── 아임웹 B2B: 탭에 불러온 세트·개별 묶음을 탭의 저장(Open API imweb-update-group)으로 보낸다 ──
@@ -207,7 +206,7 @@ try {
       [[3240, 150000, [150000]], [3241, 80000, [80000, 75000]]], 'B2B 가격은 탭 값 그대로 — 좌측 변경 판매가를 넣지 않는다');
     assert.ok(card.includes('변경 판매가 (원) 160,000원: 넣은 몰이 없습니다'), card);
     // 쿠팡은 상품번호가 없어 판매가를 못 넣고 실패, 네이버는 상품 없음.
-    assert.ok(card.includes('일괄 수정 완료 (성공: 3건, 실패: 2건 · 그중 상품 없음 1건, 건너뜀: 1건)'), card);
+    assert.ok(card.includes('일괄 수정 완료 (성공: 3건, 실패: 2건 · 그중 상품 없음 1건)'), card);
   }
 
   // ════ 변경 판매가 (원 · USD · 엔) ════
@@ -301,7 +300,7 @@ try {
     await setPrices({ 'inp-edit-krw': '160,000', 'inp-edit-usd': '110' });
     const { card, form: calls } = await bulkWithArgs();
     const has = text => assert.ok(card.includes(text), `결과 카드에 "${text}" 가 없다:\n${card}`);
-    has('일괄 수정 시작 (총 6개 플랫폼 · 변경 판매가 160,000원 · 110 USD)');
+    has('일괄 수정 시작 (총 5개 플랫폼 · 변경 판매가 160,000원 · 110 USD)');
     has('[네이버 777] 수정 완료 · 판매가 115,000원 → 160,000원 (기본 판매가 · 옵션가 차액 유지)');
     has(`[쿠팡 ${CPID}] 수정 완료 · 판매가 115,000원 → 160,000원 (No.K138 BSA 옵션 1개)`);
     has(`[아마존 ${SKU} · 미국] 수정 완료 · 판매가 30 USD → 110 USD`);
@@ -352,7 +351,7 @@ try {
     await setPrices({ 'inp-edit-usd': '' });
     await page.evaluate(() => { document.getElementById('inp-edit-jpy').value = '9999'; });
     const hidden = await bulkWithArgs();
-    assert.ok(hidden.card.includes('일괄 수정 시작 (총 6개 플랫폼)'), hidden.card);
+    assert.ok(hidden.card.includes('일괄 수정 시작 (총 5개 플랫폼)'), hidden.card);
     assert.equal(sentArgs(hidden.form, 'amazon-update')[0]?.price, '110', '판매가를 비우면 탭의 가격 그대로 저장한다');
   }
 
@@ -371,8 +370,24 @@ try {
     assert.deepEqual(await page.evaluate(() => ['inp-edit-krw', 'inp-edit-usd', 'inp-edit-jpy'].map(id => document.getElementById(id).value)), ['', '', '']);
   }
 
+  // ── 아임웹 자사몰: 탭에 불러온 구역 하나만 고친다(마지막으로 누른 미국 칸). 칸이 여럿이면 한 줄 알리고, 안 바꿨으면 '변경 없음' ──
+  {
+    await page.evaluate(() => { for (const c of ['KOREA', 'USA']) handleCheck(c, 'own', true); });
+    await page.waitForFunction(() => frameSyncTimer === null);
+    await form.evaluate(async () => {
+      window.__script['bulk-price-load-many'] = d => ({ success: true, data: { blocked: '', items: [{ id: d.ids[0], rows: [
+        { id: '11', optionId: '', name: 'Optic-glass Kia EV3 Wide View Side Mirror [No.K138]', price: '80', variant: '기본 판매가',
+          images: ['https://img/e1.jpg'], imageRevision: 'r1' }] }] } });
+      await loadImwebHead('11');
+    });
+    const { card, form: calls } = await bulkWithArgs();
+    assert.ok(card.includes('아임웹 자사몰 칸이 2개 켜져 있지만 탭에 불러온 구역 하나만 고칩니다.'), card);
+    assert.ok(card.includes('[아임웹 자사몰 11 · 미국] 수정 완료 — 변경 없음'), card);
+    assert.equal(sentArgs(calls, 'bulk-save-batch').length, 0, '바뀐 것이 없으면 보내지 않는다');
+  }
+
   assert.deepEqual(errors, []);
-  console.log('PASS: 일괄 수정 — 수정 모드 전용 버튼, 상품 없는 몰은 EditItemMissingError, 아임웹 B2B(Open API)·게시판 건너뜀, 카드 몰은 상품 없음, 실패 세기, 도중 모드 전환 거절, 변경 판매가(목록·몰별 적용·쿠팡 옵션·BSA·사전 검사·숨은 칸·차 바꾸면 비움)');
+  console.log('PASS: 일괄 수정 — 수정 모드 전용 버튼, 상품 없는 몰은 EditItemMissingError, 아임웹 B2B(Open API), 아임웹 자사몰(불러온 구역만·변경 없음), 카드 몰은 상품 없음, 실패 세기, 도중 모드 전환 거절, 변경 판매가(목록·몰별 적용·쿠팡 옵션·BSA·사전 검사·숨은 칸·차 바꾸면 비움)');
 } finally {
   await browser.close();
 }

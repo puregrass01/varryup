@@ -24,7 +24,7 @@ try {
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(pathToFileURL(path.resolve('src/ui/index_up.html')).href);
   await page.waitForFunction(() => VUSuggest.namesReady() && VUSuggest.variantsFor('도요타', '시에나').length);
-  await page.locator('#cell-JAPAN-own').click();
+  await page.locator('#cell-JAPAN-open1').click();
   assert.equal(await page.evaluate(() => VUSuggest.japanMode()), true);
   await page.locator('#inp-brand').fill('도요타');
   await page.locator('#inp-carmodel').fill('시엔타');
@@ -69,7 +69,7 @@ try {
   await page.locator('#inp-brand').evaluate(el => el.closest('.section-box')?.scrollIntoView());
   await page.screenshot({ path: 'scratch/japan-catalog-preview.png' });
   assert.equal(await page.evaluate(() => calls.some(c => /register|publish|update-product/.test(c.channel))), false);
-  await page.locator('#cell-JAPAN-own').click();
+  await page.locator('#cell-JAPAN-open1').click();
   assert.equal(await page.evaluate(() => VUSuggest.japanMode()), false);
   assert.deepEqual(errors, []);
   console.log('Japan catalog UI passed: native names, coordinated generation/year/series, manual overrides, no SKU guesses and no writes.');

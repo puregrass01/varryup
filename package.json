@@ -26,7 +26,6 @@
     "test:product-table": "node --test tests/product-table.test.mjs",
     "test:product-table-ui": "node tests/product-table-ui.mjs",
     "test:section8": "node tests/section8-mode.mjs",
-    "test:detail-toggle": "node tests/detail-toggle-ui.mjs",
     "test:new-listing-ui": "node tests/new-listing-layout-ui.mjs",
     "test:board-selection": "node tests/board-selection-ui.mjs",
     "test:edit-find-keys": "node tests/edit-find-keys-ui.mjs",

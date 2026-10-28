@@ -390,6 +390,21 @@ test('저장 잠금: 자동 변경은 화면 저장이 끝난 뒤 저장하고, 
   const loaded = await read;
   assert.equal(loaded.success, true, loaded.error);
   assert.equal(loaded.data.items[0].rows[0].price, '110.61');
+
+  // 화면 쓰기(아임웹 자사몰 신규 등록 · main imweb-head-register)도 화면 저장과 같은 줄: 서로 BUSY, 자동 변경은 기다린다.
+  let done; const register = service.uiWrite(() => new Promise(r => { done = r; }));
+  await new Promise(r => setImmediate(r));
+  const blocked = await handlers['bulk-save-batch'](null, { jobId: 'ui-write-test', scope: 'amazon-us',
+    jobs: [{ type: 'price', id: 'A', newPrice: '111', expectedPrice: '110.61' }] });
+  assert.deepEqual([blocked.success, blocked.kind, blocked.stage], [false, 'BUSY', 'pre-send']);
+  assert.equal((await service.uiWrite(async () => 'x')).kind, 'BUSY');
+  const fxAfter = service.exclusive(async () => order.push('fx after register'));
+  await new Promise(r => setImmediate(r));
+  assert.equal(order.includes('fx after register'), false, '등록이 끝나기 전에는 자동 변경도 기다린다');
+  done({ success: true });
+  assert.deepEqual(await register, { success: true });
+  await fxAfter;
+  assert.equal(order.at(-1), 'fx after register');
 });
 
 test('후보 현재가는 아마존 한 요청 20건까지 묶어 미리 읽고, 목록가로 걸러진 상품·묶음에서 빠진 상품만 따로 다룬다', async t => {

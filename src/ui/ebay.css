@@ -14,4 +14,7 @@
 #ebayTab #ebFulfillment[list]::-webkit-calendar-picker-indicator,
 #ebayTab #ebPayment[list]::-webkit-calendar-picker-indicator,
 #ebayTab #ebReturn[list]::-webkit-calendar-picker-indicator { position: absolute; left: 10px; margin: 0; }
+/* 브랜드 · MPN · 판매가 · 재고 한 줄(25% 씩) */
+#ebayTab .quad-input { width: 100%; max-width: 100%; }
+#ebayTab .quad-input > .input-col { flex: 1 1 0; min-width: 0; }
 @media (max-width: 720px) { #ebayTab .dual-input { flex-direction: column; } }

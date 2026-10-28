@@ -1,4 +1,4 @@
-// 브라우저 주입 방식 통일(리뷰 #4)과 아임웹 인스턴스 병합(리뷰 #5)을 고정한다.
+// 브라우저 주입 방식 통일(리뷰 #4)을 고정한다.
 //
 // 예전 구조: 인스턴스가 Browser 객체를 필드로 들고 있어서, main_process 가 브라우저를
 // 닫고 다시 띄우면 인스턴스는 죽은 객체를 붙들고 있었다. 그래서 핸들러마다
@@ -63,18 +63,6 @@ test('같은 플랫폼명의 컨텍스트는 재사용한다(창 중복 방지)'
     await p2.init(false);
     assert.equal(b.contexts().length, 1, '두 번째 인스턴스가 창을 또 열면 안 된다');
     assert.equal(p2.context, p1.context);
-});
-
-// ── 리뷰 #5: 아임웹 인스턴스는 하나여야 한다 ──────────────────
-// main_process.js 는 electron 을 import 하므로 여기서 실행할 수 없다.
-// 대신 '두 번째 인스턴스를 만드는 코드가 다시 생기지 않는지'를 소스에서 확인한다.
-test('main_process 에 ImwebEdit 인스턴스 생성이 한 곳뿐이다', () => {
-    const src = fs.readFileSync(new URL('../src/main_process.js', import.meta.url), 'utf8');
-    const creations = src.match(/new ImwebEdit\(/g) || [];
-    assert.equal(creations.length, 1,
-        'ImwebEdit 를 두 번 만들면 같은 브라우저 컨텍스트를 두 인스턴스가 나눠 쓰게 된다');
-    assert.ok(!/imwebEditInstance\s*=/.test(src),
-        '두 번째 싱글턴 변수(imwebEditInstance)가 되살아났다');
 });
 
 test('main_process 에 수동 browser 재주입이 남아 있지 않다', () => {

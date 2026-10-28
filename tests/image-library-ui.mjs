@@ -61,6 +61,12 @@ try {
   await page.waitForFunction(() => document.getElementById('form-frame').contentDocument.getElementById('ebImages')?.value.split('\n').length === 2);
   await page.locator('#vu-image-pick-main').click();
   assert.match(await page.locator('#vu-image-folder').textContent(), /ebay/);
+  // 다른 앱(Edge 페이지)도 dragstart 에서 x-vu-photo 를 실을 수 있다 — 이 창에서 시작한 드래그가 아니면 대표로 받지 않는다(UNC 경로면 Windows 가 그 호스트에 접속).
+  const spoof = await context.newCDPSession(page), list = await page.locator('#vu-image-list').boundingBox();
+  const photo = { dragOperationsMask: 1 | 2 | 16, items: [{ mimeType: 'application/x-vu-photo', data: '\\\\evil.example@SSL\\share\\x.jpg' }] };
+  for (const type of ['dragEnter', 'dragOver', 'drop']) await spoof.send('Input.dispatchDragEvent', { type, x: list.x + 20, y: list.y + 20, data: photo });
+  await page.waitForFunction(() => /주소가 아닙니다/.test(document.getElementById('vu-image-status').textContent));
+  assert.equal(await page.evaluate(() => calls.some(c => c.data?.changes?.thumbnail)), false);
   // 좌측 베리씨드 미리보기를 이미지 목록에 끌어다 놓으면 그 파일이 지금 목록(eBay)의 대표 이미지가 된다.
   await page.locator('#btn-load-korea').click();
   await page.locator('#photo-preview-img').waitFor();
@@ -83,6 +89,13 @@ try {
   await page.waitForFunction(() => calls.some(c => c.data?.changes?.addDetails));
   assert.deepEqual(await page.evaluate(() => calls.findLast(c => c.channel === 'image-library-configure').data), { id: 'ebay', changes: { addDetails: [esm] } });
   assert.equal(await page.evaluate(() => window.pwned), undefined, '끌어 온 마크업의 속성은 실행하지 않는다');
+  // 끌어 온 주소에는 '|' 가 그대로 남지 않는다(버리거나 %7C) — 일괄 수정 칸(bulk-edit.js)이 '|' 로 이어 나누면 뒤쪽이 남의 이미지가 된다.
+  const pipe = { dragOperationsMask: 1 | 2 | 16, items: [{ mimeType: 'text/html', data: '<img src="https://ai.esmplus.com/a.jpg|https://evil.example/x.jpg">' }] };
+  await page.waitForFunction(() => !document.getElementById('vu-image-prepare').disabled);   // 앞 드롭 작업 중에는 드롭을 받지 않는다
+  const sent = await page.evaluate(() => calls.length);
+  for (const type of ['dragEnter', 'dragOver', 'drop']) await cdp.send('Input.dispatchDragEvent', { type, x: box.x + 20, y: box.y + 20, data: pipe });
+  await page.waitForFunction(n => calls.length > n || /주소가 아닙니다/.test(document.getElementById('vu-image-status').textContent), sent);
+  assert.equal(await page.evaluate(() => calls.some(c => c.data?.changes?.addDetails?.some(u => u.includes('|')))), false);
   // ESM '태그복사' → 목록에서 Ctrl+V. HTML 편집 칸 안의 붙여넣기는 보통 붙여넣기 그대로.
   await page.locator('#vu-image-list').focus();
   await page.evaluate(() => { const dt = new DataTransfer(); dt.setData('text/plain', "<img src='https://ai.esmplus.com/yhshma/a.jpg' /><img src='https://ai.esmplus.com/yhshma/b.jpg' />");

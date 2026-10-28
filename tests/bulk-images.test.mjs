@@ -8,7 +8,7 @@ import { Coupang } from '../src/platforms/coupang.js';
 import { CoupangAPI } from '../src/platforms/coupang_api.js';
 import { Amazon } from '../src/platforms/amazon.js';
 import { Ebay } from '../src/platforms/ebay.js';
-import { ImwebEdit } from '../src/platforms/imweb_edit.js';
+import { replaceDetailImages } from '../src/platforms/openapi/imweb_b2b.js';
 
 const old = 'https://images.example/old.jpg', fresh = 'https://images.example/new.jpg', second = 'https://images.example/2.jpg';
 const quiet = { sleep: async () => {}, inspect: async () => true };
@@ -132,7 +132,7 @@ test('eBay uses resolved SKU and preserves inventory fields; no migration', asyn
   assert.equal(payload.availability.shipToLocationAvailability.quantity, 7); assert.deepEqual(payload.product.imageUrls, [fresh]);
 });
 test('Imweb adding images to text-only content keeps existing text', () => {
-  const html = ImwebEdit.prototype.replaceDetailImages.call({}, '<p>keep me</p>', [fresh]);
+  const html = replaceDetailImages('<p>keep me</p>', [fresh]);
   assert.match(html, /keep me/); assert.match(html, /new.jpg/);
 });
 

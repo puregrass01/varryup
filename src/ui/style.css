@@ -1037,19 +1037,6 @@ details.api-accordion .api-accordion-content {
     border-color: var(--primary);
 }
 
-.checkbox-btn .flag,
-.radio-btn .flag {
-    height: 14px;
-    width: auto;
-    border-radius: 2px;
-    flex-shrink: 0;
-}
-
-.checkbox-btn:has(input:not(:checked)) .flag {
-    filter: grayscale(1);
-    opacity: 0.5;
-}
-
 /* The imweb category is really just a brand table, so the left panel's brand fills
    it and the picker stays hidden. When that brand is not in the table (a bike brand,
    say), imweb blocks the registration with "pick a manufacturer" - so the shell

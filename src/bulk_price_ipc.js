@@ -160,19 +160,20 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
   /**
    * 여러 상품의 현재가를 몰이 한 요청에 허용하는 만큼 묶어 읽는다. 네이버 목록 조회 100건, 아마존 20건.
    * 묶음 조회가 없는 쿠팡(옵션별 가격 API)·eBay(SKU별 Offer)는 지금처럼 1건씩 읽고, 묶음에서 빠진 상품도 1건 조회로 확인한다.
-   * includeImages(화면의 현재가·이미지 불러오기)면 묶음 결과에 상세 이미지가 없는 상품(네이버 목록 조회)은 그 상품만 이미지 목록을 읽어 채운다.
+   * 네이버 목록 조회 결과에는 상세 이미지가 없다 — 이미지까지 달라면(화면의 현재가·이미지 불러오기) 원상품 1건 조회로 읽는다.
+   * 그 한 응답에 판매가·이미지·revision 이 다 있어, 목록 조회 뒤 이미지만 또 읽는 것보다 호출이 적고 가격도 최신이다.
    * @returns {{ items: Array<{id, rows}|{id, error, kind, blocking}>, blocked: string }} blocked 면 그 뒤 상품은 items 에 없다.
    */
-  async function loadMany({ scope, ids, includeImages = false, images: thumbs = {} } = {}) {
+  async function loadMany({ scope, ids, includeImages = false, images = {} } = {}) {
     currency(scope);
     const list = [...new Set((Array.isArray(ids) ? ids : []).map(v => String(v ?? '').trim()).filter(Boolean))];
     if (!list.length || list.length > LOAD_MANY_MAX) throw new Error('한 번에 1~' + LOAD_MANY_MAX + '개 상품의 현재가를 불러올 수 있습니다.');
-    const inputOf = id => ({ scope, id, includeImages, image: thumbs?.[id] });
+    const inputOf = id => ({ scope, id, includeImages, image: images?.[id] });
     const ready = new Map();
     try {
-      if (scope === 'naver') {
+      if (scope === 'naver' && !includeImages) {
         for (const [id, p] of await naverListed(list)) ready.set(id, [row(inputOf(id), p.salePrice,
-          { name: p.name || '', variant: '기본 판매가 · 옵션 추가금 유지', image: thumbs?.[id] || p.representativeImage?.url })]);
+          { name: p.name || '', variant: '기본 판매가 · 옵션 추가금 유지', image: images?.[id] || p.representativeImage?.url })]);
       } else if (markets[scope]) {
         for (const [id, p] of await config(amazon).loadProductsForEdit(list, markets[scope])) ready.set(id, [amazonRow(inputOf(id), p)]);
       }
@@ -195,21 +196,6 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
         items.push(item);
         if (item.blocking && !blocked) blocked = item.error;
       }
-    }
-    // 이미지가 빠진 상품은 이미지 목록을 따로 읽는다('이미지 목록 조회'와 같은 길이라 저장 때 revision 검사가 맞다).
-    // 못 읽어도 가격 행은 그대로 쓰고 이유를 처리 결과 칸에 남긴다. 인증·한도 오류가 나면 남은 상품은 읽지 않는다.
-    let imageStop = '';
-    for (const item of includeImages ? items : []) {
-      if (!item.rows || item.rows.every(r => r.imagesReady)) continue;
-      let error = imageStop;
-      if (!error) {
-        try {
-          const got = await images.load({ scope, id: item.id });
-          item.rows = item.rows.map(r => ({ ...r, images: got.images, imageRevision: got.revision, imagesReady: true, newImages: null }));
-          continue;
-        } catch (e) { const info = describeError(e); error = info.error; if (info.blocking) imageStop = error; }
-      }
-      item.rows = item.rows.map(r => ({ ...r, imageResult: '이미지 목록을 불러오지 못했습니다: ' + error }));
     }
     return { items, blocked };
   }
@@ -369,6 +355,33 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
     }
     return outcomes;
   }
+  // 아임웹 본사몰 구역 상품명(단일 상품 수정 '아임웹 자사몰' 탭). 가격 한 줄과 같은 판단: 불러온 뒤 바뀌었으면
+  // 보내지 않고(pre-send), 이미 같으면 '변경 없음', 보낸 뒤 다시 읽어 확인한다(늦으면 1.5초 뒤 한 번 더).
+  function nameContext(input) {
+    const id = identity(input), name = String(input.newName ?? '').trim();
+    if (!['imweb-ko', 'imweb-en', 'imweb-jp'].includes(input.scope)) throw new Error('상품명은 아임웹 본사몰 구역에서만 바꿀 수 있습니다.');
+    if (!name) throw new Error('상품명을 입력하세요.');
+    if (input.expectedName == null) throw new Error('상품을 먼저 불러오세요.');
+    return { id, scope: input.scope, name, expected: String(input.expectedName) };
+  }
+  async function saveName(input) {
+    const { id, scope, name, expected } = nameContext(input);
+    let now;
+    try { now = await imwebBulk.readName(scope, id); } catch (e) { throw markPreSend(e); }
+    if (now !== expected) throw markPreSend(new Error(`불러온 뒤 상품명이 바뀌었습니다(지금 ${now}). 다시 불러오세요.`));
+    if (now === name) return { status: 'UNCHANGED', name };
+    try { await imwebBulk.sendName(scope, id, name); } catch (e) { if (e && typeof e === 'object') e.sent = true; throw e; }
+    let message = '';
+    for (const wait of [0, 1500]) {
+      if (wait) await sleep(wait);
+      try {
+        const seen = await imwebBulk.readName(scope, id);
+        if (seen === name) return { status: 'VERIFIED', name };
+        message = `조회된 상품명(${seen})이 입력값과 다릅니다`;
+      } catch (e) { message = `재조회에 실패했습니다(${e.message})`; }
+    }
+    return { status: 'CHECK', message: `요청은 보냈지만 ${message}. 잠시 뒤 다시 불러와 확인하세요.` };
+  }
   // 조회 전용 채널. 저장은 bulk-save-batch 하나로만 한다(1건 저장 채널은 화면이 쓰지 않아 10-23 제거).
   for (const [channel, work] of [['bulk-price-list', list], ['bulk-price-load-many', loadMany],
     ['bulk-images-load', images.load], ['bulk-images-import', images.importImages]]) {
@@ -394,26 +407,31 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
     validate: async (job, options) => {
       identity(job);
       if (job.type === 'price') priceContext(job);
+      else if (job.type === 'name') nameContext(job);
       else { if (!job.expectedRevision) throw new Error('이미지를 먼저 불러오세요.'); await images.validate(job, options); }
     },
-    save: (job, options) => job.type === 'images' ? images.save(job, options) : save(job),
+    save: (job, options) => job.type === 'images' ? images.save(job, options) : job.type === 'name' ? saveName(job) : save(job),
     // eBay 는 한 요청에 25건을 보낸다. 네이버는 쓰기는 상품마다, 쓰기 뒤 확인을 10건씩 묶는다.
     // 아임웹은 같은 상품의 줄을 한 번 읽고 한 번 확인한다(saveImwebPrices) — 연속한 줄 IMWEB_SAVE_GROUP 개씩.
     groupSize: scope => scope === 'ebay' ? 25 : scope === 'naver' ? NAVER_VERIFY_GROUP : isImwebBulkScope(scope) ? IMWEB_SAVE_GROUP : 1,
     savePrices: (jobs, options) => jobs[0].scope === 'naver' ? saveNaverPrices(jobs, options)
       : isImwebBulkScope(jobs[0].scope) ? saveImwebPrices(jobs, options) : ebay().updatePricesBatch(jobs),
   });
-  ipcMain.handle('bulk-save-batch', async (event, input) => {
+  // 화면 쓰기(일괄 수정 저장 · 아임웹 자사몰 신규 등록 main imweb-head-register): 자동 변경 저장은 기다리고,
+  // 다른 화면 쓰기 중이면 BUSY 로 돌려보낸다.
+  async function uiWrite(work) {
     while (writing === 'fx') await idle;
     if (writing) return { success: false, error: '다른 저장 작업이 진행 중입니다.', stage: 'pre-send', kind: 'BUSY' };
     hold('ui');
+    try { return await work(); } finally { free(); }
+  }
+  ipcMain.handle('bulk-save-batch', (event, input) => uiWrite(async () => {
     try {
       const data = await batch.run(input, payload => event?.sender?.send('bulk-save-progress', payload));
       return { success: true, data };
     } catch (e) { return { success: false, ...describeError(e, { sent: !!e?.sent }) }; }
-    finally { free(); }
-  });
+  }));
   ipcMain.handle('bulk-save-cancel', (_, { jobId } = {}) => ({ success: true, data: batch.cancel(jobId) }));
   // 환율 자동 변경이 화면과 같은 조회·저장 경로를 쓰도록 넘긴다. 아임웹 미국·일본은 별도(imweb_unit_prices.js)로 한다.
-  return { list, load, loadMany, save, exclusive };
+  return { list, load, loadMany, save, exclusive, uiWrite };
 }

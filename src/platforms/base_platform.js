@@ -25,7 +25,6 @@ export class BasePlatform {
 
   get platformName() {
     const name = this.constructor.name.toLowerCase();
-    if (name.includes('imweb')) return 'imweb';
     if (name.includes('naver') || name.includes('smartstore')) return 'naver';
     if (name.includes('esm')) return 'esm';
     return name;

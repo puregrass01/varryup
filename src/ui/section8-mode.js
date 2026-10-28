@@ -46,6 +46,7 @@ function setSection8Mode(mode, force = false) {
       if (emptyText) emptyText.textContent = '현황판에서 플랫폼을 클릭하면 상품 수정 폼이 열립니다.';
     }
     updateEmptyState();
+    updateLangFields();   // 아임웹 자사몰은 신규 모드에서만 언어 칸을 켠다(index_up.html activeLangs)
   }
 
   const platformWindow = section
@@ -62,7 +63,6 @@ function setSection8Mode(mode, force = false) {
     ['cpWorkMode', 'copy', 'updateCoupangModeUI'],
     ['amzWorkMode', 'register', 'updateAmazonModeUI'],
     ['iwB2bWorkMode', 'copy', 'updateImwebB2bModeUI'],
-    ['iwBoardWorkMode', 'copy', 'updateImwebBoardModeUI'],
   ];
   let modeUiRan = false;
   for (const [name, newValue, updateUI] of fields) {

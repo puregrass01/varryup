@@ -48,6 +48,10 @@ test('ESM HTML is parsed as data, preserves order, decodes entities and deduplic
   for (const src of ['file:///C:/a.jpg', 'javascript:bad()', 'https://example.com/a.jpg', 'https://ai.esmplus.com.evil/a.jpg']) {
     assert.throws(() => esmImagesFromHtml(`<img src="${src}">`));
   }
+  // 일괄 수정은 주소를 '|' 로 이었다 다시 나눈다 — URL 이 남긴 '|' 뒤쪽은 ESM 확인 없이 저장되는 남의 이미지가 된다
+  for (const src of ['https://ai.esmplus.com/a.jpg|https://evil.example/x.jpg', 'https://ai.esmplus.com/a.jpg?x=|https://evil.example/x.jpg']) {
+    assert.throws(() => esmImagesFromHtml(`<img src="${src}">`), /\|/);
+  }
   assert.throws(() => esmImagesFromHtml('<p>No images</p>'));
 });
 

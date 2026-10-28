@@ -1,5 +1,5 @@
 {
-  "_설명": "차량 명칭 한↔영↔일 사전. 값이 null 이면 해당 언어 표기가 없다는 뜻이며,\n호출부는 폴백하되 반드시 경고를 남긴다 (조용히 영문/한글이 발행되는 것이 원래 문제였다).\n출처: CSVdatabase/V2 Vehicles - Grid view - 2026-09-22.csv,\nCSVdatabase/Manufacturers - Grid view - 2026-09-09.csv\n생성: scratch/build_vehicle_i18n.mjs (CSV 는 배포본에 동봉되지 않으므로 이 JSON 이 런타임 정본이다)\n주의: data/imweb_boards.json 의 jp 는 아임웹에 실재하는 \"게시판 이름\" 이라 이 파일과 다를 수 있고,\n      그쪽을 이 값으로 덮어쓰면 게시판을 못 찾아 포스팅이 통째로 건너뛰어진다.",
+  "_설명": "차량 명칭 한↔영↔일 사전. 값이 null 이면 해당 언어 표기가 없다는 뜻이며,\n호출부는 폴백하되 반드시 경고를 남긴다 (조용히 영문/한글이 발행되는 것이 원래 문제였다).\n출처: CSVdatabase/V2 Vehicles - Grid view - 2026-09-22.csv,\nCSVdatabase/Manufacturers - Grid view - 2026-09-09.csv\n생성: scratch/build_vehicle_i18n.mjs (CSV 는 배포본에 동봉되지 않으므로 이 JSON 이 런타임 정본이다)",
   "aliases": {
     "르노삼성": "르노 코리아",
     "르노": "르노 코리아",

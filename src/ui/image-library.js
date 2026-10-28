@@ -1,6 +1,6 @@
 (() => {
   const profiles = new Map(), bundles = new Map();
-  let ipc, root, selected = 'domestic', busy = false, afterChange = () => {};
+  let ipc, root, selected = 'domestic', busy = false, dragging = 0, afterChange = () => {};
   const $ = id => root.querySelector(`#${id}`);
   const node = (tag, text, cls) => { const el = document.createElement(tag); if (text) el.textContent = text; if (cls) el.className = cls; return el; };
   const status = text => { $('vu-image-status').textContent = text; };
@@ -24,10 +24,21 @@
       text.append(node('small', item.error || (item.source === 'esm' ? 'ESM 이미지' : item.url ? '호스팅 저장됨' : (i === 0 && p.seed ? 'VerySeed GLOBAL 최신 사진' : '적용 시 주소 확인'))));
       if (i === 0 && item.modified) text.append(node('small', new Date(item.modified).toLocaleString('ko-KR')));
       label.append(check, img, text); row.append(label);
-      if (i > 1) {
-        const up = node('button', '↑'); up.type = 'button'; up.title = `${item.name} 앞으로`; up.disabled = busy;
-        up.onclick = () => { const order = p.items.slice(1).map(v => v.path); [order[i - 1], order[i - 2]] = [order[i - 2], order[i - 1]]; change({ order }); };
-        row.append(up);
+      // 상세 줄은 끌어다 놓아 순서를 바꾼다(대표는 늘 첫 줄이라 끌 수도, 그 위에 놓을 수도 없다).
+      if (i > 0) {
+        row.draggable = !busy; row.title = '끌어서 순서 바꾸기';
+        row.addEventListener('dragstart', e => { dragging = i; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('application/x-vu-row', String(i)); });
+        row.addEventListener('dragend', () => { dragging = 0; });
+        row.addEventListener('dragover', e => { if (dragging) e.preventDefault(); });
+        row.addEventListener('drop', e => {
+          if (!dragging) return;
+          e.preventDefault(); e.stopPropagation();
+          const from = dragging; dragging = 0;
+          if (from === i || busy) return;
+          const order = p.items.slice(1).map(v => v.path);
+          order.splice(i - 1, 0, ...order.splice(from - 1, 1));
+          change({ order });
+        });
       }
       list.append(row);
     });
@@ -84,7 +95,8 @@
         const u = new URL(String(src).trim());
         if (!/^https?:$/.test(u.protocol) || u.hostname !== 'ai.esmplus.com' || u.username || u.password || u.port) return '';
         u.protocol = 'https:'; u.search = ''; u.hash = '';   // http 는 ESM 이 https 로 보낸다. ESM 파일 이름에는 ?·# 가 없다
-        return u.href;
+        // 지금 Chromium 은 경로의 '|' 를 %7C 로 바꾸지만 URL 표준(Node)은 그대로 둔다 — 남으면 일괄 수정 칸이 '|' 로 나눠 뒤쪽이 남의 이미지가 된다
+        return u.href.includes('|') ? '' : u.href;
       } catch { return ''; }
     }).filter(Boolean))];
   }
@@ -96,13 +108,13 @@
       root.innerHTML = `<summary>[img] 이미지</summary>
         <select id="vu-image-profile" aria-label="이미지 쇼핑몰"><option value="domestic">국내 공통</option><option value="amazon">Amazon</option><option value="ebay">eBay</option></select>
         <div id="vu-image-folder" class="vu-image-path"></div>
-        <div class="vu-image-actions"><button type="button" id="vu-image-html-open" title="ESM 상세 이미지 HTML 편집">HTML</button><button type="button" id="vu-image-defaults" title="ESM 기본 상세 이미지로 복원">기본값</button><button type="button" id="vu-image-pick-main" title="대표 이미지 선택">대표</button><button type="button" id="vu-image-seed">VerySeed 최신</button><button type="button" id="vu-image-refresh">새로고침</button></div>
+        <div class="vu-image-actions"><button type="button" id="vu-image-html-open" title="ESM 상세 이미지 HTML 편집">HTML</button><button type="button" id="vu-image-defaults" title="ESM 기본 상세 이미지로 복원">기본값</button><button type="button" id="vu-image-pick-main" title="대표 이미지 선택">대표</button><button type="button" id="vu-image-seed">VerySeed 최신</button><button type="button" id="vu-image-refresh">새로고침</button><button type="button" id="vu-image-esm" title="ESM Plus — 로그인 후 이미지 호스팅(여기서 이미지를 끌어다 목록에 놓으세요)">ESM</button></div>
         <div id="vu-image-html-editor" hidden><label for="vu-image-html">ESM 상세 이미지 HTML</label><textarea id="vu-image-html" rows="5" placeholder='<img src="https://ai.esmplus.com/…">'></textarea><button type="button" id="vu-image-html-save">HTML 저장</button><button type="button" id="vu-image-html-cancel">취소</button></div>
         <div id="vu-image-list" class="vu-image-list"></div><div id="vu-image-status" class="vu-image-status" role="status"></div>
         <button type="button" id="vu-image-prepare" class="vu-image-prepare">일괄 적용</button>
         <small>기본 상세 이미지는 로컬 폴더 없이 표시됩니다. 기존 상품 수정에는 자동 적용하지 않습니다.</small>`;
       $('vu-image-profile').onchange = e => { selected = e.target.value; $('vu-image-html-editor').hidden = true; draw(); };
-      // 편집기는 목록에 보이는 순서(↑ 반영, 체크 끈 것 포함)로 연다 — 저장하면 이 줄 순서가 곧 목록 순서다.
+      // 편집기는 목록에 보이는 순서(끌어 옮긴 순서, 체크 끈 것 포함)로 연다 — 저장하면 이 줄 순서가 곧 목록 순서다.
       $('vu-image-html-open').onclick = () => { const p = profiles.get(selected);
         $('vu-image-html').value = p?.detailSource === 'esm' && !p.errors.length ? p.items.slice(1).map(i => line(i.path)).join('\n') : p?.detailHtml || '';
         $('vu-image-html-editor').hidden = false; };
@@ -134,7 +146,7 @@
         }
         if (await change({ addDetails: urls })) {
           const added = (profiles.get(selected)?.items.length || 0) - items.length;
-          status((added ? `ESM 이미지 ${added}장을 목록 끝에 추가했습니다. ↑로 순서를 바꿀 수 있습니다.` : '이미 목록에 있는 이미지입니다.') + again);
+          status((added ? `ESM 이미지 ${added}장을 목록 끝에 추가했습니다. 끌어서 순서를 바꿀 수 있습니다.` : '이미 목록에 있는 이미지입니다.') + again);
         }
       };
       // 패널 안에서 시작한 드래그(편집 칸 줄 옮기기)와 편집 칸 위의 드래그는 브라우저가 처리한다 — dragover 를 막으면 편집 칸이 글자를 받지 않는다.
@@ -145,7 +157,8 @@
       for (const type of ['dragenter', 'dragover']) root.addEventListener(type, e => { if (!busy && !inner && !e.target.closest?.('textarea') && offered(e.dataTransfer.types)) e.preventDefault(); });
       root.addEventListener('drop', e => {
         const dt = e.dataTransfer, file = dt.getData('application/x-vu-photo');
-        if (file) { e.preventDefault(); change({ thumbnail: file, seed: false }); return; }
+        // 다른 앱(Edge 페이지)도 이 형식을 실을 수 있다 — 이 창 미리보기에서 시작한 드래그의 경로만 받는다(UNC 경로면 Windows 가 그 호스트에 접속).
+        if (file && file === window.vuPhotoDrag) { e.preventDefault(); change({ thumbnail: file, seed: false }); return; }
         if (inner) return;
         const urls = esmUrls(dt.getData('text/html'), dt.getData('text/uri-list') || dt.getData('text/plain'));
         if (!urls.length && e.target.closest?.('textarea')) return;   // ESM 주소가 아닌 글자는 편집 칸에 그대로 들어간다
@@ -159,6 +172,7 @@
       });
       $('vu-image-list').tabIndex = 0;   // 목록 빈자리를 눌러 포커스한 뒤 Ctrl+V
       $('vu-image-refresh').onclick = () => run(refresh);
+      $('vu-image-esm').onclick = () => window.openSellerSite?.('esm');
       $('vu-image-prepare').onclick = () => run(() => prepare(selected));
       ipc.on('image-library-progress', (_, { message }) => status(message));
       await run(refresh);

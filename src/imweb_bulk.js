@@ -11,6 +11,7 @@
 // 그래서 기본 판매가 한 줄 + 조합마다 한 줄로 보여 주고 각각 저장한다 — 쿠팡의 옵션별 가격과 같은 방식이다.
 // 저장 직전에 다시 읽어, 불러온 뒤에 바뀌었으면 보내지 않는다(pre-send).
 // 이미지: 그 구역 상품 상세설명(HTML)의 이미지. 기존 자리를 순서대로 바꾸고 글 · 배치는 그대로 둔다(replaceDetailImages).
+// 상품명: 본사몰 구역(imweb-ko/en/jp)만. 저장 직전 비교 · 확인은 bulk_price_ipc.js saveName.
 import { extractDetailImages, replaceDetailImages, optionTextOf } from './platforms/openapi/imweb_b2b.js';
 import { toFormData } from './platforms/openapi/imweb_client.js';
 import { markPreSend } from './utils/api_error.js';
@@ -122,5 +123,17 @@ export function createImwebBulk({ clientFor }) {
       { form: toFormData({ unitCode, description: replaceDetailImages(content, images) }) });
   }
 
-  return { list, load, currentPrice, writePrice, readPrices, priceIn, checkBefore, sendPrice, readImages, saveImages };
+  // ── 상품명(그 구역만) — 단일 상품 수정 '아임웹 자사몰' 탭. 요청은 imweb_unit_names.js setName 과 같다. ──
+  async function readName(scope, id) {
+    const { client, unitCode } = await target(scope);
+    const p = await client.product(id, unitCode);
+    if (!p) throw new Error(`상품 ${id} 을 찾지 못했습니다.`);
+    return String(p.name ?? '');
+  }
+  async function sendName(scope, id, productName) {
+    const { client, unitCode } = await target(scope);
+    await client.request('PATCH', `/products/${encodeURIComponent(id)}`, { form: toFormData({ unitCode, productName }) });
+  }
+
+  return { list, load, currentPrice, writePrice, readPrices, priceIn, checkBefore, sendPrice, readImages, saveImages, readName, sendName };
 }

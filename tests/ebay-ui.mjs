@@ -85,11 +85,9 @@ try {
   assert.equal(await parent.locator('#log-window .log-entry.info', { hasText: '[eBay] 1개 카테고리' }).count(), 1, '기본(system) 줄은 info 로');
   // SKU 칸은 셸이 채우는 칸이라(shell-owned) 숨는다 — 사람이 치는 카테고리 검색어로 탭 전환 뒤 보존을 본다.
   await frame.locator('#ebCategoryQuery').fill('PRESERVE-QUERY');
-  // 1-클릭: 현황판에서 아임웹 자사몰 클릭 시 바로 아임웹 탭으로 전환되고 iwTargetUs 체크됨
-  await parent.locator('#cell-USA-own').click();
-  await frame.locator('#imwebBoardTab').waitFor({ state: 'visible' });
-  assert.equal(await frame.locator('#iwTargetUs').isChecked(), true);
-  await parent.screenshot({ path: path.join(output, 'imweb-us-parent.png'), fullPage: true, animations: 'disabled' });
+  // 1-클릭: 현황판에서 아마존 미국 클릭 시 바로 아마존 탭으로 전환됨
+  await parent.locator('#cell-USA-open1').click();
+  await frame.locator('#amazonTab').waitFor({ state: 'visible' });
   await parent.locator('#cell-USA-open2').click();   // 이미 켠 eBay 타일을 다시 누르면 그 탭으로 돌아간다
   await frame.locator('#ebayTab').waitFor({ state: 'visible' });
   assert.equal(await frame.locator('#ebCategoryQuery').inputValue(), 'PRESERVE-QUERY');

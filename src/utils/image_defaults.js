@@ -25,6 +25,8 @@ export function esmImagesFromHtml(html) {
       if (url.protocol !== 'https:' || url.hostname !== 'ai.esmplus.com' || url.username || url.password || url.port) {
         throw new Error('이미지 HTML에는 https://ai.esmplus.com 이미지 주소를 사용해주세요.');
       }
+      // URL 은 '|' 를 그대로 둔다 — 일괄 수정이 '|' 로 이었다 나누면 뒤쪽이 ESM 확인 없는 남의 이미지가 된다(bulk_images.js)
+      if (url.href.includes('|')) throw new Error("ESM 이미지 주소에 '|' 를 넣을 수 없습니다.");
       if (!urls.includes(url.href)) urls.push(url.href);
     }
     for (const child of node.childNodes || []) visit(child);

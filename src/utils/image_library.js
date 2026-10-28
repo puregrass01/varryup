@@ -92,7 +92,7 @@ export class ImageLibrary {
       p.detailSource = 'esm'; p.folder = ''; p.order = [];
       if (changes.resetDetails) { p.detailHtml = this.defaults[id].detailHtml; p.excluded = []; }
       else {
-        // 편집기는 목록 순서(↑ 반영)로 열리니(ui/image-library.js) 저장한 HTML 의 줄 순서가 곧 목록 순서다.
+        // 편집기는 목록 순서(끌어 옮긴 순서)로 열리니(ui/image-library.js) 저장한 HTML 의 줄 순서가 곧 목록 순서다.
         // 체크 해제는 남아 있는 이미지 것만 지킨다.
         const kept = new Set(esmImagesFromHtml(p.detailHtml));
         p.excluded = (p.excluded || []).filter(u => kept.has(u));

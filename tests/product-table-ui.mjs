@@ -25,7 +25,6 @@ try {
       if (channel === 'amazon-load-product') return { success: true, product: { title: 'Amazon loaded', price: 0, stock: 0, description: '', bulletPoints: [] } };
       if (channel === 'ebay-load-product') return { success: true, data: { sku: data, inventory: { product: { title: 'eBay loaded' } }, offer: { offerId: 'offer', status: 'PUBLISHED', availableQuantity: 0, pricingSummary: { price: { value: '1' } } } } };
       if (channel === 'imweb-search-products') return { success: true, groups: [{ baseKey: names[0], items: [{ name: names[0], prodNo: 501, type: 'set', price: 100 }, { name: names[0], prodNo: 502, type: 'indiv', price: 50 }] }] };
-      if (channel === 'imweb-search-posts') return { success: true, rows: [{ postCode: "post/'1", subject: "옵틱글래스 현대 그랜저 '20~23' 와이드미러" }] };
       return { success: false, error: 'Offline stub' };
     } } });
   });
@@ -78,14 +77,6 @@ try {
   assert.equal(await page.locator('#iwB2bResultList tbody tr').count(), 2);
   await page.locator('#iwB2bResultList .vu-product-select').first().click();
   assert.deepEqual(await page.evaluate(() => calls.find(c => c.channel === 'imweb-load-group').data), { prodNos: [501, 502] });
-  await page.evaluate(() => {
-    switchTab('imwebBoardTab');
-    document.getElementById('iwBoardEditCodeInput').value = '123';
-    const select = document.getElementById('iwBoardEditBrand'); select.replaceChildren(new Option('옵틱글래스', '옵틱글래스')); select.value = '옵틱글래스';
-    return searchImwebBoardPosts();
-  });
-  await page.locator('#iwBoardResultList .vu-product-select').click();
-  assert.equal(await page.evaluate(() => calls.find(c => c.channel === 'imweb-load-post').data.postCode), "post/'1");
   assert.equal(await page.evaluate(() => calls.some(c => /update|register|publish/.test(c.channel))), false);
   // 셸 카드의 상품 표·수정 폼은 10-23 지웠다(탭이 없는 몰은 메인 검색이 늘 빈 목록이라 닿을 수 없었다).
   assert.deepEqual(errors, []);

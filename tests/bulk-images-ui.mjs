@@ -44,14 +44,16 @@ try {
       if(channel==='bulk-price-list' && data.scope.startsWith('imweb-')) return {success:true,data:{items:[{id:'3',name:'와이드/광각미러',scope:data.scope,price:data.scope==='imweb-en'?'58':'80000',ready:false}],note:'아임웹 Open API'}};
       if(channel==='bulk-price-list' && data.scope==='amazon-us') return {success:true,data:{items:Array.from({length:52},(_,i)=>({scope:data.scope,id:String(i+1),name:'Product '+(i+1),price:i<26?(i%2?'10000.00':'10000'):i<50?'20000':i===50?'0':'',readonly:i===51,ready:false,images:i===0?'https://images.example/a.jpg?x=1&y=2|https://images.example/b.jpg':[]})),note:''}};
       if(channel==='bulk-price-list') return {success:true,data:{items:(data.scope==='coupang'?['1']:['1','2','3']).map(id=>({scope:data.scope,id,name:'Product '+id,price:'10000',ready:false})),note:''}};
-      // 메인과 같이: 묶음 조회는 상품마다 행을 돌려주고, 네이버(목록 조회) 결과에는 상세 이미지가 없다.
+      // 메인과 같이: 묶음 조회는 상품마다 행을 돌려주고 이미지까지 채운다(네이버는 메인이 상품마다 이미지 목록을 읽는다).
+      // failLoad: 자동 불러오기를 실패시켜 '안 읽은 행'을 남긴다(가격 적용·이미지 적용이 먼저 읽는 길을 시험하려고).
       if(channel==='bulk-price-load-many') {
+        if(window.failLoad) return {success:false,error:'불러오기 실패(모의)'};
         const items=[];
         for(const id of data.ids){ const one=await this.invoke('bulk-price-load',{scope:data.scope,id,image:data.images?.[id]});
-          items.push({id,rows:one.data.map(r=>data.scope==='naver'?r:{...r,images:['https://ai.esmplus.com/test/old.jpg','https://ai.esmplus.com/test/detail.jpg'],imageRevision:'old',imagesReady:true,newImages:null})}); }
+          items.push({id,rows:one.data.map(r=>({...r,images:['https://ai.esmplus.com/test/old.jpg','https://ai.esmplus.com/test/detail.jpg'],imageRevision:'old',imagesReady:true,newImages:null}))}); }
         return {success:true,data:{items,blocked:''}};
       }
-      if(channel==='bulk-price-load') return {success:true,data:(data.scope==='coupang'?['11','12']:['']).map(optionId=>({...data,optionId,name:'Product '+data.id,price:window.loadedPrice || '10000',ready:true,priceReadonly:data.scope==='imweb-ko'}))};
+      if(channel==='bulk-price-load') return {success:true,data:(data.scope==='coupang'?['11','12']:['']).map(optionId=>({...data,optionId,name:data.scope.startsWith('imweb-')?'와이드/광각미러':'Product '+data.id,price:window.loadedPrice || (data.scope==='imweb-en'?'58':'10000'),ready:true,priceReadonly:data.scope==='imweb-ko'}))};
       if(channel==='bulk-images-load') return {success:true,data:{images:['https://ai.esmplus.com/test/old.jpg','https://ai.esmplus.com/test/detail.jpg'],revision:'old'}};
       if(channel==='image-library-load') return {success:true,profiles:['domestic','amazon','ebay'].map(id=>({id,items:[{role:'대표',selected:true,source:'local',url:'https://ai.esmplus.com/main.jpg'},{role:'상세',selected:true,source:'esm',url:'https://ai.esmplus.com/default.jpg'}]}))};
       if(channel==='bulk-images-import') {
@@ -72,15 +74,24 @@ try {
   // 선택·해제 버튼은 없앴다 — 표 머리의 전체선택 체크로 고르고, 풀면 모두 해제된다.
   const selectAll=()=>page.locator('#be-th-select-all').check();
   const clearAll=async()=>{ await selectAll(); await page.locator('#be-th-select-all').uncheck(); };
+  // 쪽 넘김·검색·필터 뒤 자동 불러오기는 잠깐(300ms) 기다렸다 돈다 — 그 뒤 작업이 끝날 때까지 기다린다.
+  const settle=async()=>{ await page.waitForTimeout(400); await idle(); };
+  // 목록을 받으면 보이는 쪽의 현재가·이미지까지 읽는다(예전 '선택 상품 현재가·이미지 불러오기' 버튼은 없앴다).
   const load=async scope=>{
     await page.locator(`[data-scope="${scope}"]`).click(); await page.locator('#be-list').click(); await idle();
-    await selectAll(); await page.locator('#be-load').click(); await idle();
+    await selectAll();
   };
   const urls='https://ai.esmplus.com/test/new.jpg|https://ai.esmplus.com/test/2.jpg';
-  await page.locator('#be-list').click(); await idle(); await selectAll();
+  assert.equal(await page.locator('#be-load').count(),0,'불러오기 버튼은 없다');
+  await page.locator('#be-list').click(); await idle();
+  assert.deepEqual(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-price-load-many').map(c=>[c.data.ids,c.data.includeImages])),[[['1','2','3'],true]],'목록 조회가 보이는 쪽의 현재가·이미지까지 읽는다');
+  assert.match(await page.locator('#be-status').textContent(),/3개 상품을 불러왔습니다\. 현재가·이미지 3개 상품을 불러왔습니다\./);
+  assert.match(await page.locator('#be-count').textContent(),/선택 0행/,'자동 불러오기는 선택을 만들지 않는다');
+  assert.equal(await page.locator('#be-body .vu-image-remove').count(),6,'읽은 행은 바로 ✖로 지울 수 있다');
+  await selectAll();
   await page.locator('#be-image-value').fill(urls); await page.locator('#be-image-apply').click(); await idle();
   assert.match(await page.locator('#be-status').textContent(),/3개 상품에 이미지 2장으로 교체 대기/);
-  assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-images-load').length),3);
+  assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-images-load').length),0,'이미 읽은 이미지는 적용 때 다시 읽지 않는다');
   assert.equal(await page.locator('#be-image-apply').textContent(),'이미지 적용');
   assert.equal(await page.locator('#be-image-op').inputValue(),'replace','기본은 교체');
   assert.equal(await page.locator('#be-body img').count(),6);
@@ -172,11 +183,6 @@ try {
   assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-images-save').length),1,'one image request per Coupang product');
   assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-save-batch').length),1,'one batch submission from the UI');
   assert.equal(await page.locator('.be-image-pending').count(),0);
-  // 옵션 하나만 골라 현재가를 다시 불러와도 다른 옵션이 덩달아 선택되지 않는다('가격 입력' 이 모든 옵션가를 덮던 것).
-  await clearAll();
-  await page.locator('#be-body tr').first().locator('input[type=checkbox]').check();
-  await page.locator('#be-load').click(); await idle();
-  assert.deepEqual(await page.locator('#be-body tr input[type=checkbox]').evaluateAll(boxes=>boxes.map(b=>b.checked)),[true,false],'reload keeps the single chosen option');
   await page.evaluate(()=>{calls.length=0;});
   // 아임웹 네 범위는 Open API 로 연결됐다 — 예전의 '카탈로그 참조 · API 연동 전' 잠금이 없어야 한다.
   for (const scope of ['imweb-ko','imweb-en','imweb-jp','imweb-b2b']) {
@@ -185,15 +191,22 @@ try {
     assert.match(await page.locator('#be-body').textContent(), /와이드\/광각미러/);
     assert.doesNotMatch(await page.locator('#be-body').textContent(), /카탈로그/);
     assert.match(await page.locator('#be-price-label').textContent(), /기존 판매가/);
-    for (const id of ['be-th-select-all','be-load','be-image-apply']) assert.equal(await page.locator('#'+id).isEnabled(),true, scope+' '+id);
+    for (const id of ['be-th-select-all','be-apply','be-image-apply']) assert.equal(await page.locator('#'+id).isEnabled(),true, scope+' '+id);
   }
-  assert.ok(await page.evaluate(()=>calls.every(c=>c.channel==='bulk-price-list')));
+  assert.ok(await page.evaluate(()=>calls.every(c=>['bulk-price-list','bulk-price-load-many','bulk-price-load'].includes(c.channel))),'조회만 — 저장 요청 없음');
   await page.locator('[data-scope="naver"]').click();
   assert.equal(await page.locator('#be-image-apply').isEnabled(),true);
   assert.equal(await page.locator('#be-image-value').inputValue(),urls,'input survives platform changes');
   // More than one page, mixed numeric representations, zero and unknown prices.
+  // 자동 불러오기를 실패시켜 목록 그대로의 행(목록 가격·목록 이미지)을 본다. 실패한 상품은 이 목록에서 다시 읽지 않는다.
+  await page.evaluate(()=>{window.failLoad=true;});
   await page.locator('[data-scope="amazon-us"]').click();
   await page.locator('#be-list').click(); await idle();
+  assert.match(await page.locator('#be-status').textContent(),/현재가 조회 끝 \(성공 0 · 실패 25\)/);
+  // 25행 쪽에서 표를 끝까지 내려도 머리 두 줄(열 이름 · 입력)이 붙어 있어 가격 적용·이미지 적용이 보인다.
+  const stuck=await page.locator('.be-scroll').evaluate(n=>{n.scrollTop=n.scrollHeight;const s=n.getBoundingClientRect(),inside=id=>{const b=document.getElementById(id).getBoundingClientRect();return b.top>=s.top&&b.bottom<=s.bottom;};
+    const out={scrolled:n.scrollTop>0,price:inside('be-apply'),image:inside('be-image-apply')};n.scrollTop=0;return out;});
+  assert.deepEqual(stuck,{scrolled:true,price:true,image:true});
   const priceFilter=page.getByLabel('가격 필터',{exact:true});
   assert.deepEqual(await priceFilter.locator('option').evaluateAll(nodes=>nodes.map(n=>n.value)),['','0','10000','20000','unknown']);
   assert.equal(await page.locator('#be-body img').count(),2);
@@ -220,12 +233,12 @@ try {
   assert.equal(await page.locator('#be-body input[type=checkbox]:checked').count(),0,'other prices are not selected');
   await priceFilter.selectOption('');
   await clearAll();
-  // Current-price refresh and a verified save must refresh dropdown values.
+  // Current-price refresh and a verified save must refresh dropdown values. 안 읽은 선택 행은 가격 적용이 먼저 읽는다.
+  await settle();
   await page.locator('#be-body input[type=checkbox]').first().check();
-  await page.evaluate(()=>{window.loadedPrice='17500';});
-  await page.locator('#be-load').click(); await idle();
-  assert.equal(await priceFilter.locator('option[value="17500"]').count(),1);
+  await page.evaluate(()=>{window.loadedPrice='17500'; window.failLoad=false;});
   await page.locator('#be-value').fill('18000'); await page.locator('#be-apply').click(); await idle();
+  assert.equal(await priceFilter.locator('option[value="17500"]').count(),1);
   await page.evaluate(()=>{window.missingBatch=true;});
   await page.locator('#be-save').click(); await idle();
   assert.match(await page.locator('#be-status').textContent(),/다시 실행/);
@@ -236,16 +249,12 @@ try {
   assert.equal(await priceFilter.locator('option[value="17500"]').count(),0);
   await page.locator('[data-scope="imweb-en"]').click();
   assert.match(await priceFilter.locator('option[value="58"]').textContent(),/^58 USD$/);
-  // 네이버 3개 현재가: 묶음 요청 한 번, 상품별 이미지 조회 없음(이미지 적용 때 조회).
+  // 이미 읽은 몰로 돌아오면 다시 읽지 않는다(자동 불러오기는 안 읽은 행만). 걸어 둔 이미지 변경안도 남는다.
   await page.evaluate(()=>{calls.length=0;});
-  await page.locator('[data-scope="naver"]').click(); await selectAll();
-  await page.locator('#be-load').click(); await idle();
-  assert.deepEqual(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-price-load-many').map(c=>c.data.ids.length)),[3]);
-  assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-images-load').length),0);
-  // Product 1·3 의 이미지 변경안(위에서 걸어 둔 것)은 현재가를 다시 읽어도 남는다. 목록을 모르는 건 Product 2 하나다.
-  assert.match(await page.locator('#be-status').textContent(),/이미지 적용 때 상품별로 조회합니다\(1개\)/);
-  assert.equal(await page.locator('.be-image-pending').count(),2,'reload keeps staged image drafts');
-  await page.locator('#be-body tr').nth(1).getByRole('button', {name:'이미지 목록 조회',exact:true}).click(); await idle();
+  await page.locator('[data-scope="naver"]').click(); await settle(); await selectAll();
+  assert.equal(await page.evaluate(()=>calls.length),0);
+  assert.equal(await page.locator('.be-image-pending').count(),2,'staged image drafts kept');
+  assert.equal(await page.locator('#be-body').getByRole('button', {name:'이미지 목록 조회',exact:true}).count(),0,'불러온 행은 이미지 목록 조회가 필요 없다');
   assert.equal(await page.locator('#be-body tr').nth(1).locator('.vu-image-remove').count(),2);
   await page.locator('#be-body tr').first().locator('.vu-image-tile').first().hover();
   await page.locator('#be-body tr').first().locator('.vu-image-remove').first().click();
@@ -269,9 +278,12 @@ try {
     assert.deepEqual(await visible(),{query:true,sync:true,fx:true},scope);
   }
   // 숨은 검색칸에 남은 글자로 목록을 거르지 않는다.
+  // (자동 불러오기를 실패시켜 둔다 — 아래 가격 적용·이미지 적용이 안 읽은 행을 먼저 읽는 길을 본다.)
   await page.locator('[data-scope="amazon-jp"]').click();
   await page.locator('#be-api-query').fill('Product');
+  await page.evaluate(()=>{window.failLoad=true;});
   await page.locator('#be-list').click(); await idle();
+  await page.evaluate(()=>{window.failLoad=false;});
   assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-price-list').at(-1).data.query),'Product');
   await page.locator('[data-scope="imweb-b2b"]').click();
   await page.locator('#be-list').click(); await idle();
@@ -280,8 +292,12 @@ try {
   // ── 판매가 한 묶음: [칸][직접 입력/환율가][가격 적용]. 안 읽은 선택 행은 먼저 읽고 채운다. 보내지는 않는다 ──
   await page.locator('[data-scope="amazon-jp"]').click();
   await page.locator('#be-api-query').fill('');
-  assert.equal(await page.locator('thead input:not(#be-th-select-all), thead button, thead select').count(),0,'열 머리에는 라벨만 남긴다');
+  // 판매가·이미지 입력은 표 머리 아래 줄, 그 열 바로 밑에 있다(사진 열 ← 이미지, 판매가 덮어쓰기 열 ← 판매가). 위 작업 줄에서는 뺐다.
   assert.equal(await page.locator('thead th').nth(6).textContent(),'판매가 덮어쓰기');
+  const column=id=>page.locator('#'+id).evaluate(n=>n.closest('thead td')?.cellIndex);
+  for (const id of ['be-value','be-currency','be-price-source','be-apply']) assert.equal(await column(id),6,id);
+  for (const id of ['be-image-value','be-image-op','be-image-apply']) assert.equal(await column(id),1,id);
+  assert.equal(await page.locator('.be-actions input, .be-actions select').count(),0);
   assert.equal(await page.locator('#be-fx-apply').count(),0);
   assert.equal(await page.locator('#be-apply').textContent(),'가격 적용');
   await page.evaluate(()=>{calls.length=0;});
@@ -330,9 +346,11 @@ try {
 
   // ── 이미지 적용 뒤 가격 적용이 안 읽은 행을 불러와도 이미지 변경안은 남는다(예전엔 행을 바꿔 끼우며 사라졌다) ──
   await page.reload(); await page.locator('#be-list').waitFor();
+  await page.evaluate(()=>{window.failLoad=true;});
   await page.locator('#be-list').click(); await idle(); await selectAll();
   await page.locator('#be-image-value').fill(urls); await page.locator('#be-image-apply').click(); await idle();
   assert.equal(await page.locator('.be-image-pending').count(),3);
+  await page.evaluate(()=>{window.failLoad=false;});
   await page.locator('#be-value').fill('12000'); await page.locator('#be-apply').click(); await idle();
   assert.match(await page.locator('#be-status').textContent(),/^3행에 가격을 입력했습니다\./);
   assert.equal(await page.locator('.be-image-pending').count(),3,'auto-load keeps staged image drafts');
@@ -341,17 +359,20 @@ try {
   assert.deepEqual(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-images-save').map(c=>[c.data.id,c.data.urls.length,c.data.expectedRevision])),[['1',2,'old'],['2',2,'old'],['3',2,'old']]);
   assert.deepEqual(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-price-save').map(c=>c.data.newPrice)),['12000','12000','12000']);
   // 상품 한 줄이 옵션 여러 줄로 펼쳐지면 한 값으로 납작하게 채우지 않고 알린다. 옵션을 보고 다시 누르면 채운다.
+  await page.evaluate(()=>{window.failLoad=true;});
   await page.locator('[data-scope="coupang"]').click(); await page.locator('#be-list').click(); await idle(); await selectAll();
+  await page.evaluate(()=>{window.failLoad=false;});
   await page.locator('#be-value').fill('20000'); await page.locator('#be-apply').click(); await idle();
   assert.deepEqual(await page.locator('#be-body input[type=number]').evaluateAll(n=>n.map(x=>x.value)),['10000','10000']);
   assert.match(await page.locator('#be-status').textContent(),/^판매가를 넣을 수 있는 행이 없습니다\. 상품 1개가 옵션 2행으로 펼쳐져 판매가를 넣지 않았습니다\./);
   await page.locator('#be-apply').click(); await idle();
   assert.deepEqual(await page.locator('#be-body input[type=number]').evaluateAll(n=>n.map(x=>x.value)),['20000','20000']);
   // 불러온 가격이 가격 필터에서 빠져도 고른 줄을 채우고 그 수를 알린다.
+  await page.evaluate(()=>{window.failLoad=true;});
   await page.locator('[data-scope="amazon-us"]').click(); await page.locator('#be-list').click(); await idle();
-  await priceFilter.selectOption('20000');
+  await priceFilter.selectOption('20000'); await settle();
   await page.locator('#be-body input[type=checkbox]').first().check();
-  await page.evaluate(()=>{window.loadedPrice='17500';});
+  await page.evaluate(()=>{window.loadedPrice='17500'; window.failLoad=false;});
   await page.locator('#be-value').fill('18000'); await page.locator('#be-apply').click(); await idle();
   assert.match(await page.locator('#be-status').textContent(),/^1행에 가격을 입력했습니다\. 현재가를 불러온 뒤 가격 필터에서 빠진 행 1개도 채웠습니다/);
   await priceFilter.selectOption('17500');
@@ -365,6 +386,20 @@ try {
   assert.deepEqual(await srcs(),['https://ai.esmplus.com/test/detail.jpg']);
   assert.match(await page.locator('#be-status').textContent(),/^3개 상품에 입력한 URL 제거 대기\./);
   assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-images-import').length),0);
+
+  // ── 현재가·이미지는 보이는 쪽(25행)만 자동으로 읽는다 — 쪽을 넘기면 그 쪽을, 읽은 쪽은 다시 읽지 않는다 ──
+  await page.reload(); await page.locator('#be-list').waitFor();
+  await page.locator('[data-scope="amazon-us"]').click(); await page.locator('#be-list').click(); await idle();
+  const loads=()=>page.evaluate(()=>calls.filter(c=>c.channel==='bulk-price-load-many').map(c=>c.data.ids[0]+'~'+c.data.ids.at(-1)));
+  assert.deepEqual(await loads(),['1~25'],'목록 전체가 아니라 첫 쪽만');
+  await page.locator('#be-next').click(); await settle();
+  assert.deepEqual(await loads(),['1~25','26~50'],'넘긴 쪽을 읽는다');
+  await page.locator('#be-prev').click(); await settle();
+  assert.deepEqual(await loads(),['1~25','26~50'],'읽은 쪽은 다시 읽지 않는다');
+  // 표 안에서 걸러 보이게 된 안 읽은 행(3쪽의 51번)도 읽는다. 검색칸은 작업 중에도 잠기지 않는다.
+  await page.locator('#be-search').fill('Product 51'); await settle();
+  assert.deepEqual(await loads(),['1~25','26~50','51~51']);
+  assert.match(await page.locator('#be-count').textContent(),/선택 0행/);
   assert.deepEqual(errors,[]);
-  console.log('PASS: photo previews, pipe lists, one shared input, ESM import, HTML parsing, automatic revision load, full-image viewer, staged apply, filtered saves, uncertain-write stop, Coupang deduplication, Imweb on the Open API (no catalog lock), dynamic price filtering, all-page selection, URL previews, per-platform state, drafts kept through price auto-load, option spread not flattened, price-filter apply, HTML removal.');
+  console.log('PASS: photo previews, pipe lists, one shared input, ESM import, HTML parsing, automatic revision load, full-image viewer, staged apply, filtered saves, uncertain-write stop, Coupang deduplication, Imweb on the Open API (no catalog lock), dynamic price filtering, all-page selection, URL previews, per-platform state, drafts kept through price auto-load, option spread not flattened, price-filter apply, HTML removal, visible-page auto-load.');
 } finally { await browser?.close(); await new Promise(resolve=>server.close(resolve)); }

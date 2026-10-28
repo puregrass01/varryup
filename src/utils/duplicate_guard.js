@@ -912,18 +912,17 @@ export function recordAmazon(ledger, plan, result, { bypass = false } = {}) {
 
 // ── 아임웹: fail-closed, 스냅샷 없음 ─────────────────────────────────────
 //   조회가 등록과 같은 토큰·세션을 쓰고(조회가 안 되면 등록도 안 될 공산이 크다), 대신 볼
-//   스냅샷이 없으며, B2B·게시판 모두 등록 즉시 공개된다 — 확인하지 못하면 멈춘다.
+//   스냅샷이 없으며, B2B 상품은 등록 즉시 공개된다 — 확인하지 못하면 멈춘다.
 
 const IMWEB_B2B_TITLE = /^옵틱글래스\s+(.+?)\s+미러\s+(1셋|운전석\/조수석)\s*(?:\[(?:No\.?\s*)?([A-Za-z]?\d+(?:-\d+)?)\])?\s*$/i;
 const IMWEB_EDITION_BY_PRICE = { 220000: 'bsa', 115000: 'bsa', 150000: 'normal', 80000: 'normal' };
 const IMWEB_LEDGER_GRACE = 30 * MIN;
-const IMWEB_LANG_LABEL = { ko: '본사몰', en: '해외몰', jp: '일본몰' };
 export const imwebAdminProductUrl = no => `https://bbstore37.imweb.me/admin/shopping/product/detail?idx=${no}`;
 
-export function planImweb(data, { brands = DEFAULT_BRANDS, boardNameFor = () => null, nameForLang = (d, f) => d?.[f], extractImageUrl = s => String(s || '').trim() } = {}) {
+export function planImweb(data, { brands = DEFAULT_BRANDS } = {}) {
   const notices = [];
   const base = { channel: 'imweb', brands, notices, lockKeys: [], targets: [] };
-  // isEditMode 로 건너뛰지 않는다 — imweb-register 는 이제 언제나 새로 만든다(수정은 imweb-update-post · B2B API).
+  // isEditMode 로 건너뛰지 않는다 — imweb-register 는 이제 언제나 새로 만든다(수정은 B2B API).
   const targets = [];
   const ci = codeInfo(data?.code);
 
@@ -943,23 +942,6 @@ export function planImweb(data, { brands = DEFAULT_BRANDS, boardNameFor = () => 
         });
       }
     }
-  }
-
-  const langs = [data?.targetHead && 'ko', data?.targetUs && 'en', data?.targetJp && 'jp'].filter(Boolean);
-  for (const lang of langs) {
-    // 등록 본체(createBoardPostViaApi)가 건너뛰는 lang 은 대상에서 뺀다 — 안 올릴 글을 막을 이유가 없다.
-    const boardName = boardNameFor(data.brand, lang);
-    if (!boardName) continue;
-    const rawSpec = lang === 'ko' ? data.specImageUrl : (data.specImageUrlEn || data.specImageUrl);
-    if (!extractImageUrl(rawSpec)) continue;
-    if (!ci.code) { notices.push(`${IMWEB_LANG_LABEL[lang]} 게시판: 코드 "${data.code ?? ''}" 를 읽을 수 없어 중복 확인을 건너뜀`); continue; }
-    const nameBrand = nameForLang(data, 'titleBrand', lang);
-    const nameModel = nameForLang(data, 'titleModel', lang);
-    targets.push({
-      kind: 'board', lang, boardName, brand: data.brand, code: ci.code,
-      subject: `${nameBrand} ${nameModel} [${data.code}]`, nameModel: String(nameModel || ''),
-      lockKey: `imweb-board|${lang}|${boardName}|${ci.code}`,
-    });
   }
   if (!targets.length) return { ...base, skip: true };
   return { ...base, skip: false, targets, lockKeys: targets.map(t => t.lockKey) };
@@ -1025,20 +1007,17 @@ function imwebDuplicate(plan, blocks) {
   const lines = blocks.map(b => {
     const t = b.target;
     const basis = b.source === 'ledger' ? `원장(이 PC, ${fmtTime(b.entry.registeredAt)} 등록)` : '아임웹 실시간 조회';
-    if (t.kind === 'b2b') {
-      const notes = [`상태 ${b.status || '알 수 없음'}`];
-      if (b.formatDiff) notes.push('제목 형식 다름');
-      if (b.exact === false) notes.push('차종 표기 다름');
-      if (b.editionNote) notes.push(b.editionNote);
-      const notOnSale = b.status && !/^sale$/i.test(b.status);
-      return `B2B ${t.type === 'set' ? '세트' : '개별'} [${t.code}]${t.bsa ? ' BSA' : ''} → 기존 상품 ${b.id || '(번호 없음)'}`
-        + (b.name ? ` "${b.name}"` : '') + ` (${notes.join(', ')})` + (b.url ? ` ${b.url}` : '') + ` [근거: ${basis}]`
-        + (notOnSale ? ' — 숨김·판매중지 상품이면 관리자에서 삭제하거나 판매중으로 바꾸세요' : '');
-    }
-    return `${IMWEB_LANG_LABEL[t.lang]} 게시판 "${t.boardName}" → 기존 글 ${b.id || ''}${b.name ? ` "${b.name}"` : ''} [근거: ${basis}]`;
+    const notes = [`상태 ${b.status || '알 수 없음'}`];
+    if (b.formatDiff) notes.push('제목 형식 다름');
+    if (b.exact === false) notes.push('차종 표기 다름');
+    if (b.editionNote) notes.push(b.editionNote);
+    const notOnSale = b.status && !/^sale$/i.test(b.status);
+    return `B2B ${t.type === 'set' ? '세트' : '개별'} [${t.code}]${t.bsa ? ' BSA' : ''} → 기존 상품 ${b.id || '(번호 없음)'}`
+      + (b.name ? ` "${b.name}"` : '') + ` (${notes.join(', ')})` + (b.url ? ` ${b.url}` : '') + ` [근거: ${basis}]`
+      + (notOnSale ? ' — 숨김·판매중지 상품이면 관리자에서 삭제하거나 판매중으로 바꾸세요' : '');
   });
   const message = `중복 등록 차단: 아임웹에 같은 상품이 이미 있습니다. ${lines.join(' / ')}. `
-    + '아무것도 새로 만들지 않았습니다 — 해당 체크(개별/세트·본사/해외/일본)를 끄고 다시 실행하세요.';
+    + '아무것도 새로 만들지 않았습니다 — 해당 체크(개별/세트)를 끄고 다시 실행하세요.';
   const source = blocks[0].source;
   return new DuplicateRegistrationError(message, {
     channel: 'imweb', source,
@@ -1050,46 +1029,26 @@ function imwebDuplicate(plan, blocks) {
   });
 }
 
-export async function checkImweb(plan, { bypass } = {}, { ledger = null, b2bRows = null, b2bOptionValues = null, boardPosts = null, now = () => new Date(), log = console } = {}) {
+export async function checkImweb(plan, { bypass } = {}, { ledger = null, b2bRows = null, b2bOptionValues = null, now = () => new Date(), log = console } = {}) {
   if (bypass) return { notices: [] };
   const notices = [];
   const blocks = [];
-  const active = [...readActive(ledger, 'imweb-b2b', notices), ...readActive(ledger, 'imweb-board', notices)];
+  const active = readActive(ledger, 'imweb-b2b', notices);
   const rowsByCode = new Map();
   const optionValuesOf = no => (b2bOptionValues ? b2bOptionValues(no) : Promise.reject(new Error('조회 수단 없음')));
 
   for (const t of plan.targets) {
-    if (t.kind === 'b2b') {
-      if (!rowsByCode.has(t.code)) rowsByCode.set(t.code, await imwebList(b2bRows && (() => b2bRows(t.code)), 'B2B'));
-      const rows = rowsByCode.get(t.code);
-      const found = await imwebB2bMatches(t, rows, optionValuesOf, notices, plan.brands);
-      blocks.push(...found);
-      for (const e of active) {
-        if (e.channel !== 'imweb-b2b' || !(e.keys || []).includes(t.lockKey) || !sameCar(t.car, e.detail).match) continue;
-        if (found.some(b => b.id === String(e.externalId))) continue;   // 실시간이 이미 막았다
-        const st = rows.some(r => String(r.prodNo) === String(e.externalId)) ? 'unknown' : 'absent';
-        if (ledgerHitStands(e, st, now, IMWEB_LEDGER_GRACE)) {
-          blocks.push({ source: 'ledger', target: t, entry: e, id: String(e.externalId || ''), name: e.title || '', status: '', url: e.url || '' });
-        } else supersedeQuietly(ledger, e, '아임웹 목록에 없음 확인', log);
-      }
-    } else {
-      const rows = await imwebList(boardPosts && (() => boardPosts(t.brand, t.lang)), `${IMWEB_LANG_LABEL[t.lang]} 게시판`);
-      const want = squash(t.subject), token = codeToken(t.code), nm = squash(t.nameModel);
-      const found = rows.filter(p => {
-        const s = String(p?.subject || '');
-        return squash(s) === want || (token.test(s) && !!nm && squash(s).includes(nm));
-      }).map(p => ({ source: 'live', target: t, id: String(p.postCode || ''), name: String(p.subject || ''), status: '', url: '' }));
-      blocks.push(...found);
-      for (const e of active) {
-        if (e.channel !== 'imweb-board' || !(e.keys || []).includes(t.lockKey)) continue;
-        if (e.externalId ? found.some(b => b.id === String(e.externalId)) : found.length) continue;
-        const listed = e.externalId
-          ? rows.some(p => String(p?.postCode) === String(e.externalId))
-          : rows.some(p => squash(p?.subject) === squash(e.title));
-        if (ledgerHitStands(e, listed ? 'unknown' : 'absent', now, IMWEB_LEDGER_GRACE)) {
-          blocks.push({ source: 'ledger', target: t, entry: e, id: String(e.externalId || ''), name: e.title || '', status: '', url: '' });
-        } else supersedeQuietly(ledger, e, '아임웹 게시판에 없음 확인', log);
-      }
+    if (!rowsByCode.has(t.code)) rowsByCode.set(t.code, await imwebList(b2bRows && (() => b2bRows(t.code)), 'B2B'));
+    const rows = rowsByCode.get(t.code);
+    const found = await imwebB2bMatches(t, rows, optionValuesOf, notices, plan.brands);
+    blocks.push(...found);
+    for (const e of active) {
+      if (e.channel !== 'imweb-b2b' || !(e.keys || []).includes(t.lockKey) || !sameCar(t.car, e.detail).match) continue;
+      if (found.some(b => b.id === String(e.externalId))) continue;   // 실시간이 이미 막았다
+      const st = rows.some(r => String(r.prodNo) === String(e.externalId)) ? 'unknown' : 'absent';
+      if (ledgerHitStands(e, st, now, IMWEB_LEDGER_GRACE)) {
+        blocks.push({ source: 'ledger', target: t, entry: e, id: String(e.externalId || ''), name: e.title || '', status: '', url: e.url || '' });
+      } else supersedeQuietly(ledger, e, '아임웹 목록에 없음 확인', log);
     }
   }
   // 대상 중 하나라도 중복이면 전체를 막는다 — 일부만 올리면 개별/세트 짝이 어긋난다.
@@ -1097,7 +1056,7 @@ export async function checkImweb(plan, { bypass } = {}, { ledger = null, b2bRows
   return { notices };
 }
 
-/** registered = imweb.lastRegistered: [{kind:'b2b', type, ok, no, title} | {kind:'board', lang, boardCode, boardName, subject, postCode}] */
+/** registered = imweb.lastRegistered: [{kind:'b2b', type, ok, no, title}] */
 export function recordImweb(ledger, plan, registered, { bypass = false } = {}) {
   if (plan.skip) return null;
   for (const r of registered || []) {
@@ -1111,16 +1070,55 @@ export function recordImweb(ledger, plan, registered, { bypass = false } = {}) {
         detail: { brand: t.car.brand, model: t.car.model, brandKey: t.car.brandKey, modelKey: t.car.modelKey, code: t.code, bsa: t.bsa, type: t.type },
         bypass: !!bypass,
       });
-    } else if (r?.kind === 'board') {
-      const t = plan.targets.find(x => x.kind === 'board' && x.lang === r.lang);
-      if (!t) continue;
-      ledger.record({
-        channel: 'imweb-board', keys: [t.lockKey], externalId: r.postCode || null, url: null, verified: !!r.postCode,
-        title: r.subject || t.subject,
-        detail: { lang: t.lang, boardName: r.boardName || t.boardName, boardCode: r.boardCode || null, code: t.code },
-        bypass: !!bypass,
-      });
     }
   }
+  return null;
+}
+
+// ── 아임웹 자사몰(본사몰): fail-closed, 원장 30분 ─────────────────────────────
+//   등록 한 번이 상품 하나(KR·US·JP 세 구역)다. 한국 구역 이름에 같은 [No.코드] · 차종이 든 상품이 있으면 막는다
+//   — rows 는 imweb_head_create.js findExisting(한국 구역 전체를 읽는다). 판(BSA)은 가르지 않는다(이름에 판이 없다).
+export function planImwebHead(data) {
+  const ci = codeInfo(data?.code);
+  const car = carFrom(data?.titleBrand || data?.brand, data?.titleModel || data?.model);
+  const base = { channel: 'imweb-head', notices: [], lockKeys: [], code: ci.code, car };
+  if (!ci.code || !car.brandKey || !car.modelKey) {
+    return { ...base, skip: true, skipReason: `자사몰 상품번호 "${data?.code ?? ''}" 나 차종을 읽을 수 없어 자사몰 중복 확인을 건너뜀` };
+  }
+  return { ...base, skip: false, lockKeys: [`imweb-head|${car.brandKey}|${ci.code}`] };
+}
+
+export async function checkImwebHead(plan, { bypass } = {}, { ledger = null, rows = null, now = () => new Date(), log = console } = {}) {
+  if (bypass) return { notices: [] };
+  const notices = [];
+  const blocks = (await imwebList(rows, '자사몰')).map(r => ({ source: 'live', id: String(r.prodNo), name: String(r.name || ''), status: String(r.status || '') }));
+  // 원장: 목록에 안 보여도(이름을 고쳤거나 목록이 늦음) 등록 뒤 30분은 막는다.
+  for (const e of readActive(ledger, 'imweb-head', notices)) {
+    if (!(e.keys || []).includes(plan.lockKeys[0]) || !sameCar(plan.car, e.detail).match) continue;
+    if (blocks.some(b => b.id === String(e.externalId))) continue;   // 실시간이 이미 막았다
+    if (ledgerHitStands(e, 'absent', now, IMWEB_LEDGER_GRACE)) blocks.push({ source: 'ledger', entry: e, id: String(e.externalId || ''), name: e.title || '', status: '' });
+    else supersedeQuietly(ledger, e, '아임웹 자사몰 목록에 없음 확인', log);
+  }
+  if (!blocks.length) return { notices };
+  const lines = blocks.map(b => `상품 ${b.id}${b.name ? ` "${b.name}"` : ''}${b.status ? ` (상태 ${b.status})` : ''}`
+    + ` [근거: ${b.source === 'ledger' ? `원장(이 PC, ${fmtTime(b.entry.registeredAt)} 등록)` : '아임웹 실시간 조회'}]`);
+  throw new DuplicateRegistrationError(`중복 등록 차단: 아임웹 자사몰에 [No.${plan.code}] ${plan.car.model} 상품이 이미 있습니다 — ${lines.join(' / ')}. `
+    + '아무것도 새로 만들지 않았습니다 — 그 상품은 단일 상품 수정으로 고치세요(숨김 상품이면 확인 뒤 아임웹 관리자에서 판매중으로).', {
+    channel: 'imweb-head', source: blocks[0].source,
+    existing: {
+      channel: 'imweb-head', source: blocks[0].source, key: { lockKey: plan.lockKeys[0] },
+      products: blocks.map(b => ({ id: b.id || null, name: b.name, optionText: '', url: null, status: b.status || null, registeredAt: b.entry?.registeredAt || null })),
+    },
+  });
+}
+
+/** result = imweb_head_create register 의 { ok, no, title }. 확인이 어긋나 숨김으로 남은 상품(ok:false)도 적는다 — 만들어진 상품이다. */
+export function recordImwebHead(ledger, plan, result, { bypass = false } = {}) {
+  if (plan.skip || !result?.no) return null;
+  ledger.record({
+    channel: 'imweb-head', keys: plan.lockKeys, externalId: String(result.no), url: null, verified: !!result.ok, title: result.title || '',
+    detail: { brand: plan.car.brand, model: plan.car.model, brandKey: plan.car.brandKey, modelKey: plan.car.modelKey, code: plan.code },
+    bypass: !!bypass,
+  });
   return null;
 }

@@ -35,7 +35,8 @@ function fakeSite(units, products) {
     request: async (method, path, { form } = {}) => {
       const m = path.match(/^\/products\/(\d+)$/);
       if (method !== 'PATCH' || !m) throw new Error('예상하지 못한 요청 ' + method + ' ' + path);
-      const unit = form.get('unitCode'), description = form.get('description');
+      const unit = form.get('unitCode'), description = form.get('description'), productName = form.get('productName');
+      if (productName != null) { calls.push(['name', m[1], unit]); get(m[1], unit).name = productName; return { data: true }; }
       calls.push(['description', m[1], unit]);
       get(m[1], unit).content = description;
       return { data: true };
@@ -155,6 +156,32 @@ test('상세 이미지: 그 구역 상세설명의 이미지를 불러와 바꾸
   assert.equal(head.store[3].uKR.content, '<p><img src="https://ai.esmplus.com/n1.jpg"></p>');
   assert.equal(head.store[3].uUS.content, '<p><img src="https://img/e1.jpg"></p>', '다른 구역은 그대로');
   assert.deepEqual(head.calls, [['description', '3', 'uKR']]);
+});
+
+test('상품명(아임웹 자사몰 탭): 그 구역 이름만 바꾸고 다시 읽어 확인한다 — 불러온 뒤 바뀐 이름 · 같은 이름은 보내지 않는다', async () => {
+  const { call, save, head } = fixture();
+  const ok = await save({ scope: 'imweb-en', id: '3', expectedName: 'Wide View Side Mirror', newName: 'Optic-glass Kia K5 Wide View Side Mirror [No.3]' }, 'name');
+  assert.deepEqual([ok.success, ok.data?.status], [true, 'VERIFIED'], ok.error);
+  assert.deepEqual([head.store[3].uUS.name, head.store[3].uKR.name], ['Optic-glass Kia K5 Wide View Side Mirror [No.3]', '와이드/광각미러'], '다른 구역(한국)은 그대로');
+  const stale = await save({ scope: 'imweb-jp', id: '3', expectedName: '옛 이름', newName: '新しい名前' }, 'name');
+  assert.deepEqual([stale.success, stale.stage], [false, 'pre-send']);
+  assert.match(stale.error, /불러온 뒤 상품명이 바뀌었습니다\(지금 広角ドアミラー\)/);
+  const same = await save({ scope: 'imweb-ko', id: '3', expectedName: '와이드/광각미러', newName: ' 와이드/광각미러 ' }, 'name');
+  assert.deepEqual([same.success, same.data?.status], [true, 'UNCHANGED']);
+  const b2b = await save({ scope: 'imweb-b2b', id: '712', expectedName: 'x', newName: 'y' }, 'name');
+  assert.deepEqual([b2b.success, b2b.stage], [false, 'pre-send']);
+  assert.match(b2b.error, /본사몰 구역에서만/);
+  assert.deepEqual(head.calls, [['name', '3', 'uUS']], '보낸 것은 미국 구역 이름 하나');
+  // 탭의 저장 한 번: 바뀐 가격 줄 · 이름 · 이미지를 한 작업으로 보낸다(BUSY · 진행 이벤트를 같이 쓴다).
+  const loaded = await call('bulk-images-load', { scope: 'imweb-ko', id: '3' });
+  const res = await call('bulk-save-batch', { jobId: 'imweb-head-1', scope: 'imweb-ko', jobs: [
+    { type: 'price', id: '3', optionId: 'od2', expectedPrice: '115000', newPrice: '120000' },
+    { type: 'name', id: '3', expectedName: '와이드/광각미러', newName: '옵틱글래스 기아 K5 광각미러 [No.3]' },
+    { type: 'images', id: '3', urls: ['https://ai.esmplus.com/n1.jpg'], expectedRevision: loaded.data.revision },
+  ] });
+  assert.equal(res.success, true, res.error);
+  assert.deepEqual(res.data.results.map(r => r.data?.status), ['VERIFIED', 'VERIFIED', 'VERIFIED']);
+  assert.deepEqual(head.calls.slice(1), [['setOption', '3', 'od2', 'uKR', 120000], ['name', '3', 'uKR'], ['description', '3', 'uKR']]);
 });
 
 test('카탈로그 행(상품 표준 표기용): SKU · 차종 검색, 값이 갈리는 USD 는 모름으로 둔다', () => {

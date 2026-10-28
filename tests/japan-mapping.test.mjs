@@ -38,7 +38,7 @@ test('브랜드 조회 — 별칭과 표기 흔들림을 흡수한다', () => {
 
     assert.equal(vu.brandJa('현대'), 'ヒョンデ');
     assert.equal(vu.brandJa('기아'), 'キア');
-    // imweb_categories.json / imweb_boards.json 은 구 사명·다른 띄어쓰기를 쓴다.
+    // imweb_categories.json 은 구 사명·다른 띄어쓰기를 쓴다.
     assert.equal(vu.brandJa('르노삼성'), vu.brandJa('르노 코리아'));
     assert.equal(vu.brandJa('쌍용'), vu.brandJa('쌍용 (KGM)'));
     assert.equal(vu.brandJa('DNA 모터스'), vu.brandJa('DNA모터스'));
@@ -86,86 +86,6 @@ test('사전이 없어도 조회는 예외 없이 null 을 돌려준다', () => 
     assert.equal(vu.brandJa('현대'), null);
     assert.equal(vu.modelJa('현대', '그랜저'), null);
     assert.equal(vu.genJa('1세대 전기형'), null);
-});
-
-/* ── 아임웹: 언어별 표기 선택과 배너 ───────────────────────────────── */
-
-/** Imweb 을 통째로 import 하면 electron/playwright 가 딸려오므로 메서드만 떼어 검사한다. */
-function imwebHelpers() {
-    const src = read('src/platforms/imweb.js');
-    const grab = name => {
-        const i = src.indexOf(`    ${name}(`);
-        assert.notEqual(i, -1, `${name} 을 찾지 못했다 — 헬퍼가 사라졌거나 이름이 바뀌었다`);
-        // 메서드 블록을 중괄호 균형으로 잘라낸다.
-        let depth = 0, end = -1;
-        for (let j = src.indexOf('{', i); j < src.length; j++) {
-            if (src[j] === '{') depth++;
-            else if (src[j] === '}') { depth--; if (!depth) { end = j + 1; break; } }
-        }
-        return src.slice(i, end).trim();
-    };
-    const logs = [];
-    const obj = new Function(`return { log(m){ this._logs.push(m); }, _logs: [], ${grab('nameForLang')}, ${grab('bannerFor')} };`)();
-    obj._logs = logs;
-    return obj;
-}
-
-const DATA = {
-    titleBrand: '인피니티', titleModel: 'G25',
-    titleBrandEn: 'INFINITI', titleModelEn: 'G25',
-    titleBrandJp: 'インフィニティ', titleModelJp: 'G25',
-    generation: '4th gen', generationJp: '4世代', code: '612',
-};
-
-test('nameForLang — 언어별 표기를 고르고, jp 는 없으면 영문→한글로 폴백한다', () => {
-    const im = imwebHelpers();
-
-    assert.equal(im.nameForLang(DATA, 'titleBrand', 'ko'), '인피니티');
-    assert.equal(im.nameForLang(DATA, 'titleBrand', 'en'), 'INFINITI');
-    assert.equal(im.nameForLang(DATA, 'titleBrand', 'jp'), 'インフィニティ');
-
-    // 일본어가 비면 영문으로, 영문도 없으면 한글로. 폴백은 반드시 로그를 남긴다.
-    const noJp = { ...DATA, titleBrandJp: '' };
-    assert.equal(im.nameForLang(noJp, 'titleBrand', 'jp'), 'INFINITI');
-    assert.ok(im._logs.some(m => m.includes('일본어 표기가 없어')), '폴백이 조용히 일어났다');
-
-    const bare = { titleBrand: '인피니티' };
-    assert.equal(im.nameForLang(bare, 'titleBrand', 'jp'), '인피니티');
-
-    // en 회귀 방지: 영문 동작은 예전 그대로여야 한다.
-    assert.equal(im.nameForLang(bare, 'titleBrand', 'en'), '인피니티');
-});
-
-test('bannerFor — 언어별 배너 형식', () => {
-    const im = imwebHelpers();
-
-    assert.equal(im.bannerFor(DATA, '인피니티', 'G25', 'ko'), '※ 인피니티 G25 조견표 ※');
-    // 영문 형식은 기존 게시글과 같아야 한다(바꾸면 게시판 표기가 갈린다).
-    assert.equal(im.bannerFor(DATA, 'INFINITI', 'G25', 'en'),
-        '※ INFINITI G25 Fitment Guide ※<br>4th gen [No.612]');
-    assert.equal(im.bannerFor(DATA, 'インフィニティ', 'G25', 'jp'),
-        '※ インフィニティ G25 適合表 ※<br>4世代 [No.612]');
-    // 일본어 세대가 없으면 영문 세대로 떨어진다(배너 자체는 나가야 한다).
-    assert.equal(im.bannerFor({ ...DATA, generationJp: '' }, 'インフィニティ', 'G25', 'jp'),
-        '※ インフィニティ G25 適合表 ※<br>4th gen [No.612]');
-});
-
-test('포스팅 경로가 같은 헬퍼를 쓴다 (복붙 재발 방지)', () => {
-    // 예전엔 신규 · 수정 경로가 각자 문자열을 조립했다 — 다시 복붙되면 표기가 갈린다.
-    const imweb = read('src/platforms/imweb.js');
-    const edit = read('src/platforms/imweb_edit.js');
-
-    for (const [name, src] of [['imweb.js', imweb], ['imweb_edit.js', edit]]) {
-        assert.ok(!/const nameBrand = \(lang === 'ko'\)/.test(src),
-            `${name} 에 옛 2분기 표기 선택이 되살아났다`);
-    }
-    // 'Fitment Guide' 배너는 bannerFor 안에만 있어야 한다.
-    // 설명 주석(// 또는 * 로 시작하는 줄)에도 예시로 적혀 있으므로 코드 줄만 센다.
-    const codeBanners = src => src.split('\n')
-        .filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l))
-        .filter(l => l.includes('Fitment Guide ※')).length;
-    assert.equal(codeBanners(imweb) + codeBanners(edit), 1,
-        '배너 문자열이 다시 여러 곳으로 복사됐다');
 });
 
 /* ── 아마존: 마켓플레이스 프로파일 ─────────────────────────────────── */

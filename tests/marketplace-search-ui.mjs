@@ -19,8 +19,11 @@ try {
       if (channel.endsWith('-search-products')) {
         if (data.searchText === 'error') return { success: false, error: 'Access denied' };
         const items = data.searchText === 'missing' ? [] : [{ id: 'custom/<sku>', name: '<img src=x onerror=alert(1)> Mirror', price: '10', stock: '0', status: 'PUBLISHED' }];
-        return { success: true, items, data: items };
+        const stats = data.searchText === 'stale' ? { source: 'cache', scanned: 1, updatedAt: '2000-01-01T00:00:00Z' } : undefined;
+        return { success: true, items, data: items, stats };
       }
+      // 동기화가 성공해도 불러온 상품이 있으면 목록을 다시 조회하지 않는다(다시 조회하면 아래 'stale' 조회 횟수가 어긋난다).
+      if (channel === 'amazon-refresh-cache') return { success: true, total: 1 };
       if (channel === 'amazon-load-product') return { success: true, product: { title: 'Loaded Amazon', price: 0, stock: 0, description: '', bulletPoints: [] } };
       if (channel === 'ebay-load-product') return { success: true, data: { sku: data,
         inventory: { product: { title: 'Loaded eBay' } },
@@ -52,6 +55,16 @@ try {
     await frame.locator('#amzSearchResults').getByText(message, { exact: true }).waitFor();
     assert.equal(await frame.locator('#amzSearchBtn').isEnabled(), true);
   }
+  // 캐시가 24시간 지났으면 조회가 뒤에서 전체 목록 동기화를 시작한다. 두 번 조회해도 마켓당 한 번만.
+  for (let i = 1; i <= 2; i++) {
+    await frame.locator('#amzSearchText').fill('stale');
+    await frame.locator('#amzSearchBtn').click();
+    await child.waitForFunction(n => window.calls.filter(c => c.channel === 'amazon-search-products' && c.data.searchText === 'stale').length === n
+      && !document.getElementById('amzSearchBtn').disabled, i);
+  }
+  await frame.locator('#amzCacheStatus').getByText(/^로컬 캐시 1건 \(미국/).waitFor();
+  assert.deepEqual(await child.evaluate(() => window.calls.filter(c => c.channel === 'amazon-refresh-cache').map(c => c.data)),
+    [{ marketplaceId: 'ATVPDKIKX0DER' }]);
   await page.locator('#cell-JAPAN-open1').click();
   assert.equal(await frame.locator('#amzMarketplaceId').inputValue(), 'A1VC38T7YXB528');
   await frame.locator('#amzSearchText').fill('');

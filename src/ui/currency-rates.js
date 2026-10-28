@@ -1,18 +1,17 @@
 (() => {
   const currencies = ['USD', 'JPY', 'KRW'];
-  const ids = ['inp-usd', 'inp-edit-krw', 'inp-edit-usd', 'inp-edit-jpy', 'amzPrice', 'ebPrice', 'ebEditPrice', 'iwBoardPriceUsd', 'iwBoardEditPriceUsd'];
+  const ids = ['inp-usd', 'inp-edit-krw', 'inp-edit-usd', 'inp-edit-jpy', 'amzPrice', 'ebPrice', 'ebEditPrice'];
   // 아마존 칸은 마켓에 따라, 수정 모드의 변경 판매가는 칸마다 통화가 정해져 있다. 나머지는 USD.
   const fixedCurrency = { 'inp-edit-krw': 'KRW', 'inp-edit-jpy': 'JPY' };
   const docs = new Set();
   let snapshot = null, initialized = false, failure = '', pending = null;
-  let batchSnapshot = null, batchPriceUsd = null;
   function valid(data) {
     return data?.base === 'USD' && data?.rates?.USD === 1 &&
       currencies.every(c => Number.isFinite(data.rates[c]) && data.rates[c] > 0) &&
       Number.isFinite(Date.parse(data.fetchedAt)) && /^\d{4}-\d{2}-\d{2}$/.test(data.marketDate);
   }
   function convert(amount, from, to, { allowStale = false } = {}) {
-    const active = batchSnapshot || snapshot;
+    const active = snapshot;
     const age = active ? Date.now() - Date.parse(active.fetchedAt) : Infinity;
     if (!active || (!allowStale && (active.stale || age < 0 || age >= 86400000)) ||
         !currencies.includes(from) || !currencies.includes(to) || !Number.isFinite(amount) || amount < 0) return null;
@@ -120,21 +119,5 @@
     window.addEventListener('focus', refresh);
     window.addEventListener('beforeunload', () => clearInterval(timer), { once: true });
   }
-  async function lockBatch(ipc, priceUsd) {
-    if (batchSnapshot) throw new Error('환율 적용 작업이 이미 진행 중입니다.');
-    if (!/^\d+(?:\.\d{1,2})?$/.test(String(priceUsd)) || !Number.isFinite(Number(priceUsd)) || Number(priceUsd) <= 0)
-      throw new Error('영문 게시판 판매가(USD)를 소수 둘째 자리까지 입력하세요.');
-    const result = await ipc.invoke('currency-rates-get');
-    const data = result?.data, age = Date.now() - Date.parse(data?.fetchedAt);
-    if (!result?.success || !valid(data) || data.stale || age < 0 || age >= 86400000 ||
-        !['JPY', 'KRW'].every(c => Number.isFinite(Number(priceUsd) * data.rates[c])))
-      throw new Error('최신 환율을 확인할 수 없어 일괄 등록을 시작하지 않았습니다.');
-    batchSnapshot = Object.freeze({ ...data, rates: Object.freeze({ ...data.rates }) });
-    batchPriceUsd = Number(priceUsd).toFixed(2);
-    refreshAll();
-    return batchSnapshot;
-  }
-  function releaseBatch() { batchSnapshot = null; batchPriceUsd = null; refreshAll(); }
-  window.VUCurrency = { init, convert, refreshDocument, lockBatch, releaseBatch,
-    getBatchSnapshot: () => batchSnapshot, getBatchPriceUsd: () => batchPriceUsd };
+  window.VUCurrency = { init, convert, refreshDocument };
 })();

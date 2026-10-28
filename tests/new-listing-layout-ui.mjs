@@ -4,7 +4,7 @@
 //  · 이미지 목록은 오른쪽 신규등록 패널, 폼 오른쪽에 있다(수정 모드에선 숨는다).
 //  · 신규 등록 몰 폼에는 판매가·재고·판매설정·상품명·상세설명만 보인다 — 나머지는 좌측이 채운다.
 //    아임웹 카테고리는 좌측 브랜드가 표에 없을 때(needs-pick)만 국산/수입·동기화와 함께 드러난다.
-//  · 짝 입력칸은 폼 폭의 25%(예전 50%).
+//  · 짝 입력칸은 폼 폭의 25%(예전 50%). 수정 모드의 한 줄 칸·버튼은 50%(예전 100%, 2026-10-27).
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -99,14 +99,6 @@ try {
   const [pb, qb] = await Promise.all(['ebPrice', 'ebQuantity'].map(id => frame.locator('#' + id).evaluate(el => el.getBoundingClientRect().bottom)));
   assert.ok(Math.abs(pb - qb) < 1, `이베이 판매가·수량 칸 높이가 맞아야 한다 (${pb} vs ${qb})`);
 
-  // ── 아임웹 본사·해외몰 게시판 ──
-  await open('KOREA-own', 'imwebBoardTab');
-  await expectFields('자사몰', ['iwBoardPriceUsd', 'iwBoardSpecImageUrl', 'iwBoardSpecImageUrlEn', 'imwebBoardRegisterBtn'],
-    ['iwBoardTitleBrand', 'iwBoardCode']);
-  assert.equal(await frame.locator('input[name="iwBoardNationality"]').first().locator('xpath=ancestor::div[contains(@class,"form-group")]').isVisible(), false);
-  const boardSteps = await frame.locator('#imwebBoardTab .step-indicator:visible span').allTextContents();
-  assert.deepEqual(boardSteps.map(t => t.trim()), ['판매가 (해외몰)', '조견표 이미지 URL'], '자사몰: 판매가에도 단계 제목이 있다');
-
   // ── 아임웹 B2B: 판매설정(개별/세트)·조견표만. 카테고리 칸은 표에 없는 브랜드일 때만 ──
   await open('KOREA-b2b', 'imwebTab');
   await expectFields('B2B', ['iwSpecImageUrl', 'imwebRegisterBtn'],
@@ -135,14 +127,21 @@ try {
   assert.equal(await page.locator('#cell-KOREA-open1').getAttribute('aria-checked'), 'true', 'Enter 로 열어도 켜진 채');
   assert.equal(await viewing(), 'KOREA-open1');
 
-  // ── 수정 모드: 숨김 없음, 이미지 목록 숨김 ──
+  // ── 수정 모드: 상품ID 는 좌측이 넣어 숨김, 한 줄 칸·버튼은 폼의 50%, 이미지 목록 숨김 ──
   await page.locator('label[for="mode-edit"]').click();
   await open('KOREA-open2', 'coupangTab');   // 켜져 있고 다른 폼을 보는 중 → 끄지 않고 연다
-  await frame.locator('#cpProductIdInput').waitFor({ state: 'visible' });
+  await frame.locator('#cpEditPanel').waitFor({ state: 'visible' });
+  assert.equal(await frame.locator('#cpProductIdInput').isVisible(), false, '수정 모드: 쿠팡 상품ID 는 좌측이 넣는다');
+  const editRatio = await frame.locator('#coupangTab').evaluate(tab => {
+    const pane = tab.getBoundingClientRect(), cs = getComputedStyle(tab);
+    const inner = pane.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    return tab.querySelector('#coupangRegisterBtn').getBoundingClientRect().width / inner;
+  });
+  assert.ok(editRatio > 0.45 && editRatio <= 0.51, `수정 모드 쿠팡 저장 버튼 폭 ${(editRatio * 100).toFixed(1)}% — 50% 근처여야 한다`);
   assert.equal(await page.locator('#image-library').isVisible(), false, '수정 모드에선 이미지 목록이 숨는다');
 
   assert.deepEqual(errors, []);
-  console.log('PASS: 가운데 탭 없음 · 현황판 칸 열림 표시 · 이미지 목록 폼 오른쪽 · 신규 폼 칸 정리 · 짝 칸 25% · 이미지 목록 접으면 폭 반환 · 이베이 칸 줄 맞춤 · 카테고리(브랜드·차종 없음) 드러남 · Enter 로 폼 열기 · 수정 모드 그대로');
+  console.log('PASS: 가운데 탭 없음 · 현황판 칸 열림 표시 · 이미지 목록 폼 오른쪽 · 신규 폼 칸 정리 · 짝 칸 25% · 이미지 목록 접으면 폭 반환 · 이베이 칸 줄 맞춤 · 카테고리(브랜드·차종 없음) 드러남 · Enter 로 폼 열기 · 수정 모드 상품ID 숨김 · 수정 모드 한 줄 칸 50%');
 } finally {
   await browser.close();
 }

@@ -1,7 +1,7 @@
 // Shared by normal registration and eBay's draft flow. Editing a published item
 // deliberately retains its loaded images unless the user edits those form fields.
 (() => {
-  const mapping = { 'naver-register': 'domestic', 'coupang-register': 'domestic', 'amazon-register': 'amazon', 'imweb-register': 'domestic', 'ebay-save-draft': 'ebay', 'ebay-preview': 'ebay' };
+  const mapping = { 'naver-register': 'domestic', 'coupang-register': 'domestic', 'amazon-register': 'amazon', 'imweb-register': 'domestic', 'imweb-head-register': 'domestic', 'ebay-save-draft': 'ebay', 'ebay-preview': 'ebay' };
   // ebay-preview: 신규 폼은 이미지 주소 칸을 숨긴다(이미지 목록이 정한다) — 미리보기도 초안과 같은 이미지로 검증한다.
   window.invokeWithImages = async (ipc, channel, data) => {
     try {

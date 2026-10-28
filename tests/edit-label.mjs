@@ -27,7 +27,6 @@ try {
     { mall: '쿠팡', btn: 'coupangRegisterBtn', nameInput: 'cpEditTitle', icon: true },
     { mall: '아마존', btn: 'amazonRegisterBtn', nameInput: 'amzTitle', icon: true },
     { mall: '아임웹 B2B몰', btn: 'iwB2bUpdateBtn', nameInput: 'iwB2bEditTitle', icon: true, emoji: '💾' },
-    { mall: '아임웹 본사·해외몰', btn: 'iwBoardUpdateBtn', nameInput: 'iwBoardEditTitle', icon: true, emoji: '💾', fallback: '게시글' },
   ];
 
   // 상품을 안 불러온 상태: "{쇼핑몰} 상품 수정하기"

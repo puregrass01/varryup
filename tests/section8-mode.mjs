@@ -63,15 +63,10 @@ try {
   await page.evaluate(() => addLog('저장 완료', 'ok'));
   await expectStatus('저장 완료', 'ok');
   assert.notEqual(await levelColor(), errorColor, '오류 색이 남아 있다');
-  // 접힌 400px 창·API KEY 화면에서도 상태줄은 보인다(로그창은 숨는다). 좁으면 제목 자리를 쓴다.
-  await page.setViewportSize({ width: 400, height: 850 });
-  await page.goto(`${url}?mode=edit&panels=collapsed`);
+  // API KEY 화면에서도 상태줄은 보인다(로그창은 숨는다).
+  await page.goto(`${url}?mode=edit`);
   await page.evaluate(() => addLog('아마존 일괄 수정 완료', 'warn'));
   await expectStatus('아마존 일괄 수정 완료', 'warn');
-  assert.equal(await page.locator('#section8').isVisible(), false);
-  assert.equal(await page.locator('#app-title').isVisible(), false);
-  const box = await page.locator('#shell-status').boundingBox();
-  assert.ok(box.width >= 150 && box.x + box.width <= 400, `상태줄 폭이 좁거나 창 밖이다: ${JSON.stringify(box)}`);
   await page.evaluate(() => { document.body.dataset.workspaceView = 'api'; addLog('API KEY 저장됨', 'info'); });
   await expectStatus('API KEY 저장됨', 'info');
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -117,9 +112,29 @@ try {
   assert.equal(await page.locator('#cell-JAPAN-open2, #cell-ARAB-own').count(), 0);
   assert.equal(await page.locator('tr[data-country="JAPAN"] td.inactive-cell').count(), 2);
   assert.equal(await page.locator('tr[data-country="ARAB"] td.inactive-cell').count(), 4);
+  // 아임웹 자사몰 3칸은 탭 하나(imwebHeadTab)를 같이 쓰는 진짜 칸이다 — 칸이 본사몰 구역이다(10-28, Open API).
+  assert.equal(await page.locator('#cell-KOREA-own, #cell-USA-own, #cell-JAPAN-own').count(), 3);
+  assert.equal(await page.locator('#board-body td.link-cell').count(), 0);
+  const frame = page.frameLocator('#form-frame');
+  const viewing = () => page.evaluate(() => [...document.querySelectorAll('#board-body td.viewing')].map(td => td.dataset.country + '-' + td.dataset.type));
+  const unitIs = async country => {
+    for (let i = 0; i < 60 && await frame.locator('#ihCountry').textContent() !== country; i++) await page.waitForTimeout(50);
+    assert.equal(await frame.locator('#ihCountry').textContent(), country);
+  };
+  await page.locator('#cell-USA-own').click();
+  await frame.locator('#imwebHeadTab .ih-edit').waitFor({ state: 'visible' });
+  assert.equal(await frame.locator('#imwebHeadTab .ih-new').isVisible(), false, '수정 모드에는 신규 등록 칸이 숨는다');
+  await unitIs('미국');
+  assert.deepEqual(await viewing(), ['USA-own']);
+  // 한국 칸을 켜면 그 구역으로 바뀐다. 켜진 미국 칸을 다시 누르면 끄지 않고 미국 구역으로 돌아간다(아마존과 같다).
+  await page.locator('#cell-KOREA-own').click();
+  await unitIs('한국');
+  assert.deepEqual(await viewing(), ['KOREA-own']);
+  await page.locator('#cell-USA-own').click();
+  await unitIs('미국');
+  assert.deepEqual([await page.evaluate(() => checked.USA.own), await viewing()], [true, ['USA-own']]);
   // 로고 타일은 이름(.plat-name) 대신 로고(.plat-logo)다 — 칸 자체를 누른다.
   await page.locator('#cell-KOREA-open1').click();
-  const frame = page.frameLocator('#form-frame');
   await frame.locator('#ssEditPanel').waitFor({ state: 'visible' });
   assert.equal(await frame.locator('#naverTab #ssEditPanel').count(), 1);
   assert.equal(await frame.locator('input[type="radio"][name="workMode"]').count(), 0);
@@ -149,7 +164,6 @@ try {
     ['KOREA-open2', 'cpEditPanel', 'cpWorkMode', 'coupangTab'],
     ['USA-open1', 'amzEditPanel', 'amzWorkMode', 'amazonTab'],
     ['KOREA-b2b', 'iwB2bEditPanel', 'iwB2bWorkMode', 'imwebTab'],
-    ['KOREA-own', 'iwBoardEditPanel', 'iwBoardWorkMode', 'imwebBoardTab'],
   ]) {
     await page.locator('#cell-' + cell).click();
     await frame.locator('#' + panel).waitFor({ state: 'visible' });

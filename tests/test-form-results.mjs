@@ -1,6 +1,6 @@
 // 쇼핑몰 폼(index.html)의 등록·저장 함수가 셸에 돌려주는 결과를 확인한다.
 //
-// 셸의 일괄 등록은 registerNaver·registerCoupang·registerImwebB2b·registerImwebBoard·registerAmazon 을
+// 셸의 일괄 등록은 registerNaver·registerCoupang·registerImwebB2b·registerAmazon 을
 // 차례로 부르고 그 결과로 성공·실패를 센다. 예전에는 이 함수들이 아무것도 돌려주지 않아서, 입력 누락으로
 // 멈춘 몰도 마켓이 거부한 몰도 '처리 완료' 로 셌다. 약속(C2)은 이렇다:
 //   · { ok, error?, partial? } 를 돌려주고 절대 던지지 않는다.
@@ -65,8 +65,7 @@ try {
   await page.goto(pathToFileURL(path.join(ROOT, 'src/ui/index.html')).href);
   await page.waitForFunction(() => document.readyState === 'complete'
     && typeof window.registerNaver === 'function' && typeof window.invokeWithImages === 'function'
-    && document.getElementById('iwBrand').value === '현대'
-    && document.getElementById('iwBoardBrand').value === '현대', null, { timeout: 15000 });
+    && document.getElementById('iwBrand').value === '현대', null, { timeout: 15000 });
 
   const 부르기 = (fn, channel) => page.evaluate(async ([fn, channel]) => {
     const before = window.__calls.filter(c => c.channel === channel).length;
@@ -164,38 +163,29 @@ try {
     refuse: `document.getElementById('iwSpecImageUrl').value = ''`,
     refuseMsg: '조견표 이미지 URL(국내용)을 입력해주세요.',
   });
-  await 네가지('아임웹 게시판 포스팅', {
-    fn: 'registerImwebBoard', channel: 'imweb-register', btn: 'imwebBoardRegisterBtn', logId: 'imwebBoardLogWindow',
-    fill: `(() => {
-      document.getElementById('iwTargetHead').checked = true;
-      for (const [id, v] of [['iwBoardCode','612'],['iwBoardSpecImageUrl','https://x/spec.jpg']]) document.getElementById(id).value = v;
-    })()`,
-    refuse: `document.getElementById('iwBoardCode').value = ''`,
-    refuseMsg: '제조사, 상품 코드를 입력해주세요.',
-  });
 
   // ── 아임웹: 일부만 올라감 ─────────────────────────────────────────────
-  console.log('\n════ 아임웹 게시판 — 본사몰은 됐고 해외몰은 거부됨 (partial)');
-  await 로그비우기('imwebBoardLogWindow');
+  console.log('\n════ 아임웹 B2B — 개별은 됐고 세트는 거부됨 (partial)');
+  await 로그비우기('imwebLogWindow');
   await 정하기('imweb-register', {
-    success: false, partial: true, error: '해외몰 게시판 등록 실패',
-    results: [{ target: '본사몰', ok: true }, { target: '해외몰', ok: false, error: '권한이 없습니다' }],
+    success: false, partial: true, error: '세트 BSA O 등록 실패',
+    results: [{ target: '개별 BSA O', ok: true }, { target: '세트 BSA O', ok: false, error: '권한이 없습니다' }],
   });
-  let r = await 부르기('registerImwebBoard', 'imweb-register');
-  let logs = await 로그('imwebBoardLogWindow');
+  let r = await 부르기('registerImwebB2b', 'imweb-register');
+  let logs = await 로그('imwebLogWindow');
   확인('아임웹 partial · { ok:false, partial:true, error }', () => {
     assert.equal(r.threw, null);
-    assert.deepEqual(r.result, { ok: false, partial: true, error: '해외몰 게시판 등록 실패' });
+    assert.deepEqual(r.result, { ok: false, partial: true, error: '세트 BSA O 등록 실패' });
   });
   확인('아임웹 partial · 된 곳은 성공 줄, 안 된 곳은 오류 줄', () => {
-    assert.ok(logs.some(l => l.type === 'success' && l.text.includes('본사몰')), JSON.stringify(logs));
-    assert.ok(logs.some(l => l.type === 'error' && l.text.includes('해외몰') && l.text.includes('권한이 없습니다')), JSON.stringify(logs));
+    assert.ok(logs.some(l => l.type === 'success' && l.text.includes('개별 BSA O')), JSON.stringify(logs));
+    assert.ok(logs.some(l => l.type === 'error' && l.text.includes('세트 BSA O') && l.text.includes('권한이 없습니다')), JSON.stringify(logs));
   });
   확인('아임웹 partial · 전체 줄은 초록 ✓ 가 아니다', () => {
     const last = logs.at(-1);
     assert.equal(last.type, 'error', JSON.stringify(last));
     assert.ok(!last.text.startsWith('✓'), JSON.stringify(last));
-    assert.ok(last.text.includes('해외몰 게시판 등록 실패'), JSON.stringify(last));
+    assert.ok(last.text.includes('세트 BSA O 등록 실패'), JSON.stringify(last));
   });
 
   console.log('\n════ 아임웹 B2B — success:true 인데 결과 한 줄이 실패 (약속 위반도 성공으로 세지 않는다)');
@@ -310,7 +300,7 @@ try {
     fn: 'registerCoupang', channel: 'coupang-update', btn: 'coupangRegisterBtn', logId: 'coupangLogWindow',
     fill: `document.getElementById('cpProductIdInput').value = '777'`,
     refuse: `document.getElementById('cpProductIdInput').value = '888'`,
-    refuseMsg: '불러온 상품(ID 777)과 입력칸의 ID(888)가 다릅니다 — 저장하지 않았습니다. 888 를 고치려면 먼저 "상품 불러오기"를 누르세요.',
+    refuseMsg: '불러온 상품(ID 777)과 지금 고른 쿠팡 상품ID(888)가 다릅니다 — 저장하지 않았습니다. 888 를 고치려면 먼저 "상품 불러오기"를 누르세요.',
   });
 
   console.log('\n════ 쿠팡 두 번째 저장 — 저장 뒤 화면 상태를 쿠팡이 돌려준 상품으로');
@@ -376,8 +366,6 @@ try {
   console.log('\n════ 아임웹 수정 저장 버튼 — 불러오기 전');
   r = await 부르기('updateImwebB2bProduct', 'imweb-update-group');
   확인('B2B 수정 · 불러오기 전 → { ok:false }', () => assert.deepEqual(r.result, { ok: false, error: '먼저 상품을 불러와주세요.' }));
-  r = await 부르기('updateImwebBoardPost', 'imweb-update-post');
-  확인('게시판 수정 · 불러오기 전 → { ok:false } (예전엔 말없이 돌아감)', () => assert.deepEqual(r.result, { ok: false, error: '먼저 게시글을 불러와주세요.' }));
 
   확인('페이지 오류 없음', () => assert.deepEqual(pageErrors, []));
   console.log(`\n${전체 - 틀림.length}/${전체} 통과`);

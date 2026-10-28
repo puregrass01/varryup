@@ -24,7 +24,7 @@ try {
         if (channel === 'amazon-load-product') return { success: true, product: { title: 'Mirror', stock: 3, price: 30, mainImageUrl: urls[0],
           raw: { attributes: { other_product_image_locator_1: [{ marketplace_id: data.marketplaceId, media_location: urls[1] }],
             other_product_image_locator_2: [{ marketplace_id: data.marketplaceId, media_location: urls[2] }] } } } };
-        if (channel === 'amazon-update' || channel === 'imweb-update-group' || channel === 'imweb-update-post') return { success: true };
+        if (channel === 'amazon-update' || channel === 'imweb-update-group') return { success: true };
         if (channel === 'ebay-load-config') return { success: true, data: { environment: 'sandbox' } };
         if (channel === 'ebay-load-product') return { success: true, data: {
           sku: data, offer: { status: 'PUBLISHED', pricingSummary: { price: { value: '30' } }, availableQuantity: 3 },
@@ -43,39 +43,43 @@ try {
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(pathToFileURL(path.resolve('src/ui/index.html')).href);
   await page.waitForFunction(() => !!window.ebayUpdate && !!window.VUImageGallery);
+  // 국내몰 갤러리는 불러온 영역 맨 위에 있고, 한 장씩 추가하던 URL 줄은 없다(갤러리의 배열 적용·ESM 상세가 대신한다).
+  assert.deepEqual(await page.evaluate(() => ['ssEditLoaded', 'cpEditLoaded', 'iwB2bEditLoaded'].map(id => {
+    const top = document.getElementById(id).firstElementChild;
+    return [top.textContent, top.nextElementSibling.id];
+  })), [['사진 · 상품 이미지', 'ssImageList'], ['사진 · 상품 이미지', 'cpImageList'], ['사진 · 상품 이미지', 'iwB2bImageList']]);
+  assert.equal(await page.locator('#ssNewImageUrl, #cpNewImageUrl, #iwB2bNewImageUrl').count(), 0);
   // Existing native state objects remain the source of truth for their save buttons.
   await page.evaluate(() => {
     ssEditState = { originNo: '1', revision: 'rev', groups: [], options: [], detailImages: urls.map(url => ({ url })) };
     cpEditState = { productId: '2', options: [], detailImages: urls.map(url => ({ url, raw: url, blockType: 'HTML' })) };
     iwB2bEditState = { products: [{ prodNo: '3' }], sharedGroups: [], combos: [], detailImages: [...urls] };
-    iwBoardEditState = { postCode: '4', lang: 'en', detailImages: [...urls] };
     document.getElementById('cpProductIdInput').value = '2';
     document.getElementById('ssEditTitle').value = 'Naver';
     document.getElementById('cpEditTitle').value = 'Coupang';
     document.getElementById('iwB2bEditTitle').value = 'B2B';
-    document.getElementById('iwBoardEditTitle').value = 'Board';
-    renderSmartstoreImages(); renderCoupangImages(); renderImwebB2bImages(); renderImwebBoardImages();
+    renderSmartstoreImages(); renderCoupangImages(); renderImwebB2bImages();
   });
   const remove = async id => page.evaluate(id => document.querySelector('#' + id + ' .vu-image-remove').click(), id);
-  for (const id of ['ssImageList', 'cpImageList', 'iwB2bImageList', 'iwBoardImageList']) {
+  for (const id of ['ssImageList', 'cpImageList', 'iwB2bImageList']) {
     await remove(id);
     assert.equal(await page.locator('#' + id + ' .vu-image-tile').count(), 2);
   }
   assert.equal(await page.evaluate(() => calls.filter(c => /update/.test(c.channel)).length), 0);
-  await page.evaluate(async () => { await saveSmartstoreEdit(); await saveCoupangEdit(); await updateImwebB2bProduct(); await updateImwebBoardPost(); });
+  await page.evaluate(async () => { await saveSmartstoreEdit(); await saveCoupangEdit(); await updateImwebB2bProduct(); });
   const payloads = await page.evaluate(() => calls);
-  for (const channel of ['smartstore-update-product', 'coupang-update', 'imweb-update-group', 'imweb-update-post']) {
+  for (const channel of ['smartstore-update-product', 'coupang-update', 'imweb-update-group']) {
     const data = payloads.find(c => c.channel === channel)?.data;
     assert.ok(data, channel + ' submitted');
     assert.deepEqual((data.detailImages || data.images).map(x => x.url || x), ['https://images.example/b.jpg', 'https://images.example/c.jpg']);
   }
   // Array replacement uses the selected form's marketplace and does not change the other forms.
   await page.evaluate(() => {
-    const box = document.querySelector('#iwBoardImageList textarea'); box.value = 'https://images.example/new.jpg|https://images.example/next.jpg';
-    document.querySelector('#iwBoardImageList .vu-image-import button').click();
+    const box = document.querySelector('#iwB2bImageList textarea'); box.value = 'https://images.example/new.jpg|https://images.example/next.jpg';
+    document.querySelector('#iwB2bImageList .vu-image-import button').click();
   });
-  await page.waitForFunction(() => iwBoardEditState.detailImages[0] === 'https://images.example/new.jpg');
-  assert.equal(await page.evaluate(() => calls.filter(c => c.channel === 'bulk-images-import').at(-1).data.scope), 'imweb-en');
+  await page.waitForFunction(() => iwB2bEditState.detailImages[0] === 'https://images.example/new.jpg');
+  assert.equal(await page.evaluate(() => calls.filter(c => c.channel === 'bulk-images-import').at(-1).data.scope), 'imweb-b2b');
   assert.equal(await page.evaluate(() => ssEditState.detailImages[0].url), 'https://images.example/b.jpg');
 
   for (const marketplaceId of ['ATVPDKIKX0DER', 'A1VC38T7YXB528']) {
@@ -146,5 +150,5 @@ try {
   await parent.evaluate(() => setSection8Mode('new'));
   assert.equal(await parent.locator('#image-library').isVisible(), true, 'new registration retains its defaults');
   assert.deepEqual(errors, []);
-  console.log('PASS: per-mall single-item arrays, native saves, array import isolation, Amazon US/JP replacement, empty draft, ESM detail add + move to main, eBay image save/partial failure/retry block, edit-mode dropdown removed.');
+  console.log('PASS: domestic galleries on top (no single-URL rows), per-mall single-item arrays, native saves, array import isolation, Amazon US/JP replacement, empty draft, ESM detail add + move to main, eBay image save/partial failure/retry block, edit-mode dropdown removed.');
 } finally { await browser.close(); }

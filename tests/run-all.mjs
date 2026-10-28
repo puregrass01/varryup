@@ -36,10 +36,11 @@ function run(label, command, args, options = {}) {
 // (그때마다 "npm test 가 안 돌아요" 가 된다) 저장소 안의 것을 기본으로 삼는다.
 const electronExe = path.join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe');
 const useElectron = existsSync(electronExe);
+// console-to-stderr: 한글 로그가 러너의 stdout 프레임 파싱을 깨뜨리는 것을 막는다(파일 주석 참고).
 run(
     `Node 테스트 (${useElectron ? 'electron as node' : 'system node'})`,
     useElectron ? electronExe : process.execPath,
-    ['--test', 'tests/'],
+    ['--import', './tests/console-to-stderr.mjs', '--test', 'tests/'],
     useElectron ? { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } } : {},
 );
 

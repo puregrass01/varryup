@@ -31,6 +31,7 @@ export function createBulkBatch({ directory, validate, save, savePrices, groupSi
     if (!Array.isArray(input.jobs) || !input.jobs.length || input.jobs.length > 5000) throw new Error('변경 목록은 1~5,000건이어야 합니다.');
     const jobs = structuredClone(input.jobs).map(job => ({ type: job.type, id: String(job.id ?? '').trim(), optionId: String(job.optionId ?? '').trim(),
       ...(job.type === 'images' ? { urls: job.urls, expectedRevision: job.expectedRevision }
+        : job.type === 'name' ? { newName: job.newName, expectedName: job.expectedName }
         : { newPrice: job.newPrice, expectedPrice: job.expectedPrice }) }));
     const digest = createHash('sha256').update(JSON.stringify({ scope, jobs })).digest('hex');
     if (previous) {
@@ -49,7 +50,7 @@ export function createBulkBatch({ directory, validate, save, savePrices, groupSi
       // 뒤쪽 행이 잘못돼도 앞쪽 상품이 먼저 바뀌지 않게 모든 입력과 공통 이미지 URL을 먼저 검사한다.
       for (const [index, job] of jobs.entries()) {
         if (record.cancelled) break;
-        if (!['price', 'images'].includes(job.type)) throw new Error('변경 종류가 올바르지 않습니다.');
+        if (!['price', 'images', 'name'].includes(job.type)) throw new Error('변경 종류가 올바르지 않습니다.');
         const key = JSON.stringify([job.type, job.id, job.type === 'price' ? job.optionId || '' : '']);
         if (seen.has(key)) throw new Error('같은 상품·옵션의 중복 변경이 있습니다.');
         seen.add(key);

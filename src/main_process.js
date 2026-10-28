@@ -3,16 +3,14 @@
 
 import { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } from 'electron';
 import { registerBulkPriceIPC } from './bulk_price_ipc.js';
-import { registerFxAutoPriceIPC, FxPriceStore } from './fx_auto_price.js';
-import { loadVehicleNames, makeJpDraft, draftCsv, draftTsv } from './amazon_jp_draft.js';
-import { detectUrlText } from './utils/image_text.js';
+import { registerFxAutoPriceIPC } from './fx_auto_price.js';
 import { registerImwebUnitPricesIPC, createOpenApiGateway } from './imweb_unit_prices.js';
 import { registerImwebUnitNamesIPC } from './imweb_unit_names.js';
 import { createImwebSession, createImwebClient } from './platforms/openapi/imweb_client.js';
 import { createImwebLock } from './utils/imweb_lock.js';
 import { createB2bApi, B2B_SITE_CODE } from './platforms/openapi/imweb_b2b.js';
 import { createImwebBulk } from './imweb_bulk.js';
-import { englishPrice } from './utils/imweb_currency.js';
+import { createImwebHeadCreate, convertWithRates, planUnitPrices } from './imweb_head_create.js';
 import { registerCurrencyRatesIPC } from './currency_rates_ipc.js';
 import { registerEbayIPC } from './ebay_ipc.js';
 import path from 'path';
@@ -50,7 +48,7 @@ import { writeJsonAtomic } from './utils/json_file.js';
 import {
     createInflightLock, runGuardedRegistration, noticeSuffix, isGuardError, guardErrorResponse, brandsFromCatalog,
     planCoupang, checkCoupang, recordCoupang, planNaver, checkNaver, recordNaver,
-    planAmazon, checkAmazon, recordAmazon, planImweb, checkImweb, recordImweb,
+    planAmazon, checkAmazon, recordAmazon, planImweb, checkImweb, recordImweb, planImwebHead, checkImwebHead, recordImwebHead,
 } from './utils/duplicate_guard.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -136,7 +134,7 @@ function stopAiServers() {
 }
 
 // 회사 공용 계정 로그인 시드:
-// 개발 PC 에만 있는 data/defaults/* (네이버·ESM·아임웹 세션, 쿠팡 API키, 아임웹 설정)를
+// 개발 PC 에만 있는 data/defaults/* (네이버·ESM 세션, 쿠팡·아마존 설정)를
 // 첫 실행 시 userData 로 복사한다. 이미 있으면(직원이 재로그인한 경우 등) 건드리지 않는다.
 //
 // 설치본에는 이 폴더를 일부러 넣지 않는다(package.json build.files 의 "!data/defaults/**").
@@ -308,28 +306,11 @@ function getEbay() {
 let imwebInstance = null;
 function getImweb() {
     if (!imwebInstance) {
-        const configPath = path.join(app.getPath('userData'), 'imweb_config.json');
-        
-        if (!fs.existsSync(configPath)) {
-            writeJsonAtomic(configPath, {
-                b2bUrl: 'https://bbstore37.imweb.me/admin/',
-                b2bId: '',
-                headUrl: 'https://optic-glass.imweb.me/admin',
-                headId: '',
-                usUrl: 'https://optic-glass-us.imweb.me/admin',
-                usId: ''
-            });
-        }
-        
-        // ImwebEdit 는 Imweb(게시판 · 로그인)을 상속하고, B2B몰 상품은 아임웹 Open API(imweb_b2b.js)로 한다.
-        // B2B 쪽은 브라우저를 쓰지 않는다. 진행 로그는 그때그때의 logCallback 으로 간다.
-        imwebInstance = new ImwebEdit(configPath, getBrowserSync);
+        // B2B몰 상품은 아임웹 Open API(imweb_b2b.js)로만 한다 — 브라우저를 쓰지 않는다.
+        imwebInstance = new ImwebEdit();
         imwebInstance.b2b = createB2bApi(getImwebApiClient(B2B_SITE_CODE), { log: msg => imwebInstance.log(msg) });
     }
-    // 서버에서 받은 아임웹 로그인정보(있으면)를 붙여준다 → login()에서 자동입력에 사용
-    imwebInstance.autoLogin = serverCreds['imweb'] || null;
-    // 진행 로그를 UI 로 보낸다. 예전에는 getImwebEdit() 쪽에만 붙어 있어서,
-    // 같은 아임웹 작업이라도 어느 게터로 들어왔느냐에 따라 로그가 보이다 말다 했다.
+    // 진행 로그를 UI 로 보낸다.
     imwebInstance.logCallback = (msg) => {
         sendToUI('imweb-log', msg);
     };
@@ -529,16 +510,14 @@ function createUpWindow(mode = 'new') {
     }
     setUpWindowMode(mode);
     upWindow = new BrowserWindow({
-        // 현황판(좌측 380px)만 보이는 접힌 화면으로 뜬다. '열기' 를 누르면 화면이 1200 으로 넓히며
-        // 쇼핑몰 탭·신규등록 패널을 펼친다(index_up.html setPanels). 이 폭·minWidth 는
-        // index_up.html 의 PANELS_COLLAPSED_WIDTH 와 같아야 한다 — 작으면 입력판이 잘린다.
-        width: 400, height: 850, minWidth: 400, minHeight: 640, resizable: true, frame: false,
+        // 현황판과 쇼핑몰 탭·신규등록 패널을 함께 펼쳐 뜬다(접기/열기 버튼은 10-28 삭제).
+        width: 1200, height: 850, minWidth: 400, minHeight: 640, resizable: true, frame: false,
         // nodeIntegrationInSubframes: iframe(index.html)의 등록 폼도 IPC 쓰게
         webPreferences: { nodeIntegration: true, contextIsolation: false, nodeIntegrationInSubframes: true },
         title: 'VERY UP',
     });
     upWindow.loadFile(path.join(__dirname, 'ui/index_up.html'), {
-        query: { mode: upWindowMode, panels: 'collapsed' }
+        query: { mode: upWindowMode }
     });
     const win = upWindow;
     win.webContents.on('did-finish-load', () => {
@@ -670,15 +649,13 @@ async function syncCredentialsFromServer() {
                 // 커머스API 키뿐이다. 두 종류가 같은 플랫폼 이름으로 공존한다.
                 if (applyNaverCredentials(c.data)) n++;
             } else if (c.platform === 'imweb') {
-                // 서버 템플릿은 OAuth clientId · clientSecret 이다. 그 둘은 Open API 키 파일의 전용 칸으로
-                // 보낸다 — imweb_config.json(브라우저 자동화 설정)에 섞으면 OAuth 요청이 읽지 못한다.
+                // 서버 템플릿은 OAuth clientId · clientSecret 이다. 그 둘은 Open API 키 파일의 전용 칸으로 보낸다.
                 // 빈 값은 '변경 없음'으로 본다(서버 템플릿의 빈 칸이 저장된 값을 지우면 안 된다).
-                const { clientId, clientSecret, ...rest } = c.data;
+                const { clientId, clientSecret } = c.data;
                 const oauth = {};
                 if (String(clientId ?? '').trim()) oauth.clientId = String(clientId).trim();
                 if (String(clientSecret ?? '').trim()) oauth.clientSecret = String(clientSecret).trim();
                 if (Object.keys(oauth).length) oaSaveConfig(oauth);
-                if (Object.keys(rest).length) mergeIntoConfig('imweb_config.json', rest);
                 n++;
             } else if (c.platform === 'papago') {
                 serverCreds['papago'] = c.data; n++;
@@ -733,7 +710,7 @@ ipcMain.handle('open-admin-server', async () => {
 });
 
 // 판매자 콘솔 열기 — **올라간 상품을 눈으로 확인하는 용도뿐이다.**
-// 등록·수정은 API(쿠팡·아마존·이베이) 나 자동화 경로(네이버·아임웹)로 돌고,
+// 등록·수정은 API(쿠팡·아마존·이베이·아임웹) 나 자동화 경로(네이버·ESM)로 돌고,
 // 여기서 여는 창은 그 경로에 전혀 끼어들지 않는다.
 //
 // 기본 브라우저(shell.openExternal) 대신 앱이 띄우는 Edge 를 쓴다. 기본 브라우저는
@@ -750,7 +727,7 @@ const SELLER_SITES = {
 };
 
 // 콘솔 창은 자동화 컨텍스트와 **분리한다.** 같은 컨텍스트를 쓰면 등록이 도는 중에
-// 이 창이 같은 탭을 끌고 가 버린다 — getImwebEdit() 주석에 적힌 바로 그 사고다.
+// 이 창이 같은 탭을 끌고 간다.
 class SellerConsole extends BasePlatform {
     constructor(browserGetter, sessionPath, name) {
         super(browserGetter, sessionPath);
@@ -809,16 +786,20 @@ ipcMain.handle('open-seller-site', async (event, platform) => {
         ? `${amazonSellerCentralUrl()}/inventory`
         : SELLER_SITES[platform];
     if (!url) return { ok: false, error: `알 수 없는 플랫폼입니다: ${platform}` };
+    // 아임웹은 앱이 관리자 로그인을 하지 않는다(게시판 크롤링을 지우며 세션도 뺐다) → 기본 브라우저로 연다.
+    if (platform === 'imweb') {
+        return shell.openExternal(url).then(() => ({ ok: true, url, fallback: true }),
+            e => ({ ok: false, error: `브라우저를 열지 못했습니다: ${e.message}` }));
+    }
     if (sellerConsoleBusy) return { ok: false, error: '판매자 콘솔을 여는 중입니다. 잠시만 기다려주세요.' };
 
     sellerConsoleBusy = true;
     try {
         await getBrowser();
 
-        // 네이버·ESM·아임웹은 각자 로그인 절차가 따로 있다. 네이버는 '네이버 아이디로 로그인'
-        // 이 새 팝업으로 열려서 일반적인 폼 자동입력으로는 잡히지 않고, 아임웹은 관리자 URL 로
-        // 바로 들어가 봐야 세션이 살아 있는지 알 수 있다. 그래서 각자의 로그인을 그대로 쓴다
-        // — 예전 '네이버 로그인' 버튼이 하던 일과 같다.
+        // 네이버·ESM은 각자 로그인 절차가 따로 있다. 네이버는 '네이버 아이디로 로그인'
+        // 이 새 팝업으로 열려서 일반적인 폼 자동입력으로는 잡히지 않는다. 그래서 각자의 로그인을
+        // 그대로 쓴다 — 예전 '네이버 로그인' 버튼이 하던 일과 같다.
         if (platform === 'naver') {
             const ok = await getNaver().login();   // 로그인 후 상품목록까지 이동한다
             return ok ? { ok: true, url } : { ok: false, error: '네이버 로그인을 완료하지 못했습니다.' };
@@ -827,13 +808,6 @@ ipcMain.handle('open-seller-site', async (event, platform) => {
             const ok = await getESM().login();
             return ok ? { ok: true, url } : { ok: false, error: 'ESM 로그인을 완료하지 못했습니다.' };
         }
-        if (platform === 'imweb') {
-            const imweb = getImweb();
-            await imweb.initBrowserSession();
-            await imweb.openAdminAt(url, '/admin/shopping/');  // 세션 만료면 안에서 자동 로그인
-            return { ok: true, url };
-        }
-
         const console_ = getSellerConsole(platform);
         await console_.init(true, { width: 1600, height: 950 });
         await console_.page.goto(url, { waitUntil: 'domcontentloaded' }).catch(() => {});
@@ -1022,12 +996,11 @@ app.on('window-all-closed', async () => {
  * 다음 작업이 새 context 를 만든다.
  */
 // (예전에는 여기에 선언된 적 없는 naverEditInstance 가 있었다 — archive/ 에만 남은 옛 변수다.
-//  ES 모듈이라 그 대입이 ReferenceError 를 던져, Edge 를 직접 닫은 뒤의 첫 작업이 실패하고
-//  imwebInstance 는 죽은 브라우저를 붙든 채 남았다. tests/main-process-lifecycle.test.mjs 가 지킨다.)
+//  ES 모듈이라 그 대입이 ReferenceError 를 던져, Edge 를 직접 닫은 뒤의 첫 작업이 실패했다.
+//  tests/main-process-lifecycle.test.mjs 가 지킨다.)
 function dropBrowserBoundInstances() {
     esmInstance = null;
     naverInstance = null;
-    imwebInstance = null;
 }
 
 async function getBrowser() {
@@ -1562,18 +1535,8 @@ ipcMain.handle('amazon-search-products', async (event, query) => {
     }
 });
 
-// 로컬 캐시 상태 (건수 / 마지막 동기화 시각). 캐시는 마켓마다 따로라 탭의 마켓을 받는다(없으면 설정 마켓).
-ipcMain.handle('amazon-cache-summary', async (event, options = {}) => {
-    try {
-        const amazon = getAmazon();
-        amazon.loadConfig();
-        return { success: true, ...amazon.getCachedListingsSummary(options?.marketplaceId) };
-    } catch (error) {
-        return { success: false, error: error.message };
-    }
-});
-
 // 전체 목록 동기화. Reports API 라 수 분 걸릴 수 있어 진행상황을 렌더러로 흘려보낸다.
+// 캐시 상태(건수·마지막 동기화)는 amazon-search-products 의 stats 로 렌더러가 그린다. enrichBrand 는 false 가 아니면 켠다.
 ipcMain.handle('amazon-refresh-cache', async (event, options = {}) => {
     try {
         const amazon = getAmazon();
@@ -1586,28 +1549,6 @@ ipcMain.handle('amazon-refresh-cache', async (event, options = {}) => {
         return { success: true, ...result };
     } catch (error) {
         console.error(error);
-        return { success: false, error: error.message };
-    }
-});
-
-// 아마존 일본 등록 초안 (amazon_jp_draft.js makeJpDraft) — 아마존에는 아무것도 보내지 않는다(읽기만 한다).
-// 상품은 정규화 표(data/amazon_listings.json), 가격·재고·이미지·ASIN 은 미국 실시간 조회, 일본에 이미 있는 SKU 는
-// 일본에 한 건씩 물어 표시, 메인 이미지는 글자 없는 사진(Windows OCR). 결과: 검토용 CSV + 업로드용 TSV(999줄씩).
-ipcMain.handle('amazon-jp-draft', async (event) => {
-    const progress = message => { try { event.senderFrame.send('amazon-jp-draft-progress', message); } catch { /* 창 닫힘 */ } };
-    try {
-        const amazon = getAmazon();
-        amazon.loadConfig();
-        const rates = await currencyRatesService.get();
-        const { rows, summary } = await makeJpDraft({
-            amazon, names: loadVehicleNames(), detect: detectUrlText, progress,
-            fx: new FxPriceStore(app.getPath('userData')).read(),
-            snapshot: rates?.success ? rates.data : null,
-        });
-        return { success: true, csv: draftCsv(rows), tsv: draftTsv(rows), summary,
-            rateError: rates?.success ? '' : (rates?.error || '환율을 불러오지 못했습니다.') };
-    } catch (error) {
-        console.error('[아마존 JP 초안]', error);
         return { success: false, error: error.message };
     }
 });
@@ -1782,7 +1723,7 @@ ipcMain.handle('vehicle-load-catalog', async () => {
 
 ipcMain.handle('vehicle-load-i18n', async () => {
     try {
-        // 차량 명칭 한↔영↔일 사전. 일본몰 게시글·아마존 JP 리스팅이 이 값을 쓴다.
+        // 차량 명칭 한↔영↔일 사전. 아마존 JP 리스팅이 이 값을 쓴다.
         // (생성: scratch/build_vehicle_i18n.mjs — CSVdatabase 는 배포본에 없으므로 이 JSON 이 정본)
         const namesPath = path.join(__dirname, '..', 'data', 'vehicle_i18n.json');
         const raw = fs.readFileSync(namesPath, 'utf-8');
@@ -1873,98 +1814,75 @@ ipcMain.handle('imweb-save-openapi-config', async (event, { clientId, clientSecr
     }
 });
 
-async function prepareEnglishBoardPrice(data) {
-    const currencySnapshot = data.currencySnapshot || (await currencyRatesService.get())?.data;
-    const prepared = { ...data, currencySnapshot };
-    englishPrice(prepared);
-    return prepared;
-}
-
 ipcMain.handle('imweb-register', async (event, data) => {
     try {
-        if (data.targetUs) data = await prepareEnglishBoardPrice(data);
-        // B2B몰은 Open API 라 브라우저가 필요 없다. 게시판(본사 · 해외 · 일본)이 있을 때만 띄운다.
-        if (data.targetHead || data.targetUs || data.targetJp) await getBrowser();
-        const imweb = getImweb();
+        const imweb = getImweb();   // 진행 로그는 getImweb 이 'imweb-log' 로 보낸다
 
-        // Route logs to the tab that started this run: B2B → imweb-log,
-        // 본사·해외몰 게시판 → imweb-board-log.
-        const channel = data.targetB2b ? 'imweb-log' : 'imweb-board-log';
-        imweb.logCallback = (msg) => {
-            sendToUI(channel, msg);
-        };
-
-        // 조회가 등록과 같은 토큰·세션을 쓰고 대신 볼 스냅샷이 없으며 중복이 즉시 공개된다
-        // — 확인하지 못하면 멈춘다(fail-closed).
-        const plan = planImweb(data, {
-            brands: guardBrands(),
-            boardNameFor: (b, l) => imweb.boardNameFor(b, l),
-            nameForLang: (d, f, l) => imweb.nameForLang(d, f, l),
-            extractImageUrl: (s) => imweb.extractImageUrl(s),
-        });
+        // 조회가 등록과 같은 토큰을 쓰고 대신 볼 스냅샷이 없으며 중복이 즉시 공개된다
+        // — 확인하지 못하면 멈춘다(fail-closed). bypass 는 checkImweb 이 스스로 처리한다.
+        const plan = planImweb(data, { brands: guardBrands() });
         const { result: run, notices } = await runGuardedRegistration({
             channel: 'imweb', data, plan, inflight: registerInflight,
-            check: async (p, opts) => {
-                if (opts.bypass) return { notices: [] };
-                await imweb.resetClosedSession();
-                const boardLangs = [...new Set(p.targets.filter(t => t.kind === 'board').map(t => t.lang))];
-                try {
-                    // 게시판 세션 확보(만료 시 자동 로그인 60초 + 수동 로그인 대기 120초)는 조회 시간 제한(90초) 밖에서
-                    // 먼저 끝낸다. 제한 안에서 하면 캡차·2FA 로그인 도중 시간 초과로 끊기고 catch 가 로그인 창을 닫는다.
-                    // 로그인 실패는 가드 오류가 아니라 기존 등록과 같은 오류로 끝난다. B2B 조회는 Open API 라 준비가 없다.
-                    if (boardLangs.length) await imweb.ensureBoardBase(boardLangs[0]);
-                    return await checkImweb(p, opts, {
-                        ledger: getRegistrationLedger(),
-                        b2bRows: (code) => imweb.listB2bRowsByCode(code),
-                        b2bOptionValues: (no) => imweb.b2bOptionValuesOf(no),
-                        boardPosts: (brand, lang) => imweb.listBoardPosts(brand, lang),
-                    });
-                } finally {
-                    // 조회가 잡아 둔 게시판 주소는 등록 단계에서 다시 잡게 한다(새 탭에서 옛 주소로 cm API 를
-                    // 부르면 인증이 안 붙는다).
-                    imweb.boardBase = null;
-                    // 등록 단계가 initBrowserSession() 을 다시 불러 조회가 연 같은 창에 콘솔·팝업 리스너가 한 번 더
-                    // 붙는다(로그 두 줄씩) → 조회 창을 닫아 등록이 새 창에서 시작하게 한다.
-                    if (boardLangs.length) {
-                        try { await imweb.close(); } catch { /* 이미 닫힘 */ }
-                        imweb.resetClosedSession();
-                    }
-                }
-            },
+            check: (p, opts) => checkImweb(p, opts, {
+                ledger: getRegistrationLedger(),
+                b2bRows: (code) => imweb.listB2bRowsByCode(code),
+                b2bOptionValues: (no) => imweb.b2bOptionValuesOf(no),
+            }),
             register: () => imweb.executeAutomation(data),
             // 일부만 성공해도 record 는 불린다 — 실제로 만들어진 것(lastRegistered)만 적으므로 재시도가
-            // 이미 올라간 상품·글을 또 만들지 않게 막고, 실패한 대상은 적히지 않는다.
+            // 이미 올라간 상품을 또 만들지 않게 막고, 실패한 대상은 적히지 않는다.
             record: (p, _run, opts) => recordImweb(getRegistrationLedger(), p, imweb.lastRegistered || [], opts),
         });
-        // 대상(B2B 개별/세트·본사/해외/일본몰)별 결과로 판정한다. 예전엔 요약 문자열을 무조건
-        // success:true 로 감싸 "일부 실패"·"포스팅 실패"도 성공으로 보고됐다.
+        // 대상(B2B 개별/세트)별 결과로 판정한다. 예전엔 요약 문자열을 무조건
+        // success:true 로 감싸 "일부 실패"도 성공으로 보고됐다.
         return imwebRunResponse(run, noticeSuffix(notices));
     } catch (error) {
-        if (isGuardError(error)) {
-            try { await getImweb().close(); } catch { /* 이미 닫힘 */ }
-            return guardErrorResponse(error);
-        }
+        if (isGuardError(error)) return guardErrorResponse(error);
         console.error(error);
         return { success: false, error: error.message };
     }
 });
 
-// ── 아임웹 B2B 기존 상품 수정 (내부 API 기반) ──────────────────
-// 예전에는 여기에 imwebEditInstance 라는 **두 번째** ImwebEdit 인스턴스가 있었다.
-// 같은 클래스·같은 imweb_config.json 이고, BasePlatform.init() 이 플랫폼명으로
-// 컨텍스트를 재사용하므로 **브라우저 컨텍스트까지 같은 것**을 썼다. 다른 것은
-// this.page 와 this.token 뿐이었다 → 복사등록 중에 상품수정을 쓰면 두 인스턴스가
-// 같은 탭을 서로 끌고 다녀, 한쪽의 goto() 뒤에 다른 쪽이 엉뚱한 페이지에서
-// 셀렉터를 찾았다. 재현이 어렵고 "가끔 이상하다"로만 보고되는 종류의 문제였다.
-// 이제 getImweb() 하나로 합쳤다. 이름은 호출부 호환을 위해 남겨 둔다.
-function getImwebEdit() {
-    return getImweb();
-}
+// ── 아임웹 자사몰(본사몰) 신규 등록 (Open API, imweb_head_create.js) ──────────
+// 상품 하나에 한국 · 미국 · 일본 구역을 한 번에 만든다(숨김 → 세 구역 확인 → 판매중). 세션 · 파일 잠금은 getImwebApiClient()
+// 그대로, 미국 · 일본 가격은 환율 탭과 같은 환율 · 규칙(convertWithRates). 쓰기는 상품 일괄 수정 저장과 한 줄로 선다
+// (bulkPriceService.uiWrite — 저장 중이면 BUSY, 환율 자동 변경 저장은 기다림).
+let imwebHeadInstance = null;
+const getImwebHead = () => (imwebHeadInstance ||= createImwebHeadCreate(getImwebApiClient(), {
+    log: message => sendToUI('log', { message, level: message.startsWith('⚠') ? 'warn' : 'info' }),
+    convertPrice: convertWithRates(() => currencyRatesService.get()),
+}));
+// 신규 등록 탭의 미국 · 일본 가격 미리보기 — 등록과 같은 계산(planUnitPrices). 아임웹에는 묻지 않는다(환율만).
+ipcMain.handle('imweb-head-price-preview', async (event, { krw, usd } = {}) => {
+    try { return { success: true, plan: await planUnitPrices(krw, usd, convertWithRates(() => currencyRatesService.get())) }; }
+    catch (error) { return { success: false, error: error.message }; }
+});
+ipcMain.handle('imweb-head-register', (event, data) => bulkPriceService.uiWrite(async () => {
+    try {
+        const head = getImwebHead();
+        const plan = planImwebHead(data);
+        const { result, notices } = await runGuardedRegistration({
+            channel: 'imweb-head', data, plan, inflight: registerInflight,
+            check: (p, opts) => checkImwebHead(p, opts, { ledger: getRegistrationLedger(), rows: () => head.findExisting(data) }),
+            register: () => head.register(data),
+            // 확인이 어긋나 숨김으로 남은 상품도 적는다 — 다시 누르면 같은 차가 또 만들어진다.
+            record: (p, r, opts) => recordImwebHead(getRegistrationLedger(), p, r, opts),
+        });
+        const suffix = noticeSuffix(notices);
+        return result.ok ? { success: true, result, message: `등록 — 세 구역 확인 뒤 판매중${suffix}` }
+            : { success: false, result, error: result.error + suffix };
+    } catch (error) {
+        if (isGuardError(error)) return guardErrorResponse(error);
+        console.error(error);
+        return { success: false, error: error.message };
+    }
+}));
 
+// ── 아임웹 B2B 기존 상품 수정 (Open API) ──────────────────
 // 제조사/차종/코드로 검색 — 세트+개별을 한 묶음으로 반환
 ipcMain.handle('imweb-search-products', async (event, { brand, model, code, idx }) => {
     try {
-        const groups = await getImwebEdit().searchProducts({ brand, model, code, idx });
+        const groups = await getImweb().searchProducts({ brand, model, code, idx });
         return { success: true, groups };
     } catch (error) {
         console.error(error);
@@ -1975,7 +1893,7 @@ ipcMain.handle('imweb-search-products', async (event, { brand, model, code, idx 
 // 짝(세트+개별)을 한 번에 불러오기
 ipcMain.handle('imweb-load-group', async (event, { prodNos }) => {
     try {
-        const group = await getImwebEdit().loadGroup(prodNos);
+        const group = await getImweb().loadGroup(prodNos);
         group.products.forEach(p => { delete p.content; delete p.periodDiscount; });   // 원본 전체는 렌더러로 넘기지 않는다
         return { success: true, group };
     } catch (error) {
@@ -1987,57 +1905,11 @@ ipcMain.handle('imweb-load-group', async (event, { prodNos }) => {
 // 짝을 한 번에 수정
 ipcMain.handle('imweb-update-group', async (event, data) => {
     try {
-        const result = await getImwebEdit().updateGroup(data);
+        const result = await getImweb().updateGroup(data);
         return { success: true, message: result };
     } catch (error) {
         console.error(error);
         return { success: false, error: error.message, partial: !!error.partial };
-    }
-});
-
-// 본사·해외몰 게시글 수정 (내부 API 기반)
-function getImwebBoardEdit() {
-    const e = getImwebEdit();
-    e.logCallback = (msg) => {
-        sendToUI('imweb-board-log', msg);
-    };
-    return e;
-}
-
-// 코드로 게시글 검색 (여러 개면 전부 반환 → 사용자가 선택)
-ipcMain.handle('imweb-search-posts', async (event, { code, lang, brand }) => {
-    try {
-        await getBrowser();
-        const rows = await getImwebBoardEdit().searchPosts({ brand, lang, code });
-        return { success: true, rows };
-    } catch (error) {
-        console.error(error);
-        return { success: false, error: error.message };
-    }
-});
-
-// 게시글 코드로 불러오기
-ipcMain.handle('imweb-load-post', async (event, { postCode, lang }) => {
-    try {
-        await getBrowser();
-        const post = await getImwebBoardEdit().loadPost(postCode, lang);
-        return { success: true, post };
-    } catch (error) {
-        console.error(error);
-        return { success: false, error: error.message };
-    }
-});
-
-ipcMain.handle('imweb-update-post', async (event, data) => {
-    try {
-        if (data.lang === 'en' && String(data.priceUsd ?? '').trim()) data = await prepareEnglishBoardPrice(data);
-        await getBrowser();
-        const e = getImwebBoardEdit();
-        const result = await e.updatePost(data);
-        return { success: true, message: result };
-    } catch (error) {
-        console.error(error);
-        return { success: false, error: error.message };
     }
 });
 

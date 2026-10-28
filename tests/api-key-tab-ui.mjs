@@ -95,23 +95,17 @@ try {
   await page.waitForTimeout(600); // Let the existing sidebar view transition finish before visual capture.
   await page.screenshot({ path: 'scratch/api-key-fixed.png' });
 
-  // 앱은 접힌 채(?panels=collapsed, 창 400px)로 뜬다. API KEY·상품 일괄 수정을 누르면 셸 패널부터 편다.
   {
     const shell = await context.newPage();
     shell.on('pageerror', e => errors.push(e.message));
     await shell.setViewportSize({ width: 1200, height: 800 });
     await shell.route('https://images.example/**', route => route.fulfill({ contentType: 'image/svg+xml',
       body: '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="300" height="300" fill="#cbd5e1"/></svg>' }));
-    await shell.goto(pathToFileURL(path.resolve('src/ui/index_up.html')).href + '?panels=collapsed');
-    assert.equal(await shell.evaluate(() => panelsCollapsed()), true, '접힌 채로 시작');
+    await shell.goto(pathToFileURL(path.resolve('src/ui/index_up.html')).href);
     await shell.locator('[data-workspace="api"]').click();
     await shell.frameLocator('#form-frame').locator('#apiKeysTab').waitFor({ state: 'visible' });
-    assert.equal(await shell.evaluate(() => panelsCollapsed()), false, 'API KEY 진입 시 패널을 편다');
     assert.equal(await shell.locator('#section8').isVisible(), true);
-    // 다시 접은 뒤 상품 일괄 수정으로 와도 편다.
-    await shell.evaluate(() => setPanels(false, { resize: false }));
     await shell.locator('[data-workspace="bulk"]').click();
-    assert.equal(await shell.evaluate(() => panelsCollapsed()), false, '상품 일괄 수정 진입 시 패널을 편다');
     assert.equal(await shell.locator('#bulk-edit-workspace').isVisible(), true);
 
     // 1200x800: 필터 레일(약 180px) + 표. 페이지 가로 스크롤이 없어야 하고 표도 칸 안에 들어가야 한다.
@@ -154,11 +148,9 @@ try {
       return { right: box('#mode-bar').right - box('[data-workspace="api"]').right, split: box('[data-workspace="fx"]').left - box('[data-workspace="bulk"]').right };
     });
     assert.ok(bar.right <= 20 && bar.split > 200, '설정 묶음은 모드 바 오른쪽 끝: ' + JSON.stringify(bar));
-    // 일괄 화면에는 환율 패널이 없다. 접어 둔 채 환율을 눌러도 패널을 펴고, 왼쪽 입력판 없이 폭 전체에 늘 펼친다.
+    // 일괄 화면에는 환율 패널이 없다. 환율은 왼쪽 입력판 없이 폭 전체에 늘 펼친다.
     assert.equal(await shell.locator('#bulk-edit-workspace .fx-panel').count(), 0, '일괄 화면에 환율 패널 없음');
-    await shell.evaluate(() => setPanels(false, { resize: false }));
     await shell.locator('[data-workspace="fx"]').click();
-    assert.equal(await shell.evaluate(() => panelsCollapsed()), false, '환율 진입 시 패널을 편다');
     assert.equal(await shell.locator('[data-workspace="fx"]').getAttribute('class'), 'mode-label is-active');
     assert.equal(await shell.locator('#bulk-edit-workspace').isVisible(), false);
     assert.equal(await shell.locator('#main').isVisible(), false, '왼쪽 입력판은 숨는다');

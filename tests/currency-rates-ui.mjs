@@ -28,9 +28,6 @@ try {
         return { success: true, data: { base: 'USD', rates: { USD: 1, JPY: 150, KRW: window.fxState === 'changed' ? 1400 : 1350 },
           marketDate: '2026-09-28', fetchedAt: new Date().toISOString(), stale: window.fxState === 'stale' } };
       }
-      if (channel === 'imweb-load-post') return { success: true, post: {
-        postCode: data.postCode, subject: 'English API post', priceUsd: '88.25',
-        images: ['https://example.test/image.jpg'] } };
       if (channel === 'vehicle-load-catalog') return { success: true, catalog };
       if (channel === 'veryup-get-mode') return new URLSearchParams(location.search).get('mode') || 'new';
       if (channel === 'amazon-load-product') return { success: true, product: {
@@ -46,7 +43,6 @@ try {
   }, { catalog });
   const page = await context.newPage(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  page.on('dialog', d => d.accept());   // 일괄 등록의 입력 확인 경고 confirm — 여기서는 환율 고정만 본다
   const url = pathToFileURL(path.resolve('src/ui/index_up.html')).href;
   await page.goto(url);
   await page.waitForFunction(() => window.VUCurrency?.convert(1, 'USD', 'KRW') === 1350);
@@ -62,65 +58,6 @@ try {
   await page.locator('label[for="inp-usd"]').hover();
   assert.equal(await page.locator('label[for="inp-usd"]').getAttribute('title'), expected(listing.priceUsd));
   assert.equal(await page.locator('#inp-usd').getAttribute('title'), expected(listing.priceUsd));
-
-  // English-only selection exposes the same Excel USD field and transfers it to the board.
-  await page.locator('#cell-USA-own').click();
-  await page.waitForFunction(price => document.getElementById('form-frame').contentDocument.getElementById('iwBoardPriceUsd').value === price, listing.priceUsd.toFixed(2));
-  const boardInput = page.frameLocator('#form-frame').locator('#iwBoardPriceUsd');
-  await boardInput.hover();
-  assert.equal(await boardInput.getAttribute('title'), expected(listing.priceUsd));
-
-  // A refresh mid-batch cannot change its exchange rate or USD source price.
-  await page.evaluate(async () => {
-    await window.VUCurrency.lockBatch(window.require('electron').ipcRenderer, '109.32');
-    window.fxState = 'changed';
-    window.dispatchEvent(new Event('focus'));
-  });
-  await page.waitForTimeout(100);
-  assert.equal(await page.evaluate(() => window.VUCurrency.convert(1, 'USD', 'KRW')), 1350);
-  assert.equal(await page.evaluate(() => window.VUCurrency.getBatchPriceUsd()), '109.32');
-  await page.evaluate(() => window.VUCurrency.releaseBatch());
-  assert.equal(await page.evaluate(() => window.VUCurrency.convert(1, 'USD', 'KRW')), 1400);
-  await page.evaluate(() => { window.fxState = 'ok'; window.dispatchEvent(new Event('focus')); });
-  await page.waitForFunction(() => window.VUCurrency.convert(1, 'USD', 'KRW') === 1350);
-  // Return to the Amazon tab for existing API tests.
-  await page.locator('#cell-USA-open1').click();
-
-  // Exercise the actual bulk entry point with mocked platform execution: preflight
-  // blocks every write on stale rates, then supplies one immutable snapshot.
-  const bulk = await page.evaluate(async () => {
-    const savedChecked = JSON.parse(JSON.stringify(checked));
-    const win = document.getElementById('form-frame').contentWindow;
-    const savedRegister = win.registerImwebBoard;
-    const calls = [];
-    for (const country of Object.keys(checked)) for (const key of Object.keys(checked[country])) checked[country][key] = false;
-    checked.USA.own = true;
-    document.getElementById('inp-usd').value = '109.32';
-    win.registerImwebBoard = async () => {
-      calls.push({ price: window.VUCurrency.getBatchPriceUsd(), krw: window.VUCurrency.getBatchSnapshot().rates.KRW });
-      window.fxState = 'changed';
-      window.dispatchEvent(new Event('focus'));
-      await new Promise(r => setTimeout(r, 50));
-      calls.push({ price: window.VUCurrency.getBatchPriceUsd(), krw: window.VUCurrency.getBatchSnapshot().rates.KRW });
-      return { ok: true };
-    };
-    try {
-      window.fxState = 'stale';
-      await runBulkRegister();
-      const blockedCalls = calls.length;
-      window.fxState = 'ok';
-      await runBulkRegister();
-      return { blockedCalls, calls, released: window.VUCurrency.getBatchSnapshot() === null, running: isBulkRunning };
-    } finally {
-      win.registerImwebBoard = savedRegister;
-      for (const country of Object.keys(savedChecked)) Object.assign(checked[country], savedChecked[country]);
-      window.fxState = 'ok';
-      window.dispatchEvent(new Event('focus'));
-    }
-  });
-  assert.deepEqual(bulk, { blockedCalls: 0, calls: [
-    { price: '109.32', krw: 1350 }, { price: '109.32', krw: 1350 } ], released: true, running: false });
-  await page.waitForFunction(() => window.VUCurrency.convert(1, 'USD', 'KRW') === 1350);
 
   await page.evaluate(() => openPlatformTab('amazonTab', 'USA'));
 
@@ -146,29 +83,19 @@ try {
   await frame.locator('#amzPrice').hover();
   assert.equal(await frame.locator('#amzPrice').getAttribute('title'), expected(3000, 'JPY'));
   await page.locator('#cell-USA-open2').click();
+  // 이베이 조회 SKU 칸은 숨었고 좌측 이베이 SKU 가 넣는다 — 빈 SKU 로는 불러오지 않는다.
+  await page.locator('#inp-sku').fill('EB-1');
+  await page.waitForFunction(() => document.getElementById('form-frame').contentDocument.getElementById('ebEditSku').value === 'EB-1');
   await frame.locator('[data-eb="load"]').click();
   await frame.locator('#ebEditPrice').hover();
   assert.equal(await frame.locator('#ebEditPrice').getAttribute('title'), expected(59.99));
   assert.equal(await frame.locator('#ebEditPrice').inputValue(), '59.99');
-
-  const boardFrame = page.frames().find(f => f.url().includes('/index.html'));
-  await boardFrame.evaluate(() => loadImwebBoardPost('post-test', 'English API post', 'en', 'TEST', '1'));
-  assert.equal(await frame.locator('#iwBoardEditPriceUsd').inputValue(), '88.25');
-  assert.equal(await frame.locator('#iwBoardEditPriceGroup').getAttribute('hidden'), null);
-  await boardFrame.evaluate(() => document.getElementById('iwBoardEditPriceUsd').dispatchEvent(new Event('mouseover', { bubbles: true })));
-  assert.equal(await frame.locator('#iwBoardEditPriceUsd').getAttribute('title'), expected(88.25));
 
   await page.evaluate(() => { window.fxState = 'stale'; window.dispatchEvent(new Event('focus')); });
   await page.waitForFunction(() => window.VUCurrency.convert(1, 'USD', 'KRW') === null);
   await frame.locator('#ebEditPrice').hover();
   assert.match(await frame.locator('#ebEditPrice').getAttribute('title'), /최신 환율/);
   assert.equal(await frame.locator('#ebEditPrice').inputValue(), '59.99');
-
-  assert.match(await page.evaluate(async () => {
-    try { await window.VUCurrency.lockBatch(window.require('electron').ipcRenderer, '100'); return ''; }
-    catch (e) { return e.message; }
-  }), /최신 환율/);
-  assert.equal(await page.evaluate(() => window.VUCurrency.getBatchSnapshot()), null);
 
   // Old main process: friendly tooltip, no raw remote-method error in the screen.
   await page.evaluate(() => { window.fxState = 'missing'; window.dispatchEvent(new Event('focus')); });

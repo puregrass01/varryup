@@ -26,7 +26,6 @@ test('실패 문구는 error 등급으로 올라간다', () => {
 test('플랫폼 접두사가 붙는다', () => {
     assert.equal(toVeryupLog('imweb-log', '상품 등록 중').message, '[아임웹] 상품 등록 중');
     assert.equal(toVeryupLog('naver-log', '로그인 완료').message, '[네이버] 로그인 완료');
-    assert.equal(toVeryupLog('imweb-board-log', '게시글 작성').message, '[아임웹 게시판] 게시글 작성');
 });
 
 test('모르는 채널은 번역하지 않는다', () => {

@@ -8,6 +8,9 @@
 //    뒤에도 남았다. 그대로 올리면 아마존은 SKU 로 덮어써 BMW 리스팅이 BYD 가 된다. 차가 바뀌면
 //    SKU·판매가·쿠팡ID 를 버리고, 같은 차에서 BSA 만 바꿀 때는 사람이 고른 값을 지킨다.
 //
+// 3) 본사몰 상품 찾기 — 상품명을 고르면 브랜드·차종부터 넣고 행(세대·연식·코드·번호·SKU)을 채운다. 다른 상품을
+//    고르면 앞 상품의 SKU 를 버린다. 목록(bulk-price-list)은 시작 때가 아니라 그 칸을 처음 누를 때 읽는다(아임웹 잠금).
+//
 // 버튼은 누르지 않는다 — 폼에 값만 오가고 등록은 일어나지 않는다.
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
@@ -20,6 +23,13 @@ const load = f => JSON.parse(readFileSync(path.join(ROOT, f), 'utf-8'));
 const names = load('data/vehicle_i18n.json');
 const categories = load('data/imweb_categories.json');
 const vehicleCatalog = load('data/vehicle_catalog.json');
+const products = [   // bulk-price-list(imweb-ko) 의 모양 그대로
+  { id: '1760', name: '옵틱글래스 현대 아반떼N 광각미러 [No.H131]' },
+  { id: '1738', name: '옵틱글래스 현대 넥쏘 광각미러 [No.H119]' },
+  { id: '1900', name: '현대 넥쏘 전동 사이드스텝 Pro (기본형/LED)', variant: '숨김(판매 안 함)' },   // [No.] 없음
+  { id: '2140', name: '옵틱글래스 벤츠 C클래스 (전기형) 광각미러 [No.340]' },   // 행 못 정함(2세대 전기형·후기형)
+  { id: '2141', name: '옵틱글래스 벤츠 C클래스 광각미러 [No.377]' },
+];
 
 const browser = await chromium.launch({
   headless: true,
@@ -30,18 +40,23 @@ const browser = await chromium.launch({
 async function fresh() {
   const context = await browser.newContext();
   await context.route(/^https?:/, r => r.abort());
-  await context.addInitScript(({ names, categories, vehicleCatalog }) => {
+  await context.addInitScript(({ names, categories, vehicleCatalog, products }) => {
+    window.__bulkListCalls = 0;
     const ipcRenderer = {
       on() {}, send() {}, removeListener() {},
-      invoke(ch) {
+      invoke(ch, input) {
         if (ch === 'vehicle-load-i18n') return Promise.resolve({ success: true, names });
         if (ch === 'imweb-load-categories') return Promise.resolve({ success: true, categories });
         if (ch === 'vehicle-load-catalog') return Promise.resolve({ success: true, catalog: vehicleCatalog });
+        if (ch === 'bulk-price-list' && input?.scope === 'imweb-ko') {
+          window.__bulkListCalls++;
+          return Promise.resolve({ success: true, data: { items: products } });
+        }
         return Promise.resolve({});
       },
     };
     window.require = () => ({ ipcRenderer, shell: {} });
-  }, { names, categories, vehicleCatalog });
+  }, { names, categories, vehicleCatalog, products });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -82,9 +97,20 @@ const pick = async (page, id, text) => {
 
 const read = page => page.evaluate(() => {
   const v = id => document.getElementById(id).value;
-  return { year: v('inp-year'), gen: v('inp-gen'), code: v('inp-code'), no: v('inp-no'),
+  return { brand: v('inp-brand'), carmodel: v('inp-carmodel'),
+           year: v('inp-year'), gen: v('inp-gen'), code: v('inp-code'), no: v('inp-no'),
            sku: v('inp-sku'), usd: v('inp-usd'), cpid: v('inp-cpid') };
 });
+
+// 본사몰 상품 찾기 칸을 눌러 목록이 도착할 때까지 기다린다(처음 누를 때 읽는다).
+const openDb = async page => {
+  await page.focus('#inp-db-search');
+  await page.waitForFunction(() => document.querySelectorAll('.vu-combo-item').length >= 2, null, { timeout: 5000 });
+};
+const shownRows = page => page.evaluate(() => [...document.querySelectorAll('.vu-combo-item')].map(r => r.textContent));
+// 카탈로그(data/vehicle_catalog.json): 넥쏘 1세대 · 18~ · FE · No.H119 → 이베이 표 HY1001NH119(BSA, 160.34) · 쿠팡 13705865676
+const NEXO = { brand: '현대', carmodel: '넥쏘', gen: '1세대', year: '18~', code: 'FE', no: 'H119',
+               sku: 'HY1001NH119', usd: '160.34', cpid: '13705865676' };
 
 const BYD_ROW = { year: '', gen: '1세대', code: 'BYD SF', no: '1702', sku: '', usd: '' };   // 카탈로그: 연식 빈 칸, SKU 없음
 
@@ -125,6 +151,56 @@ const cases = [
     await pick(p, 'inp-sku', 'OBM2105N181');
     await type(p, 'inp-no', '182');
   }, { no: '182', sku: '', usd: '' }],
+  ['본사몰 상품 목록은 시작 때 읽지 않고, 칸을 처음 누를 때 한 번 읽는다', async p => {
+    assert.equal(await p.evaluate(() => window.__bulkListCalls), 0, '시작 때 읽었다');
+    await openDb(p);
+    await p.evaluate(() => document.getElementById('inp-db-search').blur());
+    await openDb(p);
+    assert.equal(await p.evaluate(() => window.__bulkListCalls), 1, '10분 안에 다시 읽었다');
+  }, {}],
+  ['본사몰 상품 찾기에 현대 를 치면 두 상품이 다 보인다', async p => {
+    await openDb(p);
+    await filter(p, 'inp-db-search', '현대');
+    const rows = await shownRows(p);
+    for (const x of products.slice(0, 2)) assert.ok(rows.includes(x.name), `${x.name} 이 없다: ${JSON.stringify(rows)}`);
+    assert.ok(rows.includes(products[2].name + ' · 숨김(판매 안 함)'), '판매상태를 이름 뒤에 적는다');
+  }, {}],
+  ['본사몰 상품 찾기에서 넥쏘를 고르면(신규) 브랜드·차종·세대·연식·코드·번호·SKU 가 채워진다', async p => {
+    await openDb(p);
+    await pick(p, 'inp-db-search', '넥쏘 광각미러');
+    assert.equal(await p.evaluate(() => document.querySelectorAll('.vu-combo').length), 0, '채운 칸의 목록이 열렸다');
+  }, NEXO],
+  ['아반떼N 을 고르고 SKU 를 목록으로 고른 뒤 넥쏘를 고르면 앞 차의 SKU 를 버린다', async p => {
+    await openDb(p);
+    await pick(p, 'inp-db-search', '아반떼N');
+    const avante = await read(p);
+    assert.deepEqual([avante.carmodel, avante.code, avante.no], ['아반떼', 'CN7 N', 'H131'], '전제: 아반떼N 행');
+    await pick(p, 'inp-sku', 'HY0107NH131');   // 사람이 고른 값 — 차가 바뀌어도 자동으로는 안 바뀌는 값이다
+    assert.equal((await read(p)).sku, 'HY0107NH131', '전제: SKU 를 골랐다');
+    await openDb(p);
+    await pick(p, 'inp-db-search', '넥쏘 광각미러');
+  }, NEXO],
+  ['넥쏘 미러 다음에 번호 없는 넥쏘 사이드스텝을 고르면 — 차종이 같아도 앞 상품의 행·SKU 를 버린다', async p => {
+    await openDb(p);
+    await pick(p, 'inp-db-search', '넥쏘 광각미러');
+    assert.equal((await read(p)).sku, 'HY1001NH119', '전제: 미러의 SKU');
+    await openDb(p);
+    await pick(p, 'inp-db-search', '사이드스텝');
+  }, { brand: '현대', carmodel: '넥쏘', gen: '', year: '', code: '', no: '', sku: '', usd: '', cpid: '' }],
+  ['행을 못 정한 C클래스 No.340 에서 SKU 를 목록으로 고른 뒤 같은 차종의 No.377 을 고르면 앞 SKU 를 버린다', async p => {
+    await openDb(p);
+    await pick(p, 'inp-db-search', '(전기형)');
+    await pick(p, 'inp-sku', 'MB0301N340');
+    assert.equal((await read(p)).sku, 'MB0301N340', '전제: SKU 를 골랐다');
+    await openDb(p);
+    await pick(p, 'inp-db-search', '[No.377]');
+    // MB0301N340 을 고를 때 BSA 가 X 로 넘어갔고, No.377 C클래스에는 BSA X 리스팅이 없다 → 비워 두고 사람이 고른다
+  }, { brand: '벤츠', carmodel: 'C클래스', gen: '4세대', no: '377', sku: '', usd: '' }],
+  ['수정 모드에서도 넥쏘를 고르면 찾는 열쇠(번호·SKU)가 채워진다', async p => {
+    await p.locator('label[for="mode-edit"]').click();
+    await openDb(p);
+    await pick(p, 'inp-db-search', '넥쏘 광각미러');
+  }, { brand: '현대', carmodel: '넥쏘', no: 'H119', sku: 'HY1001NH119', cpid: '13705865676' }],
 ];
 
 let failed = 0;

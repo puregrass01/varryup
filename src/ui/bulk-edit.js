@@ -13,7 +13,8 @@
   const $ = id => document.getElementById(id);
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   const key = r => r.id + ':' + (r.optionId || '');
-  const state = () => { if (!states.has(scope)) states.set(scope, { rows: [], note: '', filters: {}, query: '', imageInput: '' }); return states.get(scope); };
+  // tried: 이 목록에서 현재가·이미지를 한 번 읽으려 한 상품 ID(자동 불러오기가 같은 상품을 되풀이해 두드리지 않게).
+  const state = () => { if (!states.has(scope)) states.set(scope, { rows: [], note: '', filters: {}, query: '', imageInput: '', tried: new Set() }); return states.get(scope); };
   const rows = () => state().rows;
   const priceDirty = r => !r.priceReadonly && r.ready && r.newPrice !== '' && Number(r.newPrice) !== Number(r.price === '' ? NaN : r.price);
   const imageDirty = r => r.imagesReady && Array.isArray(r.newImages) && !sameImages(r.newImages, r.images);
@@ -71,10 +72,10 @@
     // 서버 검색칸은 아마존·eBay 에서만 보인다. 나머지 몰은 전체를 받은 뒤 같은 단어로 걸러 표 안 검색과 같다(draw).
     '<div class="be-tools"><input id="be-api-query" placeholder="상품명·SKU 검색 · 빈칸이면 전체 목록" aria-label="목록 검색어">' +
     '<button id="be-list" type="button">상품 목록 조회</button><button id="be-sync" type="button" hidden>전체 목록 동기화</button></div>' +
-    '<p class="be-help">상품을 선택하고 가격 적용·이미지 적용으로 값을 넣은 뒤 선택 변경 저장을 누르세요. 현재가·이미지를 아직 불러오지 않은 상품은 적용할 때 먼저 불러옵니다. 쿠팡 이미지는 상품 전체 옵션에 적용됩니다.</p>' +
+    '<p class="be-help">표에 보이는 쪽의 상품은 현재가·이미지를 자동으로 불러옵니다. 상품을 선택하고 가격 적용·이미지 적용으로 값을 넣은 뒤 선택 변경 저장을 누르세요. 다른 쪽의 안 읽은 상품은 적용할 때 먼저 불러옵니다. 쿠팡 이미지는 상품 전체 옵션에 적용됩니다.</p>' +
     '<div class="be-actions">' +
     // 선택·해제는 표 머리의 전체선택 체크 하나로 한다. 판매가·이미지 입력은 표 머리 아래 줄, 그 열 바로 밑에 있다.
-    '<div class="be-group" role="group" aria-label="선택"><button id="be-load" type="button">선택 상품 현재가·이미지 불러오기</button></div>' +
+    // 현재가·이미지는 보이는 쪽을 자동으로 읽는다(autoLoad) — 예전 '선택 상품 현재가·이미지 불러오기' 버튼은 없앴다.
     '<div class="be-group be-group-end"><button id="be-stop" type="button" hidden>중단</button><button id="be-export" type="button">결과 CSV</button><button id="be-save" type="button" class="be-primary">선택 변경 저장</button></div></div>' +
     '<div class="be-state"><div id="be-status" role="status" aria-live="polite"></div><p class="be-help" id="be-count"></p></div>' +
     // 필터는 표 왼쪽 레일에 세로로 쌓는다(표 안 검색이 맨 위). 표는 나머지 폭을 쓴다.
@@ -85,7 +86,7 @@
     '<input id="be-image-value" type="text" placeholder="ESM URL 또는 &lt;img&gt; HTML" title="빈칸이면 이미지 설정의 ESM 상세 목록을 불러옵니다" aria-label="선택 상품에 적용할 이미지 URL 목록">' +
     '<select id="be-image-op" aria-label="이미지 적용 방식"><option value="replace">교체</option><option value="append">끝에 추가</option><option value="remove">이 URL 제거</option></select>' +
     '<button id="be-image-apply" type="button">이미지 적용</button></div></td><td></td><td></td><td></td><td></td>' +
-    '<td><div class="be-tool" role="group" aria-label="판매가 덮어쓰기"><input id="be-value" type="number" min="0" placeholder="덮어쓸 판매가" aria-label="선택 행에 넣을 판매가">' +
+    '<td><div class="be-tool" role="group" aria-label="판매가 덮어쓰기"><input id="be-value" type="number" min="0" placeholder="판매가" aria-label="선택 행에 넣을 판매가">' +
     '<span id="be-currency" class="be-unit"></span><select id="be-price-source" aria-label="판매가 값 출처" title="환율가: 국내 기준가 등급 ÷ 오늘 환율(우대 없음)에서 앞 두 자리만 남긴 값을 행마다 계산합니다(아마존·eBay 전용)">' +
     '<option value="direct">직접 입력</option><option value="fx">환율가</option></select><button id="be-apply" type="button">가격 적용</button></div></td><td></td></tr>' +
     '</thead><tbody id="be-body"></tbody></table></div></div>' +
@@ -169,11 +170,12 @@
     const policy = imagePolicy(scope);
     // 아임웹 네 범위도 Open API 로 읽고 쓴다(2026-10-05) — 예전의 '카탈로그 참조 · API 연동 전' 잠금은 없앴다.
     $('be-price-label').textContent = '기존 판매가';
-    for (const id of ['be-load', 'be-price-source', 'be-apply', 'be-save', 'be-image-value', 'be-image-op', 'be-image-apply', 'be-th-select-all']) $(id).disabled = busy;
+    for (const id of ['be-price-source', 'be-apply', 'be-save', 'be-image-value', 'be-image-op', 'be-image-apply', 'be-th-select-all']) $(id).disabled = busy;
     // 서버 검색칸·전체 목록 동기화·환율가는 아마존·eBay 만. 환율가는 행마다 계산하므로 고르면 판매가 칸을 잠근다.
     const amazonEbay = /^(?:amazon-|ebay$)/.test(scope), source = $('be-price-source');
     $('be-api-query').hidden = $('be-sync').hidden = !amazonEbay;
-    source.options[1].hidden = source.options[1].disabled = !amazonEbay;
+    // 다른 몰에서는 고를 것이 '직접 입력' 하나뿐이라 칸째 숨긴다(표 머리 입력 줄이 한 줄 낮아진다).
+    source.hidden = source.options[1].hidden = source.options[1].disabled = !amazonEbay;
     if (!amazonEbay) source.value = 'direct';
     $('be-value').disabled = busy || source.value === 'fx';
     root.querySelector('.be-help').textContent = defaultHelp;
@@ -276,10 +278,12 @@
       const td = el('td', '', rows().length ? '필터에 맞는 상품이 없습니다.' : '플랫폼을 선택하고 상품 목록을 조회하세요.');
       td.colSpan = 8; const tr = el('tr'); tr.append(td); body.append(tr);
     }
+    autoLoad();
   }
+  // 작업 중에도 왼쪽 레일(표 안 검색·필터)은 잠그지 않는다 — 자동 불러오기가 도는 동안에도 계속 찾고 거를 수 있게.
   function lock(value) {
     busy = value;
-    root.querySelectorAll('button, input, select').forEach(n => { n.disabled = value; });
+    root.querySelectorAll('button, input, select').forEach(n => { if (!n.closest('#be-filters')) n.disabled = value; });
     $('be-stop').hidden = !value; $('be-stop').disabled = false;
     draw();
   }
@@ -288,22 +292,33 @@
     lock(true); cancel = false;
     try { await work(); } catch (e) { tell(e.message); } finally { rebuildFilters(); lock(false); }
   }
-  $('be-list').addEventListener('click', () => run(async () => {
-    if (rows().some(dirty)) { tell('입력한 변경이 있습니다. 저장하거나 가격을 원래 값으로 되돌린 뒤 목록을 갱신하세요.'); return; }
-    tell('상품 목록을 불러오는 중…');
+  function unsaved() {
+    if (!rows().some(dirty)) return false;
+    tell('입력한 변경이 있습니다. 저장하거나 가격을 원래 값으로 되돌린 뒤 목록을 갱신하세요.');
+    return true;
+  }
+  // 목록을 받고 첫 쪽의 현재가·이미지까지 읽는다. '상품 목록 조회'와 '전체 목록 동기화'(끝나면 바로 목록을 다시 받는다)가 같이 쓴다.
+  async function listProducts(head = '') {
+    tell(head + '상품 목록을 불러오는 중…');
     // 숨은 검색칸(아마존·eBay 밖)에 남은 글자로 거르지 않는다.
     const result = await call('bulk-price-list', { scope, query: $('be-api-query').hidden ? '' : $('be-api-query').value.trim() });
-    state().rows = result.items.map(augment); state().note = result.note || '';
+    state().rows = result.items.map(augment); state().note = result.note || ''; state().tried = new Set();
     // 아마존·eBay 행의 환율 등급 꼬리표. 못 읽어도 목록은 그대로 쓴다.
     state().fx = /^(?:amazon-|ebay$)/.test(scope) ? await call('fx-auto-price-links', { scope }).catch(() => null) : null;
     state().filters = {}; query = ''; search.value = ''; page = 0;
-    rebuildFilters(); tell(result.note || result.items.length + '개 상품을 불러왔습니다.');
-  }));
+    rebuildFilters(); draw();
+    const listed = head + (result.note || result.items.length + '개 상품을 불러왔습니다.');
+    tell(listed);
+    const loaded = await loadVisible();
+    if (loaded) tell(listed + ' ' + loaded);
+  }
+  $('be-list').addEventListener('click', () => run(async () => { if (!unsaved()) await listProducts(); }));
   $('be-sync').addEventListener('click', () => run(async () => {
+    if (unsaved()) return;
     tell('전체 목록 동기화 중… 완료까지 수 분 걸릴 수 있습니다.');
     const r = await ipc.invoke(scope === 'ebay' ? 'ebay-refresh-cache' : 'amazon-refresh-cache', { enrichBrand: false, marketplaceId: scope === 'amazon-jp' ? 'A1VC38T7YXB528' : 'ATVPDKIKX0DER' });
     if (!r.success) throw new Error(r.error);
-    tell('목록 동기화 완료. 상품 목록 조회를 눌러 갱신하세요.');
+    await listProducts('목록 동기화 완료. ');
   }));
   // 머리글 전체선택: 체크하면 필터 결과의 모든 페이지를 고르고, 풀면 (예전 '선택 해제' 버튼처럼) 선택을 모두 지운다.
   const toggleAllSelection = checked => {
@@ -319,11 +334,11 @@
   $('be-th-select-all').addEventListener('change', e => {
     toggleAllSelection(e.target.checked);
   });
-  // 현재가는 몰이 한 요청에 허용하는 만큼 묶어 읽는다(메인 bulk-price-load-many: 네이버 목록 조회 100건, 아마존 20건×2).
+  // 현재가는 몰이 한 요청에 허용하는 만큼 묶어 읽는다(메인 bulk-price-load-many: 아마존 20건×2).
   // 묶음 조회가 없는 쿠팡·eBay 는 메인이 상품마다 읽으므로, 진행 표시와 중단이 늦지 않게 작게 나눠 보낸다.
-  // 네이버도 묶음 결과에 상세 이미지가 없어 메인이 상품마다 이미지 목록을 읽는다 — 같은 이유로 작게.
+  // 네이버도 이미지까지 읽느라 메인이 상품마다 원상품을 읽는다(목록 조회 결과에는 상세 이미지가 없다) — 같은 이유로 작게.
   const LOAD_CHUNK = { naver: 10, 'amazon-us': 40, 'amazon-jp': 40, ebay: 8, coupang: 4 };
-  // 고른 행의 상품마다 현재가(와 이미지)를 읽어 행을 바꿔 끼운다. '현재가 불러오기'와 '가격 적용'(안 읽은 행)이 같이 쓴다.
+  // 행의 상품마다 현재가·이미지를 읽어 행을 바꿔 끼운다. 자동 불러오기(보이는 쪽)와 '가격 적용'(안 읽은 선택 행)이 같이 쓴다.
   async function loadPrices(work) {
     const products = [...new Map(work.map(r => [r.id, r])).values()];
     let ok = 0, failed = 0, firstError = '', blocked = '', noImages = 0;
@@ -354,16 +369,18 @@
         if (!item.rows) { fail(r, new Error(item.error || '현재가를 불러오지 못했습니다.')); continue; }
         const at = rows().findIndex(x => x.id === r.id);
         const other = rows().filter(x => x.id !== r.id);
-        // 옵션 줄이 이미 있었으면 그 선택을 이어 쓴다. 상품 한 줄을 처음 펼칠 때만 전부 고른다 — 예전에는 옵션 하나만
-        // 골라도 불러온 뒤 모든 옵션이 선택돼, 이어서 '가격 적용' 을 누르면 옵션가가 한 값으로 납작해졌다.
+        // 옵션 줄이 이미 있었으면 그 선택을 이어 쓴다. 상품 한 줄을 처음 펼칠 때는 그 줄이 선택돼 있었을 때만 전부 고른다 —
+        // 예전에는 옵션 하나만 골라도 불러온 뒤 모든 옵션이 선택돼 '가격 적용' 이 옵션가를 한 값으로 납작하게 했고,
+        // 자동 불러오기는 고르지 않은 행까지 읽으므로 선택을 새로 만들면 안 된다.
         const before = rows().filter(x => x.id === r.id);
         const picked = before.some(x => x.optionId) ? new Map(before.map(x => [x.optionId || '', x.selected])) : null;
+        const wasSelected = before.some(x => x.selected);
         // 이미지 변경안(이미지 적용·✖)이 걸린 상품은 변경안과 그때 읽은 revision 을 새 행에 옮긴다. 가격 적용이 안 읽은 행을
         // 불러오며 행을 바꿔 끼울 때 변경안이 조용히 사라지던 것. revision 을 그대로 두어 저장의 expectedRevision 검사가 맞다.
         const draft = before.find(x => x.imagesReady && Array.isArray(x.newImages));
         other.splice(at, 0, ...item.rows.map(x => ({ ...augment(x),
           ...(draft && { images: draft.images, imageRevision: draft.imageRevision, imagesReady: true, newImages: [...draft.newImages], imageResult: draft.imageResult }),
-          selected: !x.readonly && (!picked || !!picked.get(x.optionId || '')) })));
+          selected: !x.readonly && (picked ? !!picked.get(x.optionId || '') : wasSelected) })));
         state().rows = other;
         if (!draft && !item.rows[0]?.imagesReady) noImages++;
         ok++;
@@ -374,18 +391,30 @@
     rebuildFilters();
     return { total: products.length, ok, failed, firstError, blocked, noImages };
   }
-  $('be-load').addEventListener('click', () => run(async () => {
-    const work = selected();
-    if (!work.length) { tell('현재가를 불러올 상품을 선택하세요.'); return; }
+  // 보이는 쪽(25행)의 현재가·이미지는 언제나 읽는다. 목록 전체를 읽으면 네이버·쿠팡은 상품마다 호출이라 수천 번(수십 분)이
+  // 되므로 지금 쪽만 — 쪽을 넘기거나 거르면 그 쪽을 읽는다. 한 번 읽으려 한 상품은 이 목록에서 다시 두드리지 않는다
+  // (실패·인증 오류를 되풀이하지 않게). 다시 읽으려면 상품 목록을 조회한다. 읽은 결과를 알리는 글을 돌려준다(없으면 '').
+  const unread = () => pageRows().filter(r => !r.readonly && (!r.ready || !r.imagesReady) && !state().tried.has(r.id));
+  async function loadVisible() {
+    const work = unread();
+    if (!work.length) return '';
+    work.forEach(r => state().tried.add(r.id));
     const { total, ok, failed, firstError, blocked, noImages } = await loadPrices(work);
     const counts = '성공 ' + ok + ' · 실패 ' + failed + (ok + failed < total ? ' · 남음 ' + (total - ok - failed) : '');
-    // 이미지는 현재가와 함께 언제나 읽는다(메인 loadMany). 못 읽은 상품은 행의 '이미지 목록 조회'로 다시 읽는다.
-    const imageNote = noImages ? ' 이미지 목록을 불러오지 못한 상품 ' + noImages + '개 — 처리 결과 칸을 보고 행의 이미지 목록 조회로 다시 읽으세요.' : '';
-    tell(blocked ? '현재가 조회를 멈췄습니다 (' + counts + '). 나머지 상품도 같은 이유로 실패할 오류입니다: ' + blocked
+    // 이미지는 현재가와 함께 언제나 읽는다(메인 loadMany). 그래도 목록이 없는 상품은 행의 '이미지 목록 조회'로 다시 읽는다.
+    const imageNote = noImages ? ' 이미지 목록이 오지 않은 상품 ' + noImages + '개 — 행의 이미지 목록 조회로 다시 읽으세요.' : '';
+    return blocked ? '현재가 조회를 멈췄습니다 (' + counts + '). 나머지 상품도 같은 이유로 실패할 오류입니다: ' + blocked
       : cancel ? '현재가 조회를 중단했습니다 (' + counts + ').'
         : failed ? '현재가 조회 끝 (' + counts + '). 실패한 행은 처리 결과 칸을 확인하세요. 첫 오류: ' + firstError + imageNote
-          : '현재가 조회 완료. 판매가 입력 후 저장하세요.' + imageNote);
-  }));
+          : '현재가·이미지 ' + ok + '개 상품을 불러왔습니다.' + imageNote;
+  }
+  // 쪽 넘김·검색·필터·몰 전환 뒤 그리기(draw)마다 부른다. 타자 한 글자마다 읽지 않게 잠깐 기다리고, 작업 중이면 끝난 뒤의 draw 가 다시 부른다.
+  // 읽을 행이 없으면 아무것도 하지 않는다(잠금·다시 그리기도 없이 — 그리는 중인 표를 바꿔 끼우지 않게).
+  let autoTimer = 0;
+  function autoLoad() {
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(() => { if (!busy && unread().length) run(async () => { const note = await loadVisible(); if (note) tell(note); }); }, 300);
+  }
   // 가격 적용: 값 출처가 '직접 입력'이면 칸의 값을, '환율가'면 행마다 계산한 값을 고른 행에 넣는다. 현재가를 아직 안 읽은
   // 행은 먼저 읽는다(현재가 불러오기와 같은 길). 보내기는 '선택 변경 저장'과 그 확인창에서만 한다.
   // 환율가 = 국내 기준가 등급 ÷ 오늘 환율(우대 없음)을 앞 두 자리만 남긴 값. 판단은 환율 자동 변경과 같다(fx_auto_price.js).
@@ -633,7 +662,7 @@
   let requestedApiPlatform = null;
   const keyPlatform = id => ({
     naverTab: 'naver', coupangTab: 'coupang', amazonTab: 'amazon', ebayTab: 'ebay',
-    imwebTab: 'imweb', imwebBoardTab: 'imweb',
+    imwebTab: 'imweb', imwebHeadTab: 'imweb',
     naver: 'naver', coupang: 'coupang', ebay: 'ebay', 'amazon-us': 'amazon', 'amazon-jp': 'amazon',
     'imweb-b2b': 'imweb', 'imweb-en': 'imweb', 'imweb-ko': 'imweb', 'imweb-jp': 'imweb'
   })[id];
@@ -666,8 +695,6 @@
       requestedApiPlatform = previous === 'bulk' ? keyPlatform(scope) :
         keyPlatform(lastTab) || keyPlatform(document.querySelector('#board-body .platform-cell.viewing')?.dataset.tabId) || 'naver';
     }
-    // 앱은 접힌 채(400px, ?panels=collapsed)로 뜬다. 일괄·환율·API 화면은 넓은 창이 필요하니 셸의 접기부터 푼다.
-    if (viewName && typeof panelsCollapsed === 'function' && panelsCollapsed()) setPanels(true);
     if (viewName) document.body.dataset.workspaceView = viewName;
     else delete document.body.dataset.workspaceView;
     root.hidden = viewName !== 'bulk';

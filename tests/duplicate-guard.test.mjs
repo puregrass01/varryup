@@ -397,21 +397,17 @@ test('아마존: 원장만 있고 실시간에 없으면 다시 제출을 알리
 
 // ── 17. 아임웹 ──────────────────────────────────────────────────────────
 const iwData = (over = {}) => ({
-  targetB2b: true, targetHead: false, targetUs: false, targetJp: false, isEditMode: false,
+  targetB2b: true, isEditMode: false,
   brand: '현대', model: '싼타페', titleBrand: '현대', titleModel: '싼타페', code: 'H152',
   bsaO: true, bsaX: false, registerIndiv: false, registerSet: true, ...over,
 });
 const iwRow = (over = {}) => ({ prodNo: 900, name: '옵틱글래스 현대 싼타페 미러 1셋 [H152]', price: 220000, status: 'SALE', type: 'set', ...over });
-function iwCheck(data, { rows = [iwRow()], complete = true, options = null, posts = [], boardNames = { ko: '현대', en: 'HYUNDAI' }, ledger = null, now = clock(), b2bRows } = {}) {
-  const plan = g.planImweb(data, {
-    brands: BRANDS, boardNameFor: (b, l) => boardNames[l] || null,
-    nameForLang: (d, f, l) => (l === 'ko' ? d[f] : d[f + 'En'] || d[f]), extractImageUrl: s => String(s || '').trim(),
-  });
+function iwCheck(data, { rows = [iwRow()], complete = true, options = null, ledger = null, now = clock(), b2bRows } = {}) {
+  const plan = g.planImweb(data, { brands: BRANDS });
   return { plan, run: () => g.checkImweb(plan, { bypass: false }, {
     ledger, now, log: quiet,
     b2bRows: b2bRows || (async () => ({ rows, complete })),
     b2bOptionValues: async () => { if (options instanceof Error) throw options; return options || []; },
-    boardPosts: async () => ({ rows: posts, complete: true }),
   }) };
 }
 
@@ -452,11 +448,48 @@ test('아임웹 B2B: 제목 형식이 달라도 [코드]·차종·종류가 맞�
   await assert.rejects(iwCheck(iwData(), { rows: [iwRow({ status: 'HIDDEN' })] }).run(), /판매중으로 바꾸세요/);
 });
 
-test('아임웹 게시판: 매핑 없는 언어는 빼고, 같은 제목 글이 있으면 막는다', async () => {
-  const data = iwData({ targetB2b: false, targetHead: true, targetUs: true, targetJp: true, titleBrandEn: 'Hyundai', titleModelEn: 'Santa Fe', specImageUrl: 'https://x/spec.png' });
-  const { plan, run } = iwCheck(data, { posts: [{ postCode: 'P1', subject: '현대 싼타페 [H152]' }], boardNames: { ko: '현대', en: 'HYUNDAI' } });
-  assert.deepEqual(plan.targets.map(t => t.lang), ['ko', 'en']);
-  await assert.rejects(run(), e => /본사몰 게시판/.test(e.message) && /P1/.test(e.message));
+// ── 17-2. 아임웹 자사몰(본사몰) ─────────────────────────────────────────
+const ihData = (over = {}) => ({ brand: '현대', model: '싼타페', titleBrand: '현대', titleModel: '싼타페', code: 'No.H152', bsaO: true, bsaX: false, ...over });
+const ihRow = (over = {}) => ({ prodNo: 2401, name: '옵틱글래스 현대 싼타페 광각미러 [No.H152]', status: 'sale', ...over });
+function ihCheck(data, { rows = [ihRow()], complete = true, ledger = null, now = clock(), bypass = false, list } = {}) {
+  const plan = g.planImwebHead(data);
+  return { plan, run: () => g.checkImwebHead(plan, { bypass }, { ledger, now, log: quiet, rows: list || (async () => ({ rows, complete })) }) };
+}
+
+test('아임웹 자사몰: 같은 [No.코드] · 차종 상품이 있으면 막고(판은 가르지 않음), 확인하지 못하면 멈춘다', async () => {
+  const { plan } = ihCheck(ihData());
+  assert.equal(plan.skip, false);
+  assert.equal(plan.lockKeys.length, 1);
+  assert.match(plan.lockKeys[0], /^imweb-head\|.+\|H152$/);
+  assert.deepEqual(g.planImwebHead(ihData({ bsaO: false, bsaX: true })).lockKeys, plan.lockKeys, '이름에 판이 없어 BSA O/X 는 같은 상품');
+  await assert.rejects(ihCheck(ihData()).run(), e => e.duplicate === true && e.channel === 'imweb-head' && e.source === 'live'
+    && /자사몰에 \[No\.H152\] 싼타페/.test(e.message) && /2401/.test(e.message) && /단일 상품 수정/.test(e.message));
+  // 숨김으로 남은 상품도 막는다(상태를 보여 준다)
+  await assert.rejects(ihCheck(ihData(), { rows: [ihRow({ status: 'nosale' })] }).run(), /상태 nosale/);
+  assert.deepEqual((await ihCheck(ihData(), { rows: [] }).run()).notices, []);
+  assert.deepEqual((await ihCheck(ihData(), { bypass: true }).run()).notices, [], 'allowDuplicate 면 건너뜀');
+  await assert.rejects(ihCheck(ihData(), { list: async () => { throw new Error('아임웹 API 오류 (500)'); } }).run(), e => e.checkFailed === true && /500/.test(e.message));
+  await assert.rejects(ihCheck(ihData(), { complete: false }).run(), e => e.checkFailed === true && /끝까지/.test(e.message));
+  const odd = g.planImwebHead(ihData({ code: '옵션' }));
+  assert.deepEqual([odd.skip, /중복 확인을 건너뜀/.test(odd.skipReason)], [true, true]);
+});
+
+test('아임웹 자사몰 원장: 숨김으로 남은 상품도 적고, 30분 안에는 목록에 없어도 막고 그 뒤 푼다', async t => {
+  const now = clock();
+  const ledger = ledgerAt(t, now);
+  const { plan } = ihCheck(ihData());
+  assert.equal(g.recordImwebHead(ledger, plan, { ok: false, no: null }), null);
+  assert.equal(ledger.entries().length, 0, '상품번호가 없으면(만들기 전 실패) 적지 않는다');
+  g.recordImwebHead(ledger, plan, { ok: false, no: 3001, title: '옵틱글래스 현대 싼타페 광각미러 [No.H152]' });
+  const [e] = ledger.entries();
+  assert.deepEqual([e.channel, e.externalId, e.verified, e.keys], ['imweb-head', '3001', false, plan.lockKeys]);
+  now.advance(5 * MIN);
+  await assert.rejects(ihCheck(ihData({ model: '디올뉴싼타페', titleModel: '디올뉴싼타페' }), { rows: [], ledger, now }).run(),
+    err => err.source === 'ledger' && /3001/.test(err.message));
+  assert.deepEqual((await ihCheck(ihData({ brand: '기아', titleBrand: '기아', model: 'K5', titleModel: 'K5' }), { rows: [], ledger, now }).run()).notices, []);
+  now.advance(26 * MIN);
+  await ihCheck(ihData(), { rows: [], ledger, now }).run();
+  assert.equal(ledger.entries()[0].supersededReason, '아임웹 자사몰 목록에 없음 확인');
 });
 
 // ── 18. 동시 실행 잠금 ──────────────────────────────────────────────────
@@ -650,7 +683,7 @@ test('네이버 확인된 행: 채널상품이 목록에 살아 있으면 31분�
   assert.equal(ledger.entries()[0].supersededReason, '네이버에서 없음 확인');
 });
 
-test('아임웹 원장: B2B·게시판 모두 30분 안에는 막고, 목록에 없음이 확인되면 30분 뒤 푼다', async t => {
+test('아임웹 원장: B2B 는 30분 안에는 막고, 목록에 없음이 확인되면 30분 뒤 푼다', async t => {
   const now = clock();
   const ledger = ledgerAt(t, now);
   const b2b = iwCheck(iwData(), { rows: [] });
@@ -662,21 +695,12 @@ test('아임웹 원장: B2B·게시판 모두 30분 안에는 막고, 목록에 
   await assert.rejects(iwCheck(iwData(), { rows: [iwRow({ prodNo: 901, name: '이름 바꾼 상품' })], ledger, now }).run(), /901/);
   await iwCheck(iwData(), { rows: [], ledger, now }).run();
   assert.equal(ledger.entries()[0].supersededReason, '아임웹 목록에 없음 확인');
-
-  const bd = iwData({ targetB2b: false, targetHead: true, specImageUrl: 'https://x/spec.png' });
-  const board = iwCheck(bd, { posts: [] });
-  g.recordImweb(ledger, board.plan, [{ kind: 'board', lang: 'ko', boardCode: 'b1', boardName: '현대', subject: '현대 싼타페 [H152]', postCode: 'P9' }]);
-  now.advance(5 * MIN);
-  await assert.rejects(iwCheck(bd, { posts: [], ledger, now }).run(), e => e.source === 'ledger' && /P9/.test(e.message));
-  now.advance(26 * MIN);
-  await iwCheck(bd, { posts: [], ledger, now }).run();
-  assert.equal(ledger.active('imweb-board').length, 0);
 });
 
 // ── 21. 정적 회귀 ───────────────────────────────────────────────────────
-test('main_process: 네 신규 등록 핸들러가 모두 중복 검사를 거친다', () => {
+test('main_process: 신규 등록 핸들러(네 몰 + 아임웹 자사몰)가 모두 중복 검사를 거친다', () => {
   const src = fs.readFileSync(path.join(ROOT, 'src', 'main_process.js'), 'utf8');
-  for (const ch of ['naver', 'coupang', 'amazon', 'imweb']) {
+  for (const ch of ['naver', 'coupang', 'amazon', 'imweb', 'imweb-head']) {
     const start = src.indexOf(`ipcMain.handle('${ch}-register'`);
     assert.ok(start !== -1, ch);
     const end = src.indexOf('ipcMain.handle(', start + 10);
@@ -684,11 +708,12 @@ test('main_process: 네 신규 등록 핸들러가 모두 중복 검사를 거�
     assert.match(block, /runGuardedRegistration/, ch);
     assert.match(block, /isGuardError\(error\)/, ch);
   }
-  // 아임웹: B2B 조회는 Open API 라 준비가 없다. 게시판 로그인(수 분)은 조회 시간 제한 밖에서 먼저,
-  // 끝나면 조회 창을 닫아 등록 단계의 리스너 중복을 막는다.
+  // 아임웹: B2B 조회는 Open API 라 준비가 없다 — 브라우저·게시판 세션을 다시 끌어들이지 않는다.
   const imwebBlock = src.slice(src.indexOf("ipcMain.handle('imweb-register'"), src.indexOf('ipcMain.handle(', src.indexOf("ipcMain.handle('imweb-register'") + 10));
-  assert.doesNotMatch(imwebBlock, /ensureToken/);
-  const warm = imwebBlock.search(/await imweb\.ensureBoardBase\(boardLangs\[0\]\)/);
-  assert.ok(warm !== -1 && warm < imwebBlock.indexOf('await checkImweb('));
-  assert.match(imwebBlock, /if \(boardLangs\.length\) \{\s*try \{ await imweb\.close\(\); \}/);
+  assert.doesNotMatch(imwebBlock, /ensureToken|getBrowser|ensureBoardBase|boardPosts/);
+  // 아임웹 자사몰: Open API 만, 쓰기는 상품 일괄 수정 저장과 같은 줄(uiWrite — 저장 중이면 BUSY)
+  const headStart = src.indexOf("ipcMain.handle('imweb-head-register'");
+  const headBlock = src.slice(headStart, src.indexOf('ipcMain.handle(', headStart + 10));
+  assert.match(headBlock, /bulkPriceService\.uiWrite\(/);
+  assert.doesNotMatch(headBlock, /ensureToken|getBrowser|ensureBoardBase|boardPosts|chromium/);
 });

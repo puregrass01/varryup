@@ -118,7 +118,7 @@ try {
     document.querySelectorAll('.tab-pane').forEach(p => (p.style.display = 'block'));
   });
 
-  for (const id of ['iwBrand', 'iwBoardBrand']) {
+  for (const id of ['iwBrand']) {
     const r = await formPage.evaluate((elId) => {
       const el = document.getElementById(elId);
       const group = el && el.closest('.redundant-field');

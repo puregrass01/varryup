@@ -6,8 +6,10 @@
 //   1) 좌측 브랜드·차종명이 네이버·쿠팡 찾기 칸에 들어간다
 //   2) 찾기는 저절로 돌지 않는다 — 네이버 찾기는 상품 목록 전체를 훑는 무거운 조회다
 //   3) 좌측 '상품번호'(내부 번호)는 네이버 '수정할 상품번호'(스마트스토어 번호)에 들어가지 않는다
-//   4) 탭에서 직접 고친 검색어는 좌측이 그대로인 동안 덮지 않고, 좌측을 비워도 지우지 않는다
+//   4) 셸 안에선 찾기 칸·쿠팡 상품ID 칸을 숨기고(찾기 버튼은 남긴다) 좌측을 비우면 찾기 칸도 비운다
 //   5) 찾기 결과가 하나뿐이면 표를 또 누를 것 없이 번호가 채워진다 (여럿이면 사람이 고른다)
+//   5-1) B2B 수정은 좌측 상품번호가 숨은 상품 코드 칸에 들어간다
+//   5-2) 아임웹 자사몰 수정은 좌측 상품번호(번호 본체)가 숨은 상품번호 칸(ihEditNo)에 들어간다
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -30,6 +32,9 @@ try {
         window.invokes.push(channel);
         if (channel === 'smartstore-find-id' || channel === 'coupang-find-id') {
           return Promise.resolve({ success: true, source: 'api', rows: window.__findRows || [] });
+        }
+        if (channel === 'imweb-load-categories') {
+          return Promise.resolve({ success: true, categories: { 국산차: { 기아: ['쏘렌토', 'K5'], 현대: ['싼타페'] }, 수입차: { BMW: ['X5', '3 Series'] } } });
         }
         return Promise.resolve({});
       },
@@ -71,16 +76,15 @@ try {
   assert.equal((await child().evaluate(() => window.invokes)).includes('smartstore-find-id'), false,
     '좌측 칸이 바뀌었다고 네이버 찾기(목록 전체 조회)를 돌리면 안 된다');
 
-  // 탭에서 직접 고친 검색어는 좌측이 그대로인 동안 덮지 않는다.
-  await frame.locator('#ssFindModel').fill('싼타페 TM');
-  await page.locator('#inp-code').fill('TM');               // 좌측의 다른 칸을 바꿔 채우기를 다시 돌린다
-  await page.waitForTimeout(500);
-  assert.equal(await tabValue('ssFindModel'), '싼타페 TM', '좌측 차종명이 그대로면 탭에서 고친 검색어를 지키다');
+  // 찾기 칸은 숨고(좌측이 넣는다) 찾기 버튼은 보인다. URL 파싱 칸은 없다.
+  const visible = id => frame.locator('#' + id).isVisible();
+  for (const id of ['ssFindBrand', 'ssFindModel']) assert.equal(await visible(id), false, `#${id} 는 숨는다`);
+  assert.equal(await frame.locator('button[onclick="findSmartstoreId()"]').isVisible(), true, '번호 찾기 버튼은 보인다');
+  assert.equal(await frame.locator('#ssProductUrlInput').count(), 0, '스마트스토어 URL 칸은 없다');
 
-  // 좌측을 비워도 탭 검색어를 지우지 않는다.
+  // 좌측을 비우면 숨은 찾기 칸도 비운다 — 안 보이는 옛 검색어가 남지 않는다.
   await page.locator('#inp-brand').fill('');
-  await page.waitForTimeout(500);
-  assert.equal(await tabValue('ssFindBrand'), '현대', '좌측이 비었다고 탭 검색어를 지우지 않는다');
+  await waitTab('ssFindBrand', '');
 
   // 좌측 값이 바뀌면 다시 들어간다.
   await page.locator('#inp-brand').fill('기아');
@@ -103,15 +107,68 @@ try {
   await page.locator('#inp-carmodel').fill('쏘렌토');
   await waitTab('cpFindBrand', '기아');
   await waitTab('cpFindModel', '쏘렌토');
+  for (const id of ['cpFindBrand', 'cpFindModel', 'cpProductIdInput']) assert.equal(await visible(id), false, `#${id} 는 숨는다`);
+  assert.equal(await frame.locator('button[onclick="findCoupangIdFromSheet()"]').isVisible(), true, 'ID 찾기 버튼은 보인다');
 
   await child().evaluate(() => { window.__findRows = [{ id: '9876543210', name: '옵틱글래스 쏘렌토' }] });
   await frame.locator('button[onclick="findCoupangIdFromSheet()"]').click();
   await waitTab('cpProductIdInput', '9876543210');
 
-  // ── 아임웹 B2B·게시판 수정 — 폼만 따로 연다(셸이 브랜드 칸을 건드리지 않게) ─────────────
+  // ── B2B: 좌측 상품번호 → 숨은 상품 코드 칸. URL 칸·검색 버튼은 남는다 ─────────────
+  await page.locator('#cell-KOREA-b2b').click();
+  await frame.locator('#iwB2bEditPanel').waitFor({ state: 'visible' });
+  await waitTab('iwB2bEditCodeInput', '612');
+  for (const id of ['iwB2bEditCodeInput', 'iwB2bEditBrand', 'iwB2bEditModel']) assert.equal(await visible(id), false, `#${id} 는 숨는다`);
+  for (const id of ['iwB2bEditUrlInput', 'iwB2bLoadBtn']) assert.equal(await visible(id), true, `#${id} 는 보인다`);
+
+  // 5-3) 상품번호가 있으면 코드만으로 찾는다(제조사·모델은 '-- 전체 --'). 없으면 좌측 제조사·차종을
+  //      B2B 카테고리 표에서 찾아 넣는다 — 수입 브랜드면 국적 라디오도 바뀐다. 표에 없으면 '-- 전체 --'.
+  const b2bCar = () => child().evaluate(() => [document.querySelector('input[name="iwB2bEditNationality"]:checked').value,
+    document.getElementById('iwB2bEditBrand').value, document.getElementById('iwB2bEditModel').value]);
+  async function waitB2bCar(want, msg) {
+    for (let i = 0; i < 60; i++) {
+      const got = await b2bCar();
+      if (want.every((w, k) => w === null || w === got[k])) return;
+      await page.waitForTimeout(50);
+    }
+    const got = await b2bCar();
+    assert.deepEqual(got.map((g, k) => want[k] === null ? null : g), want, msg);
+  }
+  await waitB2bCar([null, '', ''], '상품번호가 있으면 B2B 제조사·모델은 비운다(코드만 검색)');
+  await page.locator('#inp-no').fill('');
+  await waitTab('iwB2bEditCodeInput', '');
+  await waitB2bCar(['국산차', '기아', '쏘렌토'], '상품번호가 없으면 좌측 기아·쏘렌토를 B2B 표에서 찾아 넣는다');
+  await page.locator('#inp-brand').fill('bmw');
+  await page.locator('#inp-carmodel').fill('3series');
+  await waitB2bCar(['수입차', 'BMW', '3 Series'], '수입 브랜드는 국적 라디오도 수입차로 바뀐다(대소문자·공백 무시)');
+  await page.locator('#inp-brand').fill('마쯔다');
+  await page.locator('#inp-carmodel').fill('CX-5');
+  await waitB2bCar([null, '', ''], '표에 없는 브랜드는 -- 전체 --');
+  await page.locator('#inp-brand').fill('기아');
+  await page.locator('#inp-carmodel').fill('쏘렌토');
+  await waitB2bCar(['국산차', '기아', '쏘렌토'], '다시 표에 있는 차');
+  // 기아·쏘렌토(값 있음)에서 시작해야 옛 상태로 통과하지 않는다.
+  await page.locator('#inp-carmodel').fill('표에없는차');
+  await waitB2bCar([null, '', ''], '차종이 표에 없으면 브랜드도 비운다(브랜드만으로 다른 차를 불러오지 않게)');
+  await page.locator('#inp-carmodel').fill('쏘렌토');
+  await waitB2bCar(['국산차', '기아', '쏘렌토'], '표에 있는 차로 돌아옴');
+  await page.locator('#inp-no').fill('612');
+  await waitB2bCar([null, '', ''], '상품번호를 다시 넣으면 제조사·모델을 비운다');
+
+  // ── 아임웹 자사몰: 좌측 상품번호(번호 본체) → 숨은 상품번호 칸. [상품 불러오기] 는 보이고 저절로 돌지 않는다 ─────
+  await page.locator('#cell-KOREA-own').click();
+  await frame.locator('#imwebHeadTab .ih-edit').waitFor({ state: 'visible' });
+  await waitTab('ihEditNo', '612');
+  assert.equal(await visible('ihEditNo'), false, '#ihEditNo 는 숨는다');
+  assert.equal(await visible('ihFindBtn'), true, '#ihFindBtn 는 보인다');
+  await page.locator('#inp-no').fill('No.K138번');
+  await waitTab('ihEditNo', 'K138');
+  assert.equal((await child().evaluate(() => window.invokes)).includes('bulk-price-list'), false, '좌측이 바뀌었다고 본사몰 목록을 읽지 않는다');
+
+  // ── 아임웹 B2B 수정 — 폼만 따로 연다(셸이 브랜드 칸을 건드리지 않게) ─────────────
   //   6) B2B 제조사·모델 첫 칸은 '-- 전체 --' 이고 골라져 있다 — 상품 코드만으로 찾는다
   //   7) URL 칸을 비우면 숨은 idx 도 비운다
-  //   8) 검색 전에 옛 결과·편집 상태를 지운다 — 실패해도 옛 상품이 남아 저장되지 않는다(게시판도)
+  //   8) 검색 전에 옛 결과·편집 상태를 지운다 — 실패해도 옛 상품이 남아 저장되지 않는다
   //   9) 동작하지 않는 칸·버튼(+ 옵션 추가, 판매가 (수정 가능), 옵션 값 + 추가)은 없다
   const formCtx = await browser.newContext({ viewport: { width: 1200, height: 850 } });
   await formCtx.route(/^https?:/, route => route.abort());
@@ -123,7 +180,7 @@ try {
         if (channel === 'imweb-load-categories') {
           return Promise.resolve({ success: true, categories: { 국산차: { EVION: ['SW40', 'SW50'], 현대: ['싼타페'] }, 수입차: { BMW: ['X5'] } } });
         }
-        if (channel === 'imweb-search-products' || channel === 'imweb-search-posts') {
+        if (channel === 'imweb-search-products') {
           window.searches.push({ channel, payload });
           return Promise.resolve(window.__searchRes || { success: false, error: '상품을 찾지 못했습니다' });
         }
@@ -181,30 +238,11 @@ try {
   assert.equal(await form.locator('#iwB2bOptionList button', { hasText: '추가' }).count(), 0, '옵션 값 + 추가 줄이 없다(Open API 불가)');
   assert.equal(await form.locator('#iwB2bOptionList button', { hasText: '삭제' }).count(), 1);
 
-  await form.evaluate(() => {
-    switchTab('imwebBoardTab');
-    document.querySelector('input[name="iwBoardWorkMode"]').value = 'edit'; updateImwebBoardModeUI();
-  });
-  await form.locator('#iwBoardEditPanel').waitFor({ state: 'visible' });
-  assert.deepEqual(await firstOption('iwBoardEditBrand'), ['', '-- 브랜드 선택 --', ''], '게시판 브랜드도 첫 브랜드가 미리 골라져 있지 않다');
-  await form.locator('#iwBoardEditCodeInput').fill('612');
-  await form.locator('#iwBoardLoadBtn').click();
-  assert.equal(await form.evaluate(() => window.searches.filter(s => s.channel === 'imweb-search-posts').length), 0,
-    '브랜드를 안 고르면 엉뚱한 게시판을 뒤지지 않는다');
-  await form.locator('#iwBoardEditBrand').selectOption('EVION');
-  await form.evaluate(() => {
-    iwBoardEditState = { code: '612', lang: 'ko', brand: 'EVION', postCode: 'p1', title: '옛 글', detailImages: [] };
-    document.getElementById('iwBoardEditLoaded').style.display = '';
-  });
-  await form.locator('#iwBoardLoadBtn').click();
-  await form.waitForFunction(() => window.searches.some(s => s.channel === 'imweb-search-posts') && !document.getElementById('iwBoardLoadBtn').disabled);
-  assert.deepEqual(await form.evaluate(() => [iwBoardEditState, document.getElementById('iwBoardEditLoaded').style.display,
-    document.getElementById('iwBoardSearchResult').style.display]), [null, 'none', 'none'], '게시판 검색 실패도 옛 게시글을 남기지 않는다');
   await formCtx.close();
 
   assert.deepEqual(errors, []);
-  console.log('PASS: 네이버·쿠팡 찾기 칸에 좌측 브랜드·차종명, 자동 조회 없음, 내부 상품번호 안 넘김, 탭 수정 존중, 결과 1건 자동 채움, '
-    + 'B2B 코드만 검색(-- 전체 --), idx 비움, 검색 전 옛 상태 지움(B2B·게시판), 죽은 버튼 없음');
+  console.log('PASS: 네이버·쿠팡 찾기 칸에 좌측 브랜드·차종명(숨김, 좌측 비우면 비움), 자동 조회 없음, 내부 상품번호 안 넘김, 결과 1건 자동 채움, '
+    + 'B2B 좌측 상품번호 → 숨은 코드 칸, B2B 코드만 검색(-- 전체 --), idx 비움, 검색 전 옛 상태 지움(B2B), 죽은 버튼 없음');
 } finally {
   await browser.close();
 }

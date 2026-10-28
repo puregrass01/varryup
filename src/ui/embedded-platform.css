@@ -23,9 +23,14 @@
 /* These headers contain only a repeated title and the login action already on the left. */
 .embedded-platform #naverTab > .panel-header,
 .embedded-platform #imwebTab > .panel-header,
-.embedded-platform #imwebBoardTab > .panel-header,
 .embedded-platform #coupangTab > .panel-header,
-.embedded-platform #amazonTab > .panel-header {
+.embedded-platform #amazonTab > .panel-header,
+.embedded-platform #imwebHeadTab > .panel-header {
+    display: none !important;
+}
+/* 아임웹 자사몰 탭(imweb-head.js)은 모드 입력 없이 셸의 vu-new 로 신규 등록 칸 · 수정 칸을 가른다. */
+.embedded-platform.vu-new .ih-edit,
+.embedded-platform:not(.vu-new) .ih-new {
     display: none !important;
 }
 
@@ -86,8 +91,9 @@
 }
 
 /* Inputs the shell now owns: the eBay SKU and Amazon Product Type moved to the
-   left "상품 정보" panel, and the imweb board targets are the 현황판 own-mall
-   tiles. A second copy here could drift from the shell and be sent instead. */
+   left "상품 정보" panel. A second copy here could drift from the shell and be sent instead.
+   수정 모드의 찾는 열쇠도 셸이 넣는다(fillFrame): 네이버·쿠팡 찾기 칸, 쿠팡 상품ID, 이베이 조회 SKU,
+   B2B 상품 코드(제조사·모델은 비운 채 코드로 찾는다). 아마존 통화는 판매가 라벨과 같은 값이다. */
 .embedded-platform .shell-owned {
     display: none !important;
 }
@@ -147,6 +153,17 @@
     width: 50%;
     max-width: 50%;
     align-items: flex-end;   /* 좁아져 라벨이 두 줄이 돼도(이베이 '전체 재고 / 미국 판매 수량') 입력칸 줄은 맞춘다 */
+}
+
+/* ── 단일 상품 수정: 입력칸 100% → 50% (2026-10-27) ──
+   수정 모드(셸이 vu-new 를 뗀 폼)의 한 줄 입력·전체 폭 버튼(불러오기·검색·수정하기)을 반 폭으로.
+   짝 칸 줄(.dual-input)은 위 규칙으로 이미 50%(칸 25%)라 그 안의 칸은 고르지 않는다 — 고르면 반의 반이 된다.
+   textarea·상품 표·이미지 목록·옵션 편집 줄은 넓게 둔다.                                    */
+.embedded-platform:not(.vu-new) .tab-pane:not(#apiKeysTab) .form-group:not(.dual-input, .dual-input *, .inline-field > *) > .form-input:not(textarea),
+.embedded-platform:not(.vu-new) .tab-pane:not(#apiKeysTab) .submit-section > .btn.w-full,
+.embedded-platform:not(.vu-new) .tab-pane:not(#apiKeysTab) .inline-field {
+    width: 50%;
+    max-width: 50%;
 }
 
 /* ── 신규 등록: 몰 폼에는 판매가·재고·판매설정·상품명·상세설명만 (2026-10-16) ──

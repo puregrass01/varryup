@@ -1,5 +1,5 @@
-body:is([data-workspace-view="bulk"], [data-workspace-view="fx"]) :is(#main, .detail-toggle-footer) { display:none!important; }
-body[data-workspace-view="api"] #main > :not(#section8), body[data-workspace-view="api"] .detail-toggle-footer,
+body:is([data-workspace-view="bulk"], [data-workspace-view="fx"]) #main { display:none!important; }
+body[data-workspace-view="api"] #main > :not(#section8),
 body[data-workspace-view="api"] #section8-header, body[data-workspace-view="api"] #log-window,
 body[data-workspace-view="api"] #card-area, body[data-workspace-view="api"] #empty-state,
 body[data-workspace-view="api"] #image-library { display:none!important; }
@@ -75,7 +75,7 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 .be-filters label { display:flex; flex-direction:column; gap:2px; font-size:12px; line-height:1.25; color:var(--text-secondary); }
 .be-filters select, .be-filters input[type="search"] { width:100%; }
 
-/* 작업 줄은 현재가·이미지 불러오기와, 오른쪽 끝의 저장 묶음뿐이다. 판매가·이미지 입력은 표 머리 아래 줄(.be-th-tools).
+/* 작업 줄은 오른쪽 끝의 저장 묶음뿐이다(현재가·이미지는 보이는 쪽을 자동으로 읽는다). 판매가·이미지 입력은 표 머리 아래 줄(.be-th-tools).
    (선택은 표 머리의 전체선택으로 한다.) */
 .be-actions {
   display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px; margin:8px 0 4px; padding:8px 10px;
@@ -87,7 +87,11 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 /* 열 머리 아래 입력 줄: 칸 폭 안에서 줄을 바꿔 쌓는다(판매가 열 [칸][통화] / [값 출처][가격 적용], 사진 열 [URL] / [방식][이미지 적용]). */
 .be-table .be-th-tools td { padding:4px 8px 8px; background:var(--bg-panel); vertical-align:top; }
 .be-tool { display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
-#be-value { width:72px; }
+.be-tool select, .be-tool button { flex:1 1 auto; }
+#be-image-op { flex:1 1 0; min-width:0; }   /* 사진 열: [방식][이미지 적용] 을 한 줄에 — 남는 폭은 방식 칸이 갖는다 */
+#be-image-apply { flex:none; }
+/* width 를 auto 로 두면 숫자 칸의 기본 폭(약 170px)이 열 최소 폭이 되어 1200px 창에서 표가 넘친다 — 72px 에서 늘어나게만 한다. */
+#be-value { width:72px; flex:1 0 72px; }
 #be-image-value { width:100%; }
 .be-state { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:4px 16px; margin:2px 0 6px; }
 .be-state .be-help { margin:0; }
@@ -105,9 +109,14 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 }
 /* 1200px 창에서 레일(180)을 뺀 폭(약 970, 세로 스크롤바 17px 빼면 950)에 들어가게 칸 폭을 잡는다. 더 좁으면 표 칸만 가로로 스크롤한다. */
 .be-table { border-collapse:collapse; width:100%; min-width:900px; font-size:13px; background:var(--bg-card); }
-/* 머리 두 줄(열 이름 · 입력)을 함께 붙여 둔다 — 표를 내려도 입력이 보인다. */
+/* 머리 두 줄(열 이름 · 입력)을 함께 붙여 둔다 — 표를 내려도 입력이 보인다. 낮은 창(최소 640px)에서는 행 볼 자리를
+   남기려고 예전처럼 열 이름 줄만 붙인다. */
 .be-table thead { position:sticky; top:0; z-index:2; }
 .be-table th { background:var(--bg-panel); text-align:left; white-space:nowrap; font-size:12px; font-weight:600; color:var(--text-secondary); }
+@media (max-height: 760px) {
+  .be-table thead { position:static; }
+  .be-table th { position:sticky; top:0; z-index:1; }
+}
 .be-table th,.be-table td { padding:10px 8px; border-bottom:1px solid var(--border); vertical-align:middle; }
 .be-table th.be-check-column,.be-table td.be-check-column { width:1%; text-align:center; }
 .be-table img { width:60px; height:52px; object-fit:contain; border-radius:5px; background:white; }

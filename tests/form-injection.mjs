@@ -2,7 +2,7 @@
 //
 // 과거 결함:
 //   - #inp-bsa 가 마크업에 없어 BSA 가 항상 false → 전 플랫폼 BSA X + B2B 가격 하락
-//   - iwBrand/iwModel/iwBoardBrand 를 건드리지 않아 카테고리·게시판이 기본값으로 등록
+//   - iwBrand/iwModel 을 건드리지 않아 카테고리가 기본값으로 등록
 //   - setVal 이 input/change 를 발사하지 않아 titlePreview 가 비어 네이버 차단 / 쿠팡 무제목
 //   - 국내용·해외용 조견표에 같은 URL 을 복사
 import { chromium } from 'playwright';

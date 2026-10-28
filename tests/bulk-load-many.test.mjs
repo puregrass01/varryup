@@ -48,7 +48,8 @@ test('네이버 현재가: 목록 조회 한 번에 100건, 응답에 없는 번
   const singles = [];
   const naverProducts = { loadProductForEdit: async no => { singles.push(no); return { originNo: no, title: '1건', salePrice: 5000, detailImages: [] }; } };
   const { invoke } = ipcFixture({ naverAPI: { searchProducts }, naverProducts });
-  const res = await invoke('bulk-price-load-many', { scope: 'naver', ids, includeImages: true });
+  // 가격만 읽는 호출(환율 자동 변경)이다. 화면은 이미지까지 달라고 한다(아래 테스트).
+  const res = await invoke('bulk-price-load-many', { scope: 'naver', ids });
   assert.equal(res.success, true);
   assert.deepEqual(searches.map(s => [s.searchKeywordType, s.originProductNos.length, s.size]), [['PRODUCT_NO', 100, 100], ['PRODUCT_NO', 50, 100]]);
   assert.deepEqual(singles, ['1005']);
@@ -56,8 +57,30 @@ test('네이버 현재가: 목록 조회 한 번에 100건, 응답에 없는 번
   const byId = new Map(res.data.items.map(item => [item.id, item.rows]));
   assert.deepEqual([byId.get('1000')[0].price, byId.get('1000')[0].ready, byId.get('1000')[0].name], ['10000', true, '상품 1000']);
   assert.equal(byId.get('1005')[0].price, '5000');
-  assert.equal(byId.get('1000')[0].imagesReady, undefined, '검색 결과에는 상세 이미지가 없다 — 이미지 적용 때 조회');
+  assert.equal(byId.get('1000')[0].imagesReady, undefined, '가격만 읽을 때는 이미지를 읽지 않는다');
   assert.ok(!byId.has('9999'));
+});
+
+test('네이버 현재가·이미지: 목록 조회에는 상세 이미지가 없어 원상품 1건 조회로 가격·이미지를 함께 읽는다', async () => {
+  const { searches, searchProducts } = naverSearch({ 1: 10000, 2: 20000 });
+  let reads = [], fail = () => null;
+  const naverProducts = { loadProductForEdit: async no => {
+    reads.push(no);
+    if (fail()) throw fail();
+    return { originNo: no, title: 't', salePrice: 7000, revision: 'r', detailImages: [{ url: 'https://ai.esmplus.com/' + no + '.jpg' }] };
+  } };
+  const { invoke } = ipcFixture({ naverAPI: { searchProducts }, naverProducts });
+  const res = await invoke('bulk-price-load-many', { scope: 'naver', ids: ['1', '2'], includeImages: true });
+  assert.deepEqual([searches.length, reads], [0, ['1', '2']], '목록 조회 없이 상품마다 한 번');
+  const first = res.data.items[0].rows[0];
+  assert.deepEqual([first.price, first.imagesReady, first.images], ['7000', true, ['https://ai.esmplus.com/1.jpg']]);
+  assert.equal(first.imageRevision, (await invoke('bulk-images-load', { scope: 'naver', id: '1' })).data.revision, '저장 때 검사하는 revision 과 같다');
+
+  // 인증·한도 오류면 남은 상품을 읽지 않고 멈춘다(화면도 blocked 를 보고 다음 묶음을 보내지 않는다).
+  reads = []; fail = () => apiError('네이버 API 오류 (429)', { status: 429 });
+  const limited = await invoke('bulk-price-load-many', { scope: 'naver', ids: ['1', '2'], includeImages: true });
+  assert.deepEqual(reads, ['1']);
+  assert.match(limited.data.blocked, /429/);
 });
 
 test('네이버 현재가: 묶음 조회가 인증·한도 오류면 1건 조회로 계속 두드리지 않고 멈춘다', async () => {

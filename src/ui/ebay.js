@@ -49,8 +49,7 @@
     <div id="ebNewForm">
       ${input('ebSku', '고유 SKU', '예: OG-123-L-BSA · 좌우/옵션마다 다르게 입력', 'text', 'shell-owned')}
       ${input('ebTitle', '영문 상품명 (최대 80자)', '상품 브랜드와 호환 차량을 구분해주세요')}
-      <div class="form-group row dual-input"><div class="input-col">${input('ebBrand', '상품 브랜드', '예: OpticGlass')}</div><div class="input-col">${input('ebMpn', '제조사 부품번호 (MPN)', '실제 부품번호')}</div></div>
-      <div class="form-group row dual-input"><div class="input-col">${input('ebPrice', '판매가 (USD)', '예: 59.99', 'number')}</div><div class="input-col">${input('ebQuantity', '전체 재고 / 미국 판매 수량', '예: 10', 'number')}</div></div>
+      <div class="form-group row dual-input quad-input"><div class="input-col">${input('ebBrand', '상품 브랜드', '예: OpticGlass')}</div><div class="input-col">${input('ebMpn', '제조사 부품번호 (MPN)', '실제 부품번호')}</div><div class="input-col">${input('ebPrice', '판매가 (USD)', '예: 59.99', 'number')}</div><div class="input-col">${input('ebQuantity', '전체 재고 / 미국 판매 수량', '예: 10', 'number')}</div></div>
       <details><summary>포장 무게·크기 (계산 배송비 정책 사용 시 입력)</summary>
         ${input('ebWeight', '포장 무게 (kg)', '예: 0.5', 'number')}
         <div class="form-group row dual-input"><div class="input-col">${input('ebLength', '가로 (cm)', '', 'number')}</div><div class="input-col">${input('ebWidth', '세로 (cm)', '', 'number')}</div><div class="input-col">${input('ebHeight', '높이 (cm)', '', 'number')}</div></div>
@@ -89,7 +88,7 @@
       <div class="inline-field">${input('ebSearchText', '기존 상품 검색 (SKU / 상품명 / 브랜드)', '빈칸이면 전체 목록 조회')}${button('search', '기존 상품 목록 조회')}</div>
       <p class="help-text">Inventory API로 관리하는 미국 고정가 상품과 초안을 조회합니다. 상품을 선택하면 수정 정보를 불러옵니다.</p>
       <div id="ebSearchResults" aria-live="polite" style="margin:6px 0"></div>
-      <div class="inline-field">${input('ebEditSku', '조회할 SKU 또는 Listing ID', 'SKU 또는 12자리 Listing ID')}${button('load', '상품 불러오기')}</div>
+      <div class="inline-field">${input('ebEditSku', '조회할 SKU 또는 Listing ID', 'SKU 또는 12자리 Listing ID', 'text', 'shell-owned')}${button('load', '상품 불러오기')}</div>
       <p id="ebLoaded" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0">상품을 먼저 조회해주세요.</p>
       <h3 style="margin:2px 0;font-size:0.85rem">사진 · 상품 이미지</h3><div id="ebEditImageList"></div>
       <div class="form-group row dual-input"><div class="input-col">${input('ebEditPrice', '변경 판매가 (USD)', '', 'number')}</div><div class="input-col">${input('ebEditQuantity', '변경 미국 판매 수량', '', 'number')}</div></div>
@@ -232,6 +231,7 @@
   const showWarnings = result => (result.warnings || []).forEach(w => log(w.longMessage || w.message || 'eBay 경고', 'error'));
   async function loadProduct() {
     const sku = value('ebEditSku');
+    if (!sku) throw new Error('좌측 이베이 SKU 를 넣거나 목록에서 상품을 선택하세요.');
     loaded = null; loadedKey = ''; editImages = null; imageSaveUncertain = false;
     const result = await call('load-product', sku);
     // 불러오는 사이 SKU 칸이 바뀌었으면(셸이 좌측 차의 SKU 로 다시 썼거나 사람이 고쳤으면) 버린다.
@@ -369,7 +369,8 @@
     async preview() { $('ebPreview').textContent = JSON.stringify(await call('preview', product()), null, 2); log('입력·카테고리 검증 완료. 최종 판매 가능 여부는 게시 응답에서 확인합니다.', 'success'); },
     async draft() { savedDraft = null; savedDraft = await call('save-draft', product()); showWarnings(savedDraft); log(`초안 저장 완료 · SKU ${savedDraft.sku} · Offer ${savedDraft.offerId}`, 'success'); },
     async publish() { if (!savedDraft) throw new Error('초안을 먼저 저장해주세요.'); const result = await call('publish', savedDraft.sku); showWarnings(result); log(`게시 완료 · Listing ${result.listingId}`, 'success'); savedDraft = null; },
-    load: loadProduct,
+    // SKU 가 비면(현황판에서 상품을 고르지 않음) 상품 목록 조회와 같다 — 검색어도 비면 전체 목록.
+    load: () => (value('ebEditSku') ? loadProduct() : actions.search()),
     async update() {
       const product = requireLoaded(), { sku } = product;
       if (imageSaveUncertain) throw new Error('이전 이미지 요청 결과를 확인하려면 상품을 다시 불러오세요.');
