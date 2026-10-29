@@ -40,7 +40,10 @@ try {
     window.require = () => ({ ipcRenderer: { on() {}, send() {}, async invoke(channel, data) {
       window.calls.push({ channel, data: JSON.parse(JSON.stringify(data ?? null)) });
       switch (channel) {
-        case 'bulk-price-list': return { success: true, data: { items: [{ id: '11', name: ownName['imweb-ko'] }, { id: '12', name: '옵틱글래스 광각미러 [No.6120]' }] } };
+        // 아마존 · 이베이 목록: 'N612' 로 끝나는 SKU 하나 + 부분 일치 미끼(N6120)
+        case 'bulk-price-list': if (/^(amazon|ebay)/.test(data.scope)) return { success: true, data: { items: [{ id: 'OBM0501N6120', sku: 'OBM0501N6120', name: 'decoy' },
+          { id: 'OBM0501N612', sku: 'OBM0501N612', name: 'Optic Glass KIA K5 mirror' }] } };
+          return { success: true, data: { items: [{ id: '11', name: ownName['imweb-ko'] }, { id: '12', name: '옵틱글래스 광각미러 [No.6120]' }] } };
         case 'bulk-price-load-many': return { success: true, data: { items: [{ id: data.ids[0], rows: rows(data.scope, data.ids[0]) }], blocked: '' } };
         case 'bulk-save-batch': if (data.scope === window.failScope) return { success: false, error: '수정 실패(테스트)' };
           return { success: true, data: { results: data.jobs.map((job, index) => ({ index, success: true, data: { status: 'VERIFIED', revision: 'rev-new' } })) } };
@@ -110,6 +113,12 @@ try {
   });
   assert.equal(await child().evaluate(() => ssEditState.originNo), '13427230028');
   assert.equal((await callsOf('smartstore-load-product')).includes('99999'), false, '앞 상품은 불러오지도 않는다');
+
+  // 좌측 SKU 없이 차량 행만 골라도 아마존 · 이베이는 상품번호로 몰 목록을 찾아 불러온다(N6120 미끼는 버린다)
+  await child().evaluate(() => VUMallGrid.load({ no: '612', brand: '기아', model: 'K5', cpid: '9876' }));
+  assert.match(await card('amazon').innerText(), /SKU OBM0501N612 — /);
+  assert.equal(await card('ebay').locator('input[data-key="title"]').inputValue(), 'Optic-glass Mirror for KIA K5');
+  assert.equal((await callsOf('ebay-load-product')).at(-1), 'OBM0501N612');
 
   // 3) 고치면 바뀜 · 쿠팡 상품명은 재승인 경고
   await card('amazon').locator('input[data-key="amazon-us:price"]').fill('99.99');

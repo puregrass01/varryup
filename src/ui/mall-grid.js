@@ -77,6 +77,26 @@
     return item?.rows ? { rows: item.rows } : { error: (res?.success ? item?.error || res.data?.blocked : res?.error) || '결과가 비어 있습니다' };
   }
 
+  // 좌측 SKU 가 비었으면 몰 목록에서 상품번호로 찾는다. SKU 끝이 'N' + 상품번호(FD0905N1108)이거나 상품명에 '[No.번호]'.
+  // 부분 일치('N612' 가 'N6120' 에도)는 버린다. 하나면 바로 불러오고, 여럿(BSA 판 등)이면 카드 안 표에서 고른다.
+  async function findBySkuNo(scopes, no, mallName, pick) {
+    if (!no) return { missing: `좌측 ${mallName} SKU · 상품번호가 없습니다` };
+    const esc = no.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const bySku = new RegExp('N' + esc + '$', 'i'), byName = new RegExp('\\[No\\.' + esc + '(?:\\(옵\\))?\\]', 'i');
+    for (const scope of scopes) {
+      const res = await ipc.invoke('bulk-price-list', { scope, query: no });
+      if (!res?.success) throw new Error(res?.error || '목록을 읽지 못했습니다');
+      const seen = new Set(), items = (res.data?.items || []).filter(p => {
+        const sku = String(p.sku || p.id || '');
+        if (seen.has(sku) || !(bySku.test(sku) || byName.test(p.name || ''))) return false;
+        seen.add(sku);
+        return true;
+      });
+      if (items.length) return items.length > 1 ? { pick: items } : pick(items[0]);
+    }
+    return { missing: `${mallName}에 상품번호 ${no} SKU 가 없습니다` };
+  }
+
   // ── 몰마다: load(card, keys) → undefined(불러옴) | { missing } | { pick: rows } · pick(card, row) · fields · images · info · save ──
   const ADAPTERS = {
     // 아임웹 자사몰: 상품번호(prodNo)는 세 구역이 같다. 구역마다 상품명 + 1set 조합가. 상세 이미지는 구역마다 따로라 한국 구역만.
@@ -290,8 +310,8 @@
 
     // 아마존: 미국 · 일본을 같은 SKU 로 읽는다. 이미지는 두 마켓 목록이 같으면 하나로 고쳐 둘 다, 다르면 미국만.
     amazon: {
-      async load(card, { amzSku }) {
-        if (!amzSku) return { missing: '좌측 아마존 SKU 가 없습니다' };
+      async load(card, { amzSku, no }) {
+        if (!amzSku) return findBySkuNo(['amazon-us', 'amazon-jp'], no, '아마존', item => this.pick(card, item));
         card.sku = amzSku; card.markets = [];
         for (const [scope, label, currency] of AMZ_MARKETS) {
           const { rows, error } = await loadRows(scope, amzSku, true), row = rows?.[0];
@@ -304,6 +324,7 @@
         card.imageNote = ok.length === 2 && card.imageScopes.length === 1 ? 'JP 이미지는 다름 — 전체 탭에서' : '';
         card.imagesNow = [...ok[0].images];
       },
+      pick(card, item) { return this.load(card, { amzSku: item.sku || item.id }); },
       fields: card => card.markets.filter(m => !m.error).flatMap(m => [
         { key: m.scope + ':name', label: `${m.label} 상품명`, get: () => m.name, set: v => { m.name = v; } },
         { key: m.scope + ':price', label: `${m.label} 판매가 (${m.currency})`, type: 'number', step: m.currency === 'USD' ? '0.01' : '1', get: () => m.price, set: v => { m.price = v; } },
@@ -340,8 +361,8 @@
 
     // 이베이: 제목 · 판매가는 탭(ebEditTitle · ebEditPrice → ebayUpdate), 이미지는 일괄 수정 채널(scope ebay).
     ebay: {
-      async load(card, { sku }) {
-        if (!sku) return { missing: '좌측 이베이 SKU 가 없습니다' };
+      async load(card, { sku, no }) {
+        if (!sku) return findBySkuNo(['ebay'], no, '이베이', item => this.pick(card, item));
         if (window.ebayBusy?.()) throw new Error('eBay 탭이 다른 요청을 처리 중입니다 — 끝난 뒤 다시 불러오세요');
         $('ebEditSku').value = sku;
         const images = loadRows('ebay', sku, true);
@@ -353,6 +374,7 @@
         card.images = row ? { now: [...(row.images || [])], revision: row.imageRevision } : null;
         card.imageError = row ? '' : error;
       },
+      pick(card, item) { return this.load(card, { sku: item.sku || item.id }); },
       owner: () => window.ebayEditItem?.()?.name,
       // 게시되지 않은 상품은 탭의 수정(ebayUpdate)이 거부한다 — 칸 대신 회색 글로.
       fields: () => (window.ebayEditItem?.()?.status !== 'PUBLISHED' ? [] : [
