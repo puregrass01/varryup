@@ -34,7 +34,7 @@
       </div>
       <div class="step-indicator"><div class="step-number">1</div><span>생성될 상품명 (한국 · 미국 · 일본 구역)</span></div>
       ${['Ko:한국', 'En:미국', 'Jp:일본'].map(x => x.split(':')).map(([k, c]) => `<div class="form-group"><label class="form-label" for="ihName${k}">${c}</label><input type="text" id="ihName${k}" class="form-input" readonly></div>`).join('')}
-      <p class="help-text" id="ihNameWarn" style="color:#b45309"></p>
+      <p class="help-text" id="ihNameWarn" style="color:var(--accent-warn)"></p>
       <div class="step-indicator"><div class="step-number">2</div><span>판매가</span></div>
       <div class="form-group row dual-input ih-row"><div class="input-col"><label class="form-label" for="ihKrwSet">한국 1set (원)</label><input type="number" min="0" id="ihKrwSet" class="form-input"></div><div class="input-col"><label class="form-label" for="ihKrwLeft">운전석 (원)</label><input type="number" min="0" id="ihKrwLeft" class="form-input"></div><div class="input-col"><label class="form-label" for="ihKrwRight">조수석 (원)</label><input type="number" min="0" id="ihKrwRight" class="form-input"></div></div>
       <div class="form-group row dual-input"><div class="input-col"><label class="form-label" for="ihUsd">미국 1set (USD)</label><input id="ihUsd" class="form-input" inputmode="decimal" autocomplete="off"></div><div class="input-col"><label class="form-label" for="ihJpy">일본 1set (JPY)</label><input id="ihJpy" class="form-input" inputmode="numeric" autocomplete="off"></div></div>
@@ -45,13 +45,13 @@
       <div class="step-indicator"><div class="step-number">4</div><span>조견표</span></div>
       <div id="ihSpecPlan"></div>
       <p class="help-text">본문은 템플릿 상품 본문에서 조견표와 상세 이미지(이미지 목록)만 바꿉니다. 숨김으로 만들고 세 구역을 다시 읽어 모두 맞을 때만 판매중으로 바꿉니다 — 어긋나면 숨김으로 두고 상품번호를 알립니다(Open API 로는 지울 수 없습니다).</p>
-      <div class="submit-section"><button type="button" class="btn btn-gradient w-full" id="ihRegisterBtn">🚀 아임웹 자사몰 상품 등록 (한국 · 미국 · 일본)</button></div>
+      <div class="submit-section"><button type="button" class="btn btn-gradient w-full vu-key vu-key-accent" id="ihRegisterBtn">아임웹 자사몰 상품 등록 (한국 · 미국 · 일본)</button></div>
     </div>
     <div class="ih-edit">
       <p class="help-text" id="ihUnit"></p>
       <div class="form-group shell-owned"><label class="form-label" for="ihEditNo">상품번호</label><input id="ihEditNo" class="form-input" placeholder="예: 445, K123" autocomplete="off"></div>
       <div class="form-group"><label class="form-label" for="ihUrl">본사몰 상품 URL (넣으면 그 상품을 찾음)</label><input id="ihUrl" class="form-input" placeholder="예: https://optic-glass.co.kr/shop_view/?idx=1096" autocomplete="off"></div>
-      <div class="submit-section"><button type="button" class="btn btn-outline w-full" id="ihFindBtn">🔍 상품 불러오기</button></div>
+      <div class="submit-section"><button type="button" class="btn btn-outline w-full vu-key" id="ihFindBtn">상품 불러오기</button></div>
       <div id="ihResults" style="margin:6px 0"></div>
       <div id="ihLoaded" hidden>
         <h3 style="margin:2px 0;font-size:0.85rem">사진 · 상품 이미지</h3><div id="ihImageList"></div>
@@ -60,7 +60,7 @@
         <div id="ihCombos"></div>
         <p class="help-text">조합 가격은 추가금이 아니라 그 조합의 최종가입니다 — 기본 판매가만 바꾸면 조합 가격은 그대로입니다.</p>
         <p class="help-text" id="ihUnitNote"></p>
-        <div class="submit-section"><button type="button" class="btn btn-gradient w-full" id="ihUpdateBtn">💾 아임웹 자사몰 상품 수정하기</button></div>
+        <div class="submit-section"><button type="button" class="btn btn-gradient w-full vu-key vu-key-accent" id="ihUpdateBtn">아임웹 자사몰 상품 수정하기</button></div>
       </div>
     </div>`;
   document.querySelector('.tab-content-area').append(panel);
@@ -163,7 +163,7 @@
       group.append(label, input); return group;
     }));
     $('ihLoaded').hidden = false;
-    window.setEditButtonLabel('ihUpdateBtn', '아임웹 자사몰', 'ihName', '💾');
+    window.setEditButtonLabel('ihUpdateBtn', '아임웹 자사몰', 'ihName');
     log(`✓ ${loaded.name} (${UNITS[at.scope][0]} 구역 · 조합 ${loaded.combos.length}개) 불러오기 완료`, 'success');
     return { ok: true };
   });
@@ -280,7 +280,7 @@
   window.registerImwebHead = () => run(async () => {
     const { d, kr } = renderNew();
     if (!d.brand || !d.model || !d.code) throw new Error('제조사 · 차종 · 상품번호를 모두 입력해 주세요.');
-    if (!d.specImageUrl) throw new Error('국내용 조견표가 없습니다 — 좌측 🇰🇷 KOREA 사진 불러오기로 조견표를 넣어 주세요.');
+    if (!d.specImageUrl) throw new Error('국내용 조견표가 없습니다 — 좌측 Korea 사진 불러오기로 조견표를 넣어 주세요.');
     log(`본사몰 신규 등록(한국 · 미국 · 일본): ${kr}`, 'process');
     const res = await window.invokeForm(() => window.invokeWithImages(ipc, 'imweb-head-register', d));
     if (!res.success) throw new Error(res.error || '알 수 없는 오류');

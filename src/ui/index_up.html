@@ -4,7 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VERY UP VER3</title>
+  <meta name="description" content="국가와 몰별 상품을 새로 등록하고 고치는 VERY UP 작업 화면" />
   <script src="theme.js"></script>
+  <link rel="stylesheet" href="fonts.css" />
   <link rel="stylesheet" href="theme.css" />
   <link rel="stylesheet" href="style.css" />
   <script src="vu-suggest.js"></script>
@@ -12,79 +14,16 @@
   <script src="product-table.js"></script>
   <script src="currency-rates.js"></script>
   <style>
-    /* ── 기본 리셋 & 다크 테마 ── */
+    /* ── 기본 리셋. 색·글꼴 값은 theme.css 만 가진다 — 여기서는 이름(var(--…))만 쓴다 ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg-base:       #0f172a;
-      --bg-panel:      #1e293b;
-      --bg-card:       #263045;
-      --bg-input:      #0f172a;
-      --border:        #334155;
-      --accent:        #3b82f6;
-      --accent-hover:  #2563eb;
-      --accent-success:#22c55e;
-      --accent-warn:   #f59e0b;
-      --accent-danger: #ef4444;
-      --text-primary:  #f1f5f9;
-      --text-secondary:#94a3b8;
-      --text-muted:    #475569;
-      --inactive-bg:   #1e293b;
-      --inactive-text: #334155;
-      --registration-width: 380px;
-      --radius:        6px;
-      --transition:    0.15s ease;
-
-      /* 테마마다 갈리는 값 — style.css 와 같은 이름·같은 뜻으로 맞춰 둔다. */
-      --ovl-1: rgba(255,255,255,0.05);
-      --ovl-2: rgba(255,255,255,0.10);
-      --ovl-3: rgba(255,255,255,0.16);
-      --sunk:  rgba(0,0,0,0.22);
-      --shadow-panel: 0 8px 32px 0 rgba(0,0,0,0.37);
-      --btn-face:       #111827;      /* 버튼은 검정 */
-      --btn-face-hover: #000000;
-      --btn-text:       #ffffff;
-      --logo-tile:      #ffffff;
-      /* 로그 글자. 어두운 배경용 파스텔이라 밝은 화면에서는 안 보인다 → 라이트에서 진하게. */
-      --log-ok:   #86efac;
-      --log-warn: #fcd34d;
-      --log-err:  #fca5a5;
-    }
-
-    /* ── 라이트 테마 (기본) ── */
-    :root[data-theme="light"] {
-      --bg-base:        #eef2f7;
-      --bg-panel:       #ffffff;
-      --bg-card:        #ffffff;
-      --bg-input:       #ffffff;
-      --border:         #d5dbe5;
-      --accent:         #2563eb;
-      --accent-hover:   #1d4ed8;
-      --text-primary:   #0f172a;
-      --text-secondary: #52627a;
-      --text-muted:     #7c8aa0;
-      --inactive-bg:    #e7ecf3;
-      --inactive-text:  #c3ccda;
-
-      --ovl-1: rgba(15,23,42,0.04);
-      --ovl-2: rgba(15,23,42,0.08);
-      --ovl-3: rgba(15,23,42,0.16);
-      --sunk:  rgba(15,23,42,0.05);
-      --shadow-panel: 0 4px 16px 0 rgba(15,23,42,0.10);
-      /* 밝은 배경에서는 흰 타일이 로고 경계를 지운다 → 아주 옅은 회색으로. */
-      --logo-tile: #f1f4f8;
-      --log-ok:   #15803d;
-      --log-warn: #a16207;
-      --log-err:  #b91c1c;
-    }
 
     html, body {
       height: 100%;
       background: var(--bg-base);
       color: var(--text-primary);
-      font-family: 'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
+      font-family: var(--font-body);
       font-size: 13px;
-      overflow: hidden;
+      overflow: clip;
     }
 
     /* ── 앱 셸 ── */
@@ -99,9 +38,9 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 10px 16px;
+      padding: 10px var(--space-md);
       background: var(--bg-panel);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--rule);
       flex-shrink: 0;
       -webkit-app-region: drag;
     }
@@ -114,26 +53,45 @@
       align-items: center;
       gap: 6px;
       background: transparent;
-      border: 1px solid var(--border);
+      border: 1px solid var(--rule-2);
       color: var(--text-secondary);
       padding: 5px 10px;
       border-radius: var(--radius);
       cursor: pointer;
+      font-family: var(--font-body);
       font-size: 12px;
       transition: background var(--transition), color var(--transition);
     }
     #btn-back:hover {
-      background: var(--bg-card);
+      background: var(--paper-2);
       color: var(--text-primary);
     }
 
     #app-title {
+      font-family: var(--font-display);
       font-size: 15px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
+      font-weight: 600;
+      letter-spacing: -0.01em;
       color: var(--text-primary);
       flex: none;
     }
+
+    /* 창 버튼(테마 · 최소화 · 닫기). 납작한 칸, 닫기만 위험색 바탕 */
+    .win-btns { display: flex; gap: 6px; margin-left: auto; -webkit-app-region: no-drag; }
+    .win-btn {
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      background: var(--ovl-2);
+      color: var(--text-secondary);
+      font-family: var(--font-body);
+      font-size: 13px;
+      cursor: pointer;
+      transition: background var(--transition), color var(--transition);
+    }
+    .win-btn:hover { background: var(--ovl-3); color: var(--text-primary); }
+    .win-btn.win-close:hover { background: var(--danger-wash); color: var(--accent-danger); border-color: var(--accent-danger); }
 
     /* 상태줄 — addLog 의 마지막 줄. 로그창이 숨는 화면(접힘 400px·상품 일괄 수정·API KEY)에서도 결과가 보인다.
        두 줄까지(줄 높이 14px × 2 = 버튼 28px)라 헤더 높이가 안 바뀐다. */
@@ -149,6 +107,7 @@
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;
     }
+    #shell-status[data-level="ok"]    { color: var(--log-ok); }
     #shell-status[data-level="warn"]  { color: var(--log-warn); }
     #shell-status[data-level="error"] { color: var(--log-err); }
     /* 접힌 400px 창에서는 제목 자리를 상태줄에 준다(메시지가 생긴 뒤에만). */
@@ -156,47 +115,52 @@
       #header:has(#shell-status:not(:empty)) #app-title { display: none; }
     }
 
-    /* ── 모드 선택 ── */
+    /* ── 모드 선택: 꺼진 트레이 위의 납작한 선택지, 고른 것은 코발트 워시 ── */
     #mode-bar {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 16px;
+      gap: var(--space-sm);
+      padding: var(--space-sm) var(--space-md);
       background: var(--bg-base);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--rule);
       flex-shrink: 0;
     }
     #mode-bar span { color: var(--text-secondary); font-size: 12px; }
 
-    .mode-radio { display: none; }
+    .mode-radio { position: absolute; opacity: 0; pointer-events: none; }
     .mode-label {
       display: flex;
       align-items: center;
       gap: 6px;
       cursor: pointer;
-      padding: 4px 12px;
-      border-radius: 14px;
-      border: 1px solid var(--border);
+      padding: var(--space-xs) 12px;
+      border-radius: var(--radius);
+      border: 1px solid var(--rule-2);
+      background: var(--bg-panel);
       color: var(--text-secondary);
       font-size: 12px;
-      transition: all var(--transition);
+      font-weight: 500;
+      transition: background var(--transition), color var(--transition), border-color var(--transition);
       user-select: none;
     }
+    .mode-label:hover { color: var(--text-primary); border-color: var(--input-border); }
     .mode-label .dot {
       width: 8px; height: 8px;
       border-radius: 50%;
       border: 2px solid var(--text-muted);
-      transition: all var(--transition);
+      transition: background var(--transition), border-color var(--transition);
     }
     .mode-radio:checked + .mode-label {
       color: var(--accent);
       border-color: var(--accent);
-      background: rgba(59,130,246,0.08);
+      background: var(--accent-wash);
+      box-shadow: var(--shadow-key-press);
     }
     .mode-radio:checked + .mode-label .dot {
       background: var(--accent);
       border-color: var(--accent);
     }
+    .mode-radio:focus-visible + .mode-label { outline: 2px solid var(--focus); outline-offset: 2px; }
 
     /* ── 메인 (좌우 분할) ── */
     #main {
@@ -211,33 +175,37 @@
       width: var(--registration-width);
       min-height: 0;
       flex-shrink: 0;
-      border-right: 1px solid var(--border);
+      border-right: 1px solid var(--rule);
       display: flex;
       flex-direction: column;
       overflow-y: auto;
       scrollbar-gutter: stable;
-      padding: 14px 16px;
+      padding: 14px var(--space-md);
       gap: 12px;
     }
     #section7 > * { flex-shrink: 0; }
     #section7::-webkit-scrollbar { width: 10px; }
-    #section7::-webkit-scrollbar-track { background: var(--bg-panel); }
+    #section7::-webkit-scrollbar-track { background: var(--bg-base); }
     #section7::-webkit-scrollbar-thumb {
-      background: var(--text-muted);
-      border: 2px solid var(--bg-panel);
+      background: var(--rule-2);
+      border: 2px solid var(--bg-base);
       border-radius: 5px;
     }
-    #section7::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+    #section7::-webkit-scrollbar-thumb:hover { background: var(--input-border); }
 
     .section-title {
-      font-size: 11px;
+      font-family: var(--font-display);
+      font-size: 12px;
       font-weight: 600;
-      letter-spacing: 0.1em;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      padding-bottom: 4px;
-      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding-bottom: var(--space-xs);
+      border-bottom: 1px solid var(--rule);
     }
+    #product-info-title { margin-top: var(--space-md); }
+
+    /* 판매자 콘솔 줄 */
+    #login-buttons { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+    #login-buttons .console-label { font-size: 11px; font-weight: 500; color: var(--text-muted); margin-right: 2px; }
 
     /* 입력 폼 */
     /* 2단 그리드. 입력칸을 50% 로 줄이면 칸 오른쪽 절반이 빈 공간으로 남으므로,
@@ -245,14 +213,14 @@
     .field-group {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px 10px;
+      gap: var(--space-sm) 10px;
       align-items: start;
     }
 
     .field {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: var(--space-xs);
       min-width: 0;
     }
     /* 선택지가 길거나 여러 줄인 항목은 한 줄을 다 쓴다. */
@@ -265,27 +233,37 @@
     }
     .field input, .field textarea {
       background: var(--bg-input);
-      border: 1px solid var(--border);
+      border: 1px solid var(--input-border);
       color: var(--text-primary);
       border-radius: var(--radius);
       padding: 6px 9px;
+      font-family: var(--font-body);
       font-size: 13px;
       box-sizing: border-box;
       outline: none;
-      transition: border-color var(--transition);
       width: 100%;
       max-width: 100%;
     }
-    .field input:focus, .field textarea:focus {
-      border-color: var(--accent);
+    .field input::placeholder, .field textarea::placeholder { color: var(--text-muted); }
+    /* 포커스 링은 outline 으로, 곧바로 — 테두리는 그대로 둔다 */
+    .field input:focus-visible, .field textarea:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: -1px;
     }
     .field textarea {
       resize: vertical;
       min-height: 60px;
       height: auto;
-      font-family: inherit;
       width: 100%;
       max-width: 100%;
+    }
+    #inp-chart-html { min-height: 70px; }
+    /* 기계 값(SKU · 가격 · 번호 · 코드 · HTML)은 고정폭 */
+    #inp-code, #inp-no, #inp-sku, #inp-amz-sku, #inp-usd, #inp-amz-ptype, #inp-cpid,
+    #inp-edit-krw, #inp-edit-usd, #inp-edit-jpy, #inp-chart-html {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
     }
 
     /* 언어별 표기 칸. 체크된 나라가 하나뿐이면 한 칸, 셋이면 세 칸이 된다. */
@@ -293,9 +271,8 @@
     .lang-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .lang-col[hidden] { display: none; }
     .lang-tag {
-      font-size: 9px;
+      font-size: 10px;
       color: var(--text-muted);
-      letter-spacing: 0.02em;
       white-space: nowrap;
     }
     /* 칸이 하나뿐일 땐 언어 꼬리표가 군더더기다. */
@@ -305,10 +282,10 @@
        몰 가운데 지금 켜진 것이다. [hidden] 이 .field 의 display:flex 에 지지 않게 못 박는다. */
     .mall-field[hidden] { display: none !important; }
     .mall-tags {
-      font-size: 9px;
+      font-size: 10px;
       color: var(--text-muted);
       font-weight: 400;
-      margin-left: 4px;
+      margin-left: var(--space-xs);
       white-space: nowrap;
     }
     /* 꼬리표가 길면 라벨이 두 줄이 된다('변경 판매가 (USD) · 아마존 미국 · 이베이'). 같은 줄 옆 칸과 입력칸
@@ -329,6 +306,8 @@
       border-radius: 0;
       accent-color: var(--accent);
     }
+    .field input[type="radio"]:focus-visible,
+    .field input[type="checkbox"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; box-shadow: none; }
 
     /* BSA 여부 · 차량 종류 — 선택지를 한 줄에 나란히 둔다. */
     .bsa-group {
@@ -349,37 +328,32 @@
       cursor: pointer;
     }
 
-    /* 최근 사진 버튼 */
+    /* 최근 사진 버튼 — 무늬 없는 키(.vu-key). 크기만 여기서 */
+    .photo-row { display: flex; gap: var(--space-sm); margin-bottom: 10px; }
     .load-photo-btn {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
-      background: var(--bg-card);
-      border: 1px dashed var(--border);
-      color: var(--text-secondary);
-      border-radius: var(--radius);
       padding: 7px 10px;
-      cursor: pointer;
       font-size: 12px;
+      font-weight: 500;
       width: 100%;
-      transition: all var(--transition);
-    }
-    .load-photo-btn:hover {
-      border-color: var(--accent);
-      color: var(--accent);
     }
     /* 사진 미리보기 */
+    #photo-preview { margin-bottom: 12px; text-align: center; }
     #photo-preview img {
       max-width: 100%; max-height: 150px;
-      border-radius: var(--radius); border: 1px solid var(--border);
+      border-radius: var(--radius); border: 1px solid var(--rule);
     }
+    #photo-preview-name { font-size: 11px; color: var(--text-secondary); margin-top: var(--space-xs); }
 
     /* ── 현황판 ── */
     .board-title {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: var(--space-sm);
+      font-family: var(--font-display);
       font-size: 12px;
       color: var(--text-secondary);
       font-weight: 600;
@@ -388,35 +362,38 @@
       content: '';
       flex: 1;
       height: 1px;
-      background: var(--border);
+      background: var(--rule);
       order: 1;                  /* 구분선을 빠른 선택 칩 앞으로 — 칩이 줄 오른쪽 끝에 붙는다 */
     }
     /* 현황판 빠른 선택. 누르면 그 조합으로 '바꾼다'(더하지 않는다). 지금 선택과 같은 칩이 켜진다. */
     .board-presets {
       order: 2;
       display: flex;
-      gap: 4px;
+      gap: var(--space-xs);
       flex-shrink: 0;
     }
     .board-preset {
-      padding: 1px 8px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
+      padding: 1px var(--space-sm);
+      border: 1px solid var(--rule-2);
+      border-radius: var(--radius);
       background: transparent;
       color: var(--text-secondary);
+      font-family: var(--font-body);
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 500;
       line-height: 1.6;
       cursor: pointer;
-      transition: all var(--transition);
+      transition: background var(--transition), color var(--transition), border-color var(--transition);
     }
     .board-preset:hover { border-color: var(--accent); color: var(--text-primary); }
     .board-preset[aria-pressed="true"] {
       background: var(--accent);
       border-color: var(--accent);
-      color: #fff;
+      color: var(--accent-ink);
     }
 
+    /* 현황판 판: 깎은 카드(.vu-cut) 안에 표 */
+    .board-panel { margin-top: var(--space-sm); padding: 2px 6px; }
     #status-board {
       width: 100%;
       border-collapse: collapse;
@@ -427,21 +404,21 @@
       color: var(--text-muted);
       font-weight: 500;
       text-align: center;
-      font-size: 10px;
+      font-size: 11px;
     }
     #status-board thead th:first-child { text-align: left; }
 
     #status-board tbody tr {
-      border-top: 1px solid var(--border);
+      border-top: 1px solid var(--rule);
       transition: background var(--transition);
     }
     #status-board tbody tr:hover { background: var(--ovl-1); }
     #status-board tbody tr.row-checked {
-      border-left: 3px solid var(--accent);
+      border-left: 2px solid var(--accent);
     }
 
     #status-board td {
-      padding: 4px 2px;
+      padding: var(--space-xs) 2px;
       text-align: center;
       vertical-align: middle;
     }
@@ -450,23 +427,23 @@
       font-weight: 600;
       font-size: 11px;
       color: var(--text-secondary);
-      padding-left: 2px;
+      padding-left: var(--space-xs);
       white-space: nowrap;
     }
     #status-board .country-cell-inner {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: var(--space-xs);
     }
     #status-board .country-flag {
       height: 15px;
       width: auto;
       border-radius: 1px;
-      box-shadow: 0 0 1px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 0 0 1px var(--rule-2);
       flex-shrink: 0;
     }
 
-    /* 활성 셀 */
+    /* 몰 타일. 안 고름 = 헤어라인 타일, 고름 = 눌린 코발트 워시, 지금 보는 몰 = 코발트 면 */
     .platform-cell {
       cursor: pointer;
       user-select: none;
@@ -476,20 +453,21 @@
       flex-direction: column;
       align-items: center;
       gap: 2px;
-      padding: 4px 2px;
-      border-radius: 5px;
-      border: 1px solid transparent;
+      padding: var(--space-xs) 2px;
+      border-radius: var(--radius);
+      border: 1px solid var(--rule);
+      background: var(--bg-panel);
       outline: none;
-      transition: background var(--transition), border-color var(--transition);
+      transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
     }
-    .platform-cell:hover .cell-inner { background: rgba(59,130,246,0.1); }
+    .platform-cell:hover .cell-inner { background: var(--paper-2); border-color: var(--rule-2); }
     /* 선택 = 눌린 타일. 체크박스를 없앤 자리를 색·테두리·안쪽 그림자가 대신한다. */
     .platform-cell .cell-inner.checked {
-      background: rgba(59,130,246,0.18);
+      background: var(--accent-wash);
       border-color: var(--accent);
-      box-shadow: inset 0 1px 3px rgba(0,0,0,0.45);
+      box-shadow: var(--shadow-key-press);
     }
-    .platform-cell .cell-inner:focus-visible { border-color: var(--accent); }
+    .platform-cell .cell-inner:focus-visible { border-color: var(--accent); outline: 2px solid var(--focus); outline-offset: 1px; }
     /* 쇼핑몰은 이름 대신 로고로 보여준다. 로고 파일이 아직 없는 몰만 이름으로 남는다.
        ⚠ 밝은 타일을 꼭 깔아야 한다 — 아임웹 로고는 평균 밝기 15/255 의 사실상 검정이라
        어두운 배경에 그냥 올리면 아무것도 안 보인다. 브랜드 색은 건드리지 않는 방법이다. */
@@ -509,9 +487,13 @@
     }
     .platform-cell:hover .plat-logo { opacity: 0.75; }
     .platform-cell .cell-inner.checked .plat-logo { filter: none; opacity: 1; }
+    /* 어둡게: 아임웹 로고는 검은 판이라 투명도만 낮추면 바탕에 묻혀 검은 구멍이 된다.
+       대비를 줄여 검정을 회색으로 올린다 — 밝게의 '회색 칸'과 같은 꺼짐 표시 */
+    :root[data-theme="dark"] .platform-cell .cell-inner:not(.checked) .plat-logo { filter: grayscale(1) contrast(0.45) brightness(1.35); opacity: 0.75; }
+    :root[data-theme="dark"] .platform-cell:hover .cell-inner:not(.checked) .plat-logo { opacity: 0.9; }
 
     .platform-cell .plat-name {
-      font-size: 9px;
+      font-size: 10px;
       color: var(--text-muted);
       white-space: nowrap;
     }
@@ -520,31 +502,39 @@
        켜진 칸에만 보인다 — 꺼진 칸은 폼이 없다. */
     .platform-cell.viewing .cell-inner.checked {
       background: var(--accent);
-      box-shadow: 0 2px 6px rgba(59, 130, 246, 0.35);
+      border-color: var(--accent-hover);
+      box-shadow: none;
     }
-    .platform-cell.viewing .cell-inner.checked .plat-name { color: #fff; }
+    .platform-cell.viewing .cell-inner.checked .plat-name { color: var(--accent-ink); }
 
-    /* 비활성 셀 */
+    /* 비활성 셀 — 몰이 없는 자리. 꺼진 트레이 조각만 남긴다 */
     .inactive-cell {
-      background: var(--inactive-bg);
-      opacity: 0.3;
+      position: relative;
       cursor: not-allowed;
+    }
+    .inactive-cell::before {
+      content: '';
+      position: absolute;
+      inset: 4px 2px;
+      border: 1px dashed var(--rule);
+      border-radius: var(--radius);
+      background: var(--paper-3);
     }
 
     /* 자동 생성 SKU(vu-suggest applyGeneratedSku) — 몰에 있는 SKU 와 구분되게 */
-    input.vu-generated { font-style: italic; color: #2563eb; }
+    input.vu-generated { font-style: italic; color: var(--accent); }
 
     /* ── 판매자 콘솔 아이콘 버튼 ── */
     .console-btn {
       width: 30px; height: 30px; padding: 0;
       display: inline-flex; align-items: center; justify-content: center;
-      border-radius: 8px;
-      border: 1px solid var(--ovl-3);
-      background: var(--ovl-1);
+      border-radius: var(--radius);
+      border: 1px solid var(--rule-2);
+      background: var(--bg-panel);
       cursor: pointer;
-      transition: background var(--transition);
+      transition: background var(--transition), border-color var(--transition);
     }
-    .console-btn:hover { background: var(--ovl-3); }
+    .console-btn:hover { background: var(--paper-2); border-color: var(--input-border); }
     .console-btn img {
       width: 20px; height: 20px;
       object-fit: contain;
@@ -554,67 +544,22 @@
       box-sizing: border-box;
     }
 
-    /* ── 실행 버튼 ── */
+    /* ── 실행 버튼 (입력 확인 = 무늬 없는 키, 일괄 등록 = 코발트 키). 색·그림자·누름은 theme.css .vu-key ── */
     #btn-run {
       width: 100%;
+      margin-top: 12px;
       padding: 9px;
-      background: var(--btn-face);
-      color: var(--btn-text);
-      border: none;
-      border-radius: var(--radius);
       font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background var(--transition), transform 0.05s;
-      letter-spacing: 0.04em;
     }
-    #btn-run:hover { background: var(--accent-hover); }
-    #btn-run:active { transform: scale(0.98); }
-    #btn-run:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    /* ── 일괄 등록 · 일괄 수정 버튼 ── */
-    #btn-bulk-register, #btn-bulk-edit {
+    #btn-bulk-register {
       width: 100%;
+      margin-top: var(--space-sm);
       padding: 10px;
-      background: linear-gradient(135deg, #2563eb, #7c3aed);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius);
       font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all var(--transition);
-      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
-      letter-spacing: 0.04em;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
-    }
-    #btn-bulk-register:hover {
-      background: linear-gradient(135deg, #1d4ed8, #6d28d9);
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.45);
-      transform: translateY(-1px);
-    }
-    #btn-bulk-register:active, #btn-bulk-edit:active { transform: translateY(0); }
-    #btn-bulk-register:disabled, #btn-bulk-edit:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      box-shadow: none;
-      transform: none;
-    }
-    /* 수정은 등록과 색을 달리한다 — 모드가 바뀌어도 같은 자리라 눌러 놓고 헷갈리지 않게. */
-    #btn-bulk-edit {
-      background: linear-gradient(135deg, #059669, #0d9488);
-      box-shadow: 0 2px 6px rgba(5, 150, 105, 0.35);
-    }
-    #btn-bulk-edit:hover {
-      background: linear-gradient(135deg, #047857, #0f766e);
-      box-shadow: 0 4px 12px rgba(5, 150, 105, 0.45);
     }
 
     /* ── SECTION 8 (우측 — 자세히 보기) ── */
@@ -625,11 +570,35 @@
       overflow: hidden;
       min-width: 380px;
     }
+    #section8-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--rule);
+      background: var(--paper-2);
+      color: var(--text-primary);
+      flex-shrink: 0;
+    }
+    #sec8-desc { font-family: var(--font-display); font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+    .sec8-tools { display: flex; gap: 6px; align-items: center; }
+    .sec8-btn {
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--radius);
+      border: 1px solid var(--rule-2);
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: var(--font-body);
+      font-size: 11px;
+      cursor: pointer;
+      transition: background var(--transition), color var(--transition);
+    }
+    .sec8-btn:hover { background: var(--ovl-1); color: var(--text-primary); }
 
     #section8-body {
       flex: 1;
       min-height: 0;
-      padding: 14px 16px;
+      padding: 14px var(--space-md);
       display: flex;
       gap: 12px;
     }
@@ -642,12 +611,15 @@
       flex-direction: column;
       gap: 12px;
     }
+    /* 등록 폼 iframe — 깎은 패널(.vu-cut) */
+    #form-frame { width: 100%; flex: 1; min-height: 420px; margin-top: 0; }
+    #card-area { flex-direction: column; gap: 12px; }
 
-    /* ── 로그 윈도우 ── */
+    /* ── 로그 윈도우 — 줄은 고정폭 ── */
     #log-window {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: var(--space-xs);
       max-height: 200px;
       overflow-y: auto;
       flex-shrink: 0;
@@ -655,10 +627,12 @@
 
     .log-entry {
       display: flex;
-      gap: 8px;
+      gap: var(--space-sm);
       align-items: flex-start;
-      padding: 5px 8px;
-      border-radius: 4px;
+      padding: 5px var(--space-sm);
+      border-radius: var(--radius);
+      border: 1px solid var(--rule);
+      font-family: var(--font-mono);
       font-size: 12px;
       animation: fadeIn 0.2s ease;
     }
@@ -666,70 +640,25 @@
 
     .log-entry .log-time {
       color: var(--text-muted);
-      font-size: 10px;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
       white-space: nowrap;
       padding-top: 1px;
-      min-width: 52px;
+      min-width: 58px;
     }
     .log-entry .log-icon { font-size: 12px; line-height: 1.4; }
     .log-entry .log-msg { flex: 1; line-height: 1.5; }
 
-    .log-entry.info  { background: rgba(59,130,246,0.06); color: var(--text-primary); }
-    .log-entry.ok    { background: rgba(34,197,94,0.07);  color: var(--log-ok); }
-    .log-entry.warn  { background: rgba(245,158,11,0.07); color: var(--log-warn); }
-    .log-entry.error { background: rgba(239,68,68,0.08);  color: var(--log-err); }
-
-    /* ── 상품 수정 카드 ── */
-    .product-card {
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-      animation: fadeIn 0.25s ease;
-    }
-    .product-card-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 9px 12px;
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border);
-    }
-    .product-card-header .platform-badge {
-      font-size: 10px;
-      font-weight: 600;
-      padding: 2px 7px;
-      border-radius: 10px;
-      background: rgba(59,130,246,0.15);
-      color: var(--accent);
-      letter-spacing: 0.05em;
-    }
-    .product-card-header .card-title {
-      flex: 1;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-primary);
-    }
-    .product-card-header .card-status {
-      font-size: 10px;
-      color: var(--text-muted);
-    }
-
-    .product-card-body { padding: 10px 12px; }
-
-    /* 일괄 수정 결과 카드 — 이번 일괄 수정의 결과만 모아 둔다(로그에도 같이 남는다). */
-    .bulk-edit-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-    .bulk-edit-rows li { font-size: 12px; line-height: 1.5; padding: 4px 8px; border-radius: 4px; overflow-wrap: anywhere; }
-    .bulk-edit-rows li.info  { background: rgba(59,130,246,0.06); color: var(--text-primary); }
-    .bulk-edit-rows li.ok    { background: rgba(34,197,94,0.07);  color: var(--log-ok); }
-    .bulk-edit-rows li.warn  { background: rgba(245,158,11,0.07); color: var(--log-warn); }
-    .bulk-edit-rows li.error { background: rgba(239,68,68,0.08);  color: var(--log-err); }
+    .log-entry.info  { background: var(--bg-panel);     color: var(--text-primary); }
+    .log-entry.ok    { background: var(--success-wash); color: var(--log-ok); }
+    .log-entry.warn  { background: var(--warn-wash);    color: var(--log-warn); }
+    .log-entry.error { background: var(--danger-wash);  color: var(--log-err); }
 
     /* ── 스크롤바 ── */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+    ::-webkit-scrollbar-thumb { background: var(--rule-2); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--input-border); }
 
     /* 빈 상태 */
     .empty-state {
@@ -741,9 +670,7 @@
       gap: 10px;
       color: var(--text-muted);
       font-size: 12px;
-      opacity: 0.6;
     }
-    .empty-state .empty-icon { font-size: 36px; }
   </style>
   <link rel="stylesheet" href="image-library.css" />
   <link rel="stylesheet" href="bulk-edit.css" />
@@ -758,16 +685,10 @@
     <button id="btn-back" title="런처로 돌아가기">← 런처로</button>
     <div id="app-title">VERY UP VER3</div>
     <div id="shell-status" role="status" aria-live="polite"></div>
-    <div style="display:flex;gap:6px;margin-left:auto;-webkit-app-region:no-drag;">
-      <button id="btn-theme" type="button" data-theme-toggle title="밝게 / 어둡게"
-        style="width:28px;height:28px;border-radius:50%;border:none;background:var(--ovl-2);color:var(--text-secondary);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;"
-        onmouseover="this.style.background='var(--ovl-3)'" onmouseout="this.style.background='var(--ovl-2)'">🌙</button>
-      <button onclick="require('electron').ipcRenderer.send('minimize-win')" title="최소화"
-        style="width:28px;height:28px;border-radius:50%;border:none;background:var(--ovl-2);color:#94a3b8;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;"
-        onmouseover="this.style.background='var(--ovl-3)'" onmouseout="this.style.background='var(--ovl-2)'">─</button>
-      <button onclick="require('electron').ipcRenderer.send('close-win')" title="닫기"
-        style="width:28px;height:28px;border-radius:50%;border:none;background:var(--ovl-2);color:#94a3b8;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;"
-        onmouseover="this.style.background='rgba(220,50,50,0.8)';this.style.color='#fff'" onmouseout="this.style.background='var(--ovl-2)';this.style.color='#94a3b8'">✕</button>
+    <div class="win-btns">
+      <button id="btn-theme" type="button" class="win-btn" data-theme-toggle title="밝게 / 어둡게"></button>
+      <button type="button" class="win-btn" onclick="require('electron').ipcRenderer.send('minimize-win')" title="최소화" aria-label="최소화">─</button>
+      <button type="button" class="win-btn win-close" onclick="require('electron').ipcRenderer.send('close-win')" title="닫기" aria-label="닫기">✕</button>
     </div>
   </div>
 
@@ -797,8 +718,8 @@
            '네이버 …'(콘솔 열기)가 따로 있었는데, 콘솔도 같은 계정으로 자동 로그인하게 된
            뒤로는 둘이 같은 일을 한다. 누르면 로그인하고 그 몰의 상품 목록까지 열어준다.
            네이버·아임웹은 앱이 로그인하지 않는다(API 전용) — 기본 브라우저로 목록 주소만 연다. -->
-      <div id="login-buttons" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 12px;">
-        <span style="font-size:11px;color:var(--text-muted);margin-right:2px;">판매자 콘솔</span>
+      <div id="login-buttons">
+        <span class="console-label">판매자 콘솔</span>
         <button type="button" class="console-btn" onclick="openSellerSite('naver')"
           title="네이버 스마트스토어 상품목록 (기본 브라우저)"><img src="logos/naver.png" alt="네이버" /></button>
         <button type="button" class="console-btn" onclick="openSellerSite('imweb')"
@@ -812,14 +733,13 @@
       </div>
 
       <!-- 최근 사진 불러오기 (KOREA / GLOBAL) -->
-      <div style="display:flex;gap:8px;margin-bottom:10px;">
-        <button class="load-photo-btn" id="btn-load-korea">🇰🇷 KOREA 사진 불러오기</button>
-        <button class="load-photo-btn" id="btn-load-global">🌐 GLOBAL 사진 불러오기</button>
+      <div class="photo-row">
+        <button class="load-photo-btn vu-key" id="btn-load-korea">Korea 사진 불러오기</button>
+        <button class="load-photo-btn vu-key" id="btn-load-global">Global 사진 불러오기</button>
       </div>
       <!-- 사진 미리보기 -->
-      <div id="photo-preview" style="display:none;margin-bottom:12px;text-align:center;">
-        <img id="photo-preview-img" alt="미리보기" title="오른쪽 [img] 이미지 목록에 끌어다 놓으면 대표 이미지가 됩니다" />
-        <div id="photo-preview-name" style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>
+      <div id="photo-preview" style="display:none;">
+        <div id="photo-preview-name"></div>
       </div>
 
       <!-- 현황판 -->
@@ -833,7 +753,8 @@
           <button type="button" class="board-preset" data-preset="none" title="모두 끄기">해제</button>
         </span>
       </div>
-      <table id="status-board" style="margin-top:8px;">
+      <div class="board-panel vu-cut">
+      <table id="status-board">
         <thead>
           <tr>
             <th>나라</th>
@@ -847,9 +768,10 @@
           <!-- JS로 렌더링 -->
         </tbody>
       </table>
+      </div>
 
       <!-- 상품 정보 (현황판 아래로 이동) -->
-      <div class="section-title" id="product-info-title" style="margin-top:16px;">상품 정보</div>
+      <div class="section-title" id="product-info-title">상품 정보</div>
       <div class="field-group">
         <!-- 차량 DB(카탈로그) 행으로 찾아 아래 칸을 모두 채운다(vu-suggest.js setDbRows · pickRow). 신규·수정 모두 보인다.
              '기아 P415' 처럼 단어 여러 개로 찾는다. 아임웹은 읽지 않는다. -->
@@ -955,7 +877,7 @@
           <label for="inp-cpid">쿠팡 상품ID<span class="mall-tags"></span></label>
           <input type="text" id="inp-cpid" inputmode="numeric" placeholder="이미 올라간 상품" />
         </div>
-        <!-- 변경 판매가 (단일 상품 수정 모드에서만). 일괄 수정이 몰 탭에 불러온 상품의 판매가로 넣고 저장한다 —
+        <!-- 변경 판매가 (단일 상품 수정 모드에서만). 6몰 표의 카드 칸에 '바뀐 값' 으로 들어가고 저장은 카드에서 한다 —
              네이버는 기본 판매가(옵션가 차액 유지), 쿠팡은 상품번호의 옵션, 아마존·이베이는 판매가. 비우면 그대로.
              목록은 국내 기준가 등급과 그 환율가, 이베이 표 판매가(vu-suggest). 차를 바꾸면 비운다. -->
         <div class="field mall-field edit-only" data-malls="naver coupang">
@@ -986,24 +908,24 @@
         </div>
         <div class="field new-only wide">
           <label for="inp-chart-html">상세페이지 조견표 HTML</label>
-          <textarea id="inp-chart-html" placeholder="사진 불러오기 버튼을 누르면 링크가 자동 입력됩니다" style="min-height:70px;"></textarea>
+          <textarea id="inp-chart-html" placeholder="사진 불러오기 버튼을 누르면 링크가 자동 입력됩니다"></textarea>
         </div>
       </div>
 
       <!-- 입력 확인 (신규등록 모드에서만 표시). 좌측 값은 칸을 바꿀 때마다 오른쪽 폼에 바로
            들어가므로 이 버튼은 넣는 버튼이 아니다 — 빠졌거나 어긋난 것을 로그로 보여 준다. -->
-      <button id="btn-run" style="margin-top:12px;">✔ 입력 확인</button>
-      <button id="btn-bulk-register" class="btn-bulk" style="margin-top:8px;">🚀 일괄 등록</button>
-      <!-- 일괄 수정 (단일 상품 수정 모드에서만 표시). 현황판에서 켠 몰마다 탭에 불러온 상품을 저장한다. -->
-      <button id="btn-bulk-edit" class="btn-bulk" style="margin-top:12px;display:none;">🛠 일괄 수정</button>
+      <button id="btn-run" class="vu-key">입력 확인</button>
+      <button id="btn-bulk-register" class="btn-bulk vu-key vu-key-accent">일괄 등록</button>
     </div><!-- /section7 -->
 
     <!-- ── SECTION 8 (우측 — 자세히 보기) ── -->
     <div id="section8">
-      <div id="section8-header" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg-card);flex-shrink:0;">
-        <span id="sec8-desc" style="font-size:12px;font-weight:600;color:var(--text-secondary);">신규등록 — 실행 로그</span>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <button id="btn-clear-log" title="로그 지우기" style="padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:11px;cursor:pointer;">비우기</button>
+      <div id="section8-header">
+        <span id="sec8-desc">신규등록: 실행 로그</span>
+        <div class="sec8-tools">
+          <!-- 수정 모드: 몰 탭을 보다가 여섯 몰 카드 표(mall-grid.js)로 돌아간다 -->
+          <button id="btn-grid-back" class="sec8-btn" hidden>← 6몰 표</button>
+          <button id="btn-clear-log" class="sec8-btn" title="로그 지우기">비우기</button>
         </div>
       </div>
       <div id="section8-body">
@@ -1011,11 +933,9 @@
           <!-- 로그 or 카드 -->
           <div id="log-window"></div>
           <!-- 선택 플랫폼 등록 폼 (iframe으로 index.html의 해당 탭 로드) -->
-          <iframe id="form-frame" title="등록 폼"
-            style="display:none;width:100%;flex:1;min-height:420px;border:1px solid var(--border);border-radius:8px;background:#0b1220;margin-top:0;"></iframe>
-          <div id="card-area" style="display:none; flex-direction:column; gap:12px;"></div>
+          <iframe id="form-frame" class="vu-cut" title="등록 폼" style="display:none;"></iframe>
+          <div id="card-area" style="display:none;"></div>
           <div id="empty-state" class="empty-state">
-            <div class="empty-icon">📋</div>
             <div id="empty-state-text">현황판에서 플랫폼을 클릭하면 등록 폼이 열립니다.</div>
           </div>
         </div>
@@ -1443,9 +1363,10 @@ const MALL_ON = {
 const MALL_NAME = { amazon: '아마존', 'amazon-us': '아마존 미국', 'amazon-jp': '아마존 일본',
                     ebay: '이베이', naver: '네이버', coupang: '쿠팡', own: '자사몰' };
 
+// 수정 모드는 6몰 표가 켠 몰과 상관없이 여섯 몰을 다 불러온다 — 열쇠(SKU · 쿠팡 상품ID) · 변경 판매가 칸도 다 보인다.
 function updateMallFields() {
   document.querySelectorAll('.mall-field').forEach(f => {
-    const on = (f.dataset.malls || '').split(/\s+/).filter(m => MALL_ON[m] && MALL_ON[m]());
+    const on = (f.dataset.malls || '').split(/\s+/).filter(m => MALL_ON[m] && (currentMode === 'edit' || MALL_ON[m]()));
     f.hidden = on.length === 0;
     const tags = f.querySelector('.mall-tags');
     if (tags) tags.textContent = on.length ? ' · ' + on.map(m => MALL_NAME[m]).join(' · ') : '';
@@ -1646,6 +1567,8 @@ function presetSelection(countries) {
     next[country] = {};
     for (const p of PLATFORMS[country]) next[country][p.type] = countries.includes(country) && p.active && !!p.name;
   }
+  // 아마존 탭은 한 번에 한 마켓만 올린다 — 미국·일본이 다 들어가는 조합(전체)은 미국 아마존을 기본으로 둔다.
+  if (next.USA?.open1 && next.JAPAN?.open1) next.JAPAN.open1 = false;
   return next;
 }
 
@@ -1694,7 +1617,7 @@ function setBoardSelection(next) {
   if (!changed) return;
   const frame = $('form-frame');
   if (!getSelectedTabs().length) {
-    if (frame) frame.style.display = 'none';
+    closeForms();
   } else if (frame && frame.style.display === 'block') {
     applyFilter();   // 보던 몰이 아직 켜져 있으면 그대로, 꺼졌으면 남은 첫 몰로
   } else {
@@ -1706,6 +1629,9 @@ function setBoardSelection(next) {
 
 // quiet: 여러 칸을 한꺼번에 바꿀 때(setBoardSelection) 폼 탭을 칸마다 옮기지 않는다 — 부른 쪽이 끝에 한 번 맞춘다.
 function handleCheck(country, type, isChecked, targetTab, { quiet = false } = {}) {
+  // 아마존 미국·일본은 둘 중 하나만 켠다(아마존 탭이 한 번에 한 마켓만 올린다). 하나를 켜면 다른 쪽을 끈다.
+  const otherAmazon = type === 'open1' && { USA: 'JAPAN', JAPAN: 'USA' }[country];
+  if (isChecked && otherAmazon && checked[otherAmazon]?.open1) handleCheck(otherAmazon, 'open1', false, null, { quiet: true });
   checked[country][type] = isChecked;
   onBoardSelectionChanged();
   syncCellUI(country, type);
@@ -1731,7 +1657,7 @@ function handleCheck(country, type, isChecked, targetTab, { quiet = false } = {}
     const tabs = getSelectedTabs();
     const frame = $('form-frame');
     if (tabs.length === 0) {
-      if (frame) frame.style.display = 'none';
+      closeForms();
       updateEmptyState();
     } else if (frame && frame.style.display === 'block') {
       applyFilter();
@@ -1845,7 +1771,7 @@ function syncFrame() {
 function updateRunButton(r) {
   if (!btnRun) return;
   const n = r && r.ok ? r.missed.length : 0;
-  btnRun.textContent = n ? `✔ 입력 확인 · 경고 ${n}건` : '✔ 입력 확인';
+  btnRun.textContent = n ? `입력 확인 · 경고 ${n}건` : '입력 확인';
 }
 
 // 탭 칸을 사람이 직접 고쳤는지 표시해 둔다. 프로그램이 쏜 이벤트는 isTrusted 가 false 라
@@ -2472,8 +2398,7 @@ function uncheckAllAndClearCards() {
   updateLangFields();
   updateMallFields();
   cardArea.innerHTML = '';
-  const frame = $('form-frame');
-  if (frame) frame.style.display = 'none';
+  closeForms();
   updateEmptyState();
 }
 
@@ -2557,6 +2482,10 @@ async function loadSeedPhoto(region) {
 }
 $('btn-load-korea').addEventListener('click', () => loadSeedPhoto('korea'));
 $('btn-load-global').addEventListener('click', () => loadSeedPhoto('global'));
+// 미리보기 그림은 빈 src 로 두지 않고 여기서 만든다 — 사진을 불러오기 전엔 상자째 숨어 있다
+$('photo-preview').prepend(Object.assign(document.createElement('img'), {
+  id: 'photo-preview-img', alt: '미리보기', title: '오른쪽 [img] 이미지 목록에 끌어다 놓으면 대표 이미지가 됩니다',
+}));
 // 미리보기는 data: URL 이라 끌 때 실제 파일 경로를 싣는다 — image-library.js 가 받아 대표 이미지로 쓴다.
 // 다른 앱의 페이지도 같은 형식을 실을 수 있어, 이 창에서 시작한 드래그의 경로를 기억해 두고 받는 쪽이 대조한다.
 $('photo-preview-img').addEventListener('dragstart', e => {
@@ -2604,6 +2533,7 @@ function applyFilter(preferTab) {
       doc.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       if (btn) btn.classList.add('active');
       markViewingCells(tabId);
+      $('btn-grid-back').hidden = currentMode !== 'edit';
     };
 
     let firstActiveBtn = null;
@@ -2664,7 +2594,7 @@ function openPlatformTab(targetTab, country) {
   if (targetTab === 'imwebHeadTab' && IMWEB_HEAD_SCOPE[country]) lastImwebCountry = country;
 
   if (!tabs.length) {
-    frame.style.display = 'none';
+    closeForms();
     updateEmptyState();
     return;
   }
@@ -2720,10 +2650,98 @@ function openDetailSidebar() {
 }
 
 /* ══════════════════════════════════════════════
+   단일 상품 수정 — 6몰 표 (폼 안의 mall-grid.js)
+   수정 모드의 기본 화면이다. 현황판 칸 · 카드 머리를 누르면 그 몰 탭, [← 6몰 표] 로 돌아온다.
+   본사몰 상품 찾기에서 상품을 고르면 여섯 몰을 한꺼번에 불러온다 — 칸에 글자를 칠 때는 안 부른다
+   (네이버 찾기는 상품 목록 전체를 훑는 무거운 조회다).
+══════════════════════════════════════════════ */
+function showMallGrid() {
+  const frame = $('form-frame');
+  if (!frame || currentMode !== 'edit') return;
+  frame.style.display = 'block';
+  $('btn-grid-back').hidden = true;
+  markViewingCells(null);
+  updateEmptyState();
+  const show = () => { try { frame.contentWindow.showMallGrid?.(); } catch (e) { /* 폼 스크립트 오류는 폼 쪽에서 드러난다 */ } };
+  const doc = frame.contentWindow && frame.contentWindow.document;
+  if (doc && doc.readyState === 'complete' && doc.querySelector('.tab-btn')) return show();
+  frame.onload = () => {
+    frame.dataset.ready = 'true';
+    syncFrameTheme();
+    setSection8Mode(currentMode, true);
+    syncFrame();
+    // 뜨는 사이 신규 모드로 바뀌었으면 표 대신 켠 몰의 폼(syncModeView 의 신규 쪽 — 이 onload 가 openPlatformTab 의 것을 덮었다).
+    // 그 사이 몰 탭을 열었으면(문서는 다 읽혀 openPlatformTab 이 바로 탭을 띄우고 onload 는 아직 이쪽 것일 때)
+    // [← 6몰 표] 가 보인다 — 그 탭을 표로 덮지 않는다.
+    const first = currentMode !== 'edit' && firstSelectedTab();
+    if (first) openPlatformTab(first.tab, first.country);
+    else if (currentMode !== 'edit') closeForms();
+    else if ($('btn-grid-back').hidden) show();
+  };
+  if (!frame.src || !frame.src.includes('index.html')) frame.src = `index.html?mode=${currentMode}`;
+}
+
+// 폼을 닫을 자리. 수정 모드에는 닫힌 상태가 없다 — 6몰 표로 간다.
+function closeForms() {
+  if (currentMode === 'edit') return showMallGrid();
+  const frame = $('form-frame');
+  if (frame) frame.style.display = 'none';
+}
+
+// 모드가 바뀐 뒤 오른쪽 화면을 맞춘다: 수정이면 6몰 표, 신규면 표 대신 켠 몰의 폼(없으면 닫기).
+function syncModeView() {
+  updateMallFields();
+  if (currentMode === 'edit') return showMallGrid();
+  $('btn-grid-back').hidden = true;
+  const frame = $('form-frame'), grid = frame?.contentWindow?.document?.getElementById('mallGridTab');
+  if (!grid || grid.style.display === 'none') return;
+  const first = firstSelectedTab();
+  if (first) openPlatformTab(first.tab, first.country);
+  else { frame.style.display = 'none'; updateEmptyState(); }
+}
+
+// 카드 머리 → 그 몰 탭. 현황판 칸을 누른 것과 같다(꺼져 있으면 켠다).
+function openGridMall(country, type) {
+  const plat = PLATFORMS[country]?.find(p => p.type === type), tab = plat && NAME_TO_TAB[plat.name];
+  if (!tab) return;
+  openDetailSidebar();
+  if (!checked[country][type]) return handleCheck(country, type, true, tab);
+  openPlatformTab(tab, country);
+  scheduleFrameSync();
+}
+
+// 좌측의 지금 열쇠로 6몰 표를 불러온다(상품 고르기 · 표의 [다시 불러오기]).
+function loadMallGrid() {
+  const grid = $('form-frame')?.contentWindow?.VUMallGrid;
+  if (currentMode !== 'edit' || !grid) return;
+  pushEditPrices();
+  const v = id => ($(id)?.value || '').trim();
+  grid.load({ no: bareNoOf(v('inp-no')), brand: v('inp-brand'), model: v('inp-carmodel'),
+    sku: v('inp-sku'), amzSku: v('inp-amz-sku'), cpid: v('inp-cpid') });
+}
+
+// 좌측 변경 판매가 → 통화가 맞는 카드 칸(네이버 · 쿠팡 원, 아마존 미국 · 이베이 달러, 아마존 일본 엔)에 '바뀐 값' 으로.
+// 틀린 값은 넣지 않고 알린다. 저장은 카드 · 표의 저장 버튼이 한다.
+function pushEditPrices() {
+  const grid = $('form-frame')?.contentWindow?.VUMallGrid;
+  if (currentMode !== 'edit' || !grid) return;
+  const prices = {};
+  for (const [currency, spec] of Object.entries(EDIT_PRICES)) {
+    const value = editPriceOf(currency);
+    if (value && (!spec.pattern.test(value) || !(Number(value) > 0) || Number(value) > Number.MAX_SAFE_INTEGER)) {
+      addLog(`${spec.label} "${value}" — 0보다 큰 ${spec.rule}로 입력하세요. 카드에 넣지 않았습니다.`, 'warn');
+      continue;
+    }
+    prices[currency] = value;
+  }
+  grid.setPrices(prices, { no: bareNoOf($('inp-no')?.value), bsa: skuBsa() });
+}
+
+/* ══════════════════════════════════════════════
    일괄 등록 (선택된 플랫폼 순차 실행)
 ══════════════════════════════════════════════ */
 let isBulkRunning = false;
-let bulkKind = '';   // 진행 중인 일: '일괄 등록' | '일괄 수정' (한 번에 하나만 돈다)
+let bulkKind = '';   // 진행 중인 일: '일괄 등록' (수정 저장은 6몰 표가 한다)
 // 일괄 등록의 시간 한도. 이베이는 이미지 호스팅이 끝나야 초안을 저장해서 몇 분씩 걸린다 — 넉넉히 잡는다. 넘기면 그 몰은 실패로 세고 다음 몰로 간다.
 // 예전에는 응답 없는 몰 하나가 '진행 중' 버튼을 영영 잠갔다. (테스트가 줄여 쓸 수 있게 객체로 둔다.)
 const bulkTiming = { stepMs: 10 * 60 * 1000, frameMs: 20 * 1000, pauseMs: 800 };
@@ -2824,13 +2842,13 @@ async function runBulkRegister() {
   if (amazonLeft) addLog(`⚠ 이번 일괄 등록은 아마존 ${amazonLeft === '일본' ? '미국' : '일본'}에만 올립니다. ${amazonLeft} 아마존은 올리지 않습니다 — ${amazonLeftHow}`, 'warn');
 
   const btnBulk = $('btn-bulk-register');
-  const originalText = btnBulk ? btnBulk.innerHTML : '🚀 일괄 등록';
+  const originalText = btnBulk ? btnBulk.innerHTML : '일괄 등록';
 
   isBulkRunning = true;
   bulkKind = '일괄 등록';
   if (btnBulk) {
     btnBulk.disabled = true;
-    btnBulk.innerHTML = '⏳ 일괄 등록 진행 중...';
+    btnBulk.innerHTML = '일괄 등록 진행 중...';
   }
 
   addLog(`========== 일괄 등록 시작 (총 ${targetPlatforms.length}개 플랫폼) ==========`, 'info');
@@ -2890,47 +2908,10 @@ async function runBulkRegister() {
 }
 
 /* ══════════════════════════════════════════════
-   일괄 수정 (단일 상품 수정 모드 — 선택된 플랫폼의 수정 저장을 순차 실행)
-   몰마다 그 탭에 '불러온 상품' 을 저장한다. 수정할 상품이 없는 몰은 저장 함수를 부르지 않고
-   EditItemMissingError 로 끝낸다 — 저장 함수에 맡기면 '먼저 불러오세요' 가 그 탭 로그에만 남았다.
-   셸이 대신 불러와서 저장하지는 않는다: 고친 것 없는 저장도 마켓에는 수정이다(쿠팡은 승인 심사를 다시 탄다).
+   변경 판매가 (단일 상품 수정 모드) — 6몰 표의 카드 칸에 넣는다(pushEditPrices). 예전 '일괄 수정' 버튼 ·
+   결과 카드는 6몰 표의 [저장] · [바뀐 몰 모두 저장] 과 카드마다의 결과 줄로 바뀌었다(10-29).
 ══════════════════════════════════════════════ */
-class EditItemMissingError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = 'EditItemMissingError';
-  }
-}
-
-// 수정 모드에서 현황판에서 켠 몰. 그 탭(tabId)의 저장 함수(fn)를 탄다.
-// 아임웹 B2B 는 2026-10-05 Open API 저장으로 옮겨 넣었다 — 판매가는 B2B 탭 값 그대로다
-// (B2B 가는 세트·개별·조합마다 달라 좌측 변경 판매가를 넣지 않는다).
-// currency: 그 몰이 읽는 좌측 변경 판매가 칸. 'market' 은 탭에 불러온 마켓의 통화(아마존 미국 USD · 일본 JPY).
-function bulkEditTargets() {
-  const targets = [];
-  if (checked.KOREA?.open1) targets.push({ name: '네이버', tabId: 'naverTab', country: 'KOREA', fn: 'registerNaver', currency: 'KRW' });
-  if (checked.KOREA?.open2) targets.push({ name: '쿠팡', tabId: 'coupangTab', country: 'KOREA', fn: 'registerCoupang', currency: 'KRW' });
-  if (checked.KOREA?.b2b) {
-    targets.push({ name: '아임웹 B2B몰', tabId: 'imwebTab', country: 'KOREA', fn: 'updateImwebB2bProduct' });
-  }
-  // 아마존 탭은 불러온 마켓 하나만 고친다. country 를 넘기지 않는다 — 넘기면 탭을 열며 마켓을 바꿔서,
-  // 불러온 상품과 마켓이 달라져 저장이 거부된다.
-  if (checked.USA?.open1 || checked.JAPAN?.open1) targets.push({ name: '아마존', tabId: 'amazonTab', country: null, fn: 'registerAmazon', currency: 'market' });
-  if (checked.USA?.open2) targets.push({ name: 'eBay 미국', tabId: 'ebayTab', country: 'USA', fn: 'ebayUpdate', what: '가격·판매 수량 수정', currency: 'USD' });
-  // 아임웹 자사몰도 불러온 구역 하나만 고친다(아마존과 같은 이유로 country 없음). 좌측 변경 판매가는 넣지 않는다 —
-  // 조합 가격이 최종가라 기본가만 바꾸면 조합은 그대로 남는다(B2B 와 같다). 탭 값 그대로 저장한다.
-  if (checked.KOREA?.own || checked.USA?.own || checked.JAPAN?.own) targets.push({ name: '아임웹 자사몰', tabId: 'imwebHeadTab', country: null, fn: 'updateImwebHead' });
-  return targets;
-}
-
-// 수정할 상품을 돌려준다. 없으면 던진다 — 일괄 수정은 이 예외로 그 몰을 '상품 없음' 으로 센다.
-function requireEditItem(target, win) {
-  const item = typeof win.editItemOf === 'function' ? win.editItemOf(target.tabId) : null;
-  if (!item) throw new EditItemMissingError(`수정할 상품이 없습니다 — ${target.name} 탭에서 상품을 먼저 불러오세요`);
-  return item;
-}
-
-// 좌측 '변경 판매가' 칸 — 통화마다 하나. 몰은 자기 통화 칸만 읽는다(bulkEditTargets 의 currency).
+// 좌측 '변경 판매가' 칸 — 통화마다 하나. 카드는 자기 통화 칸만 읽는다(mall-grid.js price).
 const EDIT_PRICES = {
   KRW: { id: 'inp-edit-krw', label: '변경 판매가 (원)',  pattern: /^\d+$/,                rule: '정수' },
   USD: { id: 'inp-edit-usd', label: '변경 판매가 (USD)', pattern: /^\d+(?:\.\d{1,2})?$/, rule: '소수 둘째 자리까지의 수' },
@@ -2945,197 +2926,10 @@ function editPriceOf(currency) {
   return el.value.replace(/[,\s]/g, '');
 }
 
-function formatPrice(value, currency) {
-  const n = Number(value);
-  if (String(value ?? '').trim() === '' || !Number.isFinite(n)) return String(value ?? '');
-  return n.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) + (currency === 'KRW' ? '원' : currency === 'JPY' ? '엔' : ' USD');
-}
-
-// 결과 줄의 판매가 부분. from 은 탭에 들어 있던 값(쿠팡은 고친 옵션마다), to 는 넣은 값이다.
-const pricesBefore = ({ from }) => [...new Set((from || []).map(v => String(v ?? '').trim()).filter(Boolean))];
-const priceUnchanged = priced => {
-  const before = pricesBefore(priced);
-  return before.length === 1 && Number(before[0]) === Number(priced.to);
-};
-function describePrice(priced) {
-  const { currency, to, note } = priced;
-  const before = pricesBefore(priced), after = formatPrice(to, currency);
-  const was = before.length ? before.map(v => formatPrice(v, currency)).join(' · ') : '없음';
-  return `${priceUnchanged(priced) ? `판매가 그대로 ${after}` : `판매가 ${was} → ${after}`}${note ? ` (${note})` : ''}`;
-}
-
 // 좌측 SKU 가 이베이 표에서 BSA 판인지. 쿠팡에서 같은 상품번호에 BSA·일반 옵션이 같이 있을 때 고른다. 모르면 null.
 function skuBsa() {
   const listing = window.VUSuggest?.listing?.($('inp-sku')?.value || '') || window.VUSuggest?.listing?.($('inp-amz-sku')?.value || '');
   return listing ? !!listing.bsa : null;
-}
-
-// 결과 카드. 이번 일괄 수정의 결과만 카드 영역 맨 위에 모은다(로그·헤더 상태줄에도 같이 남긴다).
-// bulkEditLive: 도는 동안의 카드 — 도중 모드 전환 거절도 여기에 적는다.
-let bulkEditLive = null;
-function bulkEditReport() {
-  let card = $('bulk-edit-result');
-  if (!card) {
-    card = document.createElement('div');
-    card.className = 'product-card';
-    card.id = 'bulk-edit-result';
-    card.innerHTML = `
-      <div class="product-card-header">
-        <span class="platform-badge">일괄 수정</span>
-        <span class="card-title">선택한 몰 수정 저장</span>
-        <span class="card-status" id="bulk-edit-status"></span>
-      </div>
-      <div class="product-card-body"><ul class="bulk-edit-rows" id="bulk-edit-rows"></ul></div>`;
-  }
-  cardArea.prepend(card);
-  $('bulk-edit-rows').innerHTML = '';
-  updateEmptyState();
-  const icons = { info: 'ℹ️', ok: '✅', warn: '⚠️', error: '❌' };
-  return {
-    row(msg, level = 'info') {
-      addLog(msg, level);
-      const li = document.createElement('li');
-      li.className = level;
-      li.textContent = `${icons[level] || ''} ${msg}`;
-      $('bulk-edit-rows').appendChild(li);
-    },
-    status(text) { $('bulk-edit-status').textContent = text; },
-  };
-}
-
-async function runBulkEdit() {
-  if (isBulkRunning) {
-    addLog(`이미 ${bulkKind}이 진행 중입니다.`, 'warn');
-    return;
-  }
-  // 신규 모드에서는 몰마다 같은 함수가 '등록' 으로 간다 — 버튼은 숨지만, 숨은 버튼을 부르는 길도 막는다.
-  if (currentMode !== 'edit') {
-    addLog('일괄 수정은 단일 상품 수정 모드에서만 할 수 있습니다.', 'warn');
-    return;
-  }
-  openDetailSidebar();
-  const report = bulkEditReport();
-  const targets = bulkEditTargets();
-  if (targets.length === 0) {
-    report.row('현황판에서 수정할 플랫폼을 먼저 선택하세요.', 'warn');
-    report.status('대상 없음');
-    return;
-  }
-  // 변경 판매가는 보내기 전에 전부 검사한다. 한 칸이라도 틀렸으면 아무 몰도 저장하지 않는다 — 몇 몰만
-  // 저장된 뒤 멈추면 어디까지 바뀌었는지 사람이 맞춰야 한다(상품 일괄 수정의 '요청을 전송하지 않았습니다' 와 같다).
-  const prices = {};
-  for (const [currency, spec] of Object.entries(EDIT_PRICES)) {
-    const value = editPriceOf(currency);
-    if (!value) continue;
-    let problem = '';
-    if (!spec.pattern.test(value) || !(Number(value) > 0) || Number(value) > Number.MAX_SAFE_INTEGER) problem = `0보다 큰 ${spec.rule}로 입력하세요`;
-    else if (currency === 'KRW' && targets.some(t => t.tabId === 'coupangTab') && Number(value) % 10 !== 0) problem = '쿠팡 판매가는 10원 단위여야 합니다';
-    if (problem) {
-      report.row(`${spec.label} "${value}" — ${problem}. 아무 몰도 저장하지 않았습니다.`, 'error');
-      report.status('중단');
-      return;
-    }
-    prices[currency] = value;
-  }
-  // 찾는 열쇠(SKU·상품ID)를 지금 좌측 값으로 맞춰 둔다. 도중에 늦게 들어가면 탭이 '불러온 상품과
-  // 칸이 다르다' 며 저장을 거부한다.
-  clearTimeout(frameSyncTimer);
-  frameSyncTimer = null;
-  fillFrame({ report: false });
-  // 판매가를 넣을 옵션을 고르는 상품번호·BSA 도 시작할 때 값으로 고정한다(도는 사이 좌측을 고쳐도 따라가지 않게).
-  const keyNo = bareNoOf($('inp-no')?.value), keyBsa = skuBsa();
-
-  const btn = $('btn-bulk-edit');
-  const originalText = btn ? btn.innerHTML : '🛠 일괄 수정';
-  isBulkRunning = true;
-  bulkKind = '일괄 수정';
-  bulkEditLive = report;
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '⏳ 일괄 수정 진행 중...';
-  }
-  report.status('진행 중...');
-  const priceList = Object.entries(prices).map(([currency, value]) => formatPrice(value, currency));
-  report.row(`일괄 수정 시작 (총 ${targets.length}개 플랫폼${priceList.length ? ` · 변경 판매가 ${priceList.join(' · ')}` : ''})`, 'info');
-  const ownOn = Object.keys(IMWEB_HEAD_SCOPE).filter(c => checked[c]?.own);
-  if (ownOn.length > 1) report.row(`아임웹 자사몰 칸이 ${ownOn.length}개 켜져 있지만 탭에 불러온 구역 하나만 고칩니다.`, 'info');
-
-  let successCount = 0, failCount = 0;
-  const failedNames = [], missingNames = [], pricedCurrencies = new Set();
-  try {
-    for (const [i, target] of targets.entries()) {
-      let result, label = '', priced = null;
-      try {
-        openPlatformTab(target.tabId, target.country);
-        const win = await waitForFormFunction(target.fn, bulkTiming.frameMs);
-        if (!win) throw new Error(`수정 폼이 ${bulkDuration(bulkTiming.frameMs)} 안에 준비되지 않았습니다(${target.fn} 없음)`);
-        const item = requireEditItem(target, win);
-        label = [item.id, item.market].filter(Boolean).join(' · ');
-        // 변경 판매가를 그 탭에 불러온 상품에 넣고 같은 저장으로 보낸다. 넣지 못하면(쿠팡에 그 번호 옵션이
-        // 없다 등) applyEditPrice 가 던진다 — 그 몰은 저장하지 않고 실패로 센다. 판매가만 빼고 저장하면
-        // 사람은 판매가까지 바뀐 줄 안다.
-        const currency = target.currency === 'market' ? (item.market === '일본' ? 'JPY' : 'USD') : target.currency;
-        if (currency && prices[currency]) {
-          if (typeof win.applyEditPrice !== 'function') throw new Error('이 탭은 판매가를 넣을 수 없습니다(applyEditPrice 없음)');
-          priced = { currency, ...win.applyEditPrice(target.tabId, prices[currency], { no: keyNo, bsa: keyBsa }) };
-          pricedCurrencies.add(currency);
-        }
-        const run = () => win[target.fn]();
-        addLog(`[${target.name}] ${label ? `${label} ` : ''}${target.what || '수정 저장'} 요청 전송 중...`, 'info');
-        // 저장 함수는 던지지 않기로 했지만, 던져도(폼 스크립트 오류 등) 실패로 세고 다음 몰로 간다.
-        const raw = await withBulkTimeout(Promise.resolve().then(run), bulkTiming.stepMs);
-        result = { ...readBulkResult(raw, '수정'), message: raw && raw.message };
-      } catch (err) {
-        result = { ok: false, missing: err instanceof EditItemMissingError, error: (err && err.message) || String(err) };
-      }
-      const what = label ? `${target.name} ${label}` : target.name;
-      const priceText = priced ? ` · ${describePrice(priced)}` : '';
-      if (result.ok) {
-        successCount++;
-        report.row(`[${what}] 수정 완료${priceText}${result.message ? ` — ${result.message}` : ''}`, 'ok');
-      } else {
-        failCount++;
-        failedNames.push(target.name);
-        // 바꾼 판매가는 탭의 상품에 들어간 채로 남는다 — 저장이 안 됐다는 것을 같이 적는다.
-        const unsaved = priced && !priceUnchanged(priced)
-          ? ` (판매가 ${formatPrice(priced.to, priced.currency)}: 탭에만 들어가 있고 저장되지 않았습니다)` : '';
-        if (result.missing) {
-          missingNames.push(target.name);
-          report.row(`[${what}] 상품 없음: ${result.error}`, 'error');
-        } else if (result.partial) {
-          report.row(`[${what}] 일부만 수정: ${result.error}${unsaved}`, 'warn');
-        } else {
-          report.row(`[${what}] 수정 실패: ${result.error}${unsaved}`, 'error');
-        }
-      }
-      if (i < targets.length - 1) await new Promise(r => setTimeout(r, bulkTiming.pauseMs));
-    }
-
-    const missingNote = missingNames.length ? ` · 그중 상품 없음 ${missingNames.length}건` : '';
-    report.row(`일괄 수정 완료 (성공: ${successCount}건, 실패: ${failCount}건${missingNote})`,
-               failCount === 0 ? 'ok' : (successCount > 0 ? 'warn' : 'error'));
-    if (missingNames.length) {
-      report.row(`수정할 상품이 없는 몰: ${missingNames.join(', ')} — 그 몰에 이 상품이 있는지 확인하고, 탭에서 불러온 뒤 다시 누르세요`, 'warn');
-    }
-    const otherFailed = failedNames.filter(n => !missingNames.includes(n));
-    if (otherFailed.length) report.row(`다시 확인할 몰: ${otherFailed.join(', ')} — 아래 로그에서 이유를 보세요`, 'warn');
-    // 적어 둔 판매가를 받은 몰이 하나도 없으면 알린다(아마존 탭에 다른 마켓 상품이 불러와져 있었다 등).
-    for (const [currency, value] of Object.entries(prices)) {
-      if (!pricedCurrencies.has(currency)) report.row(`${EDIT_PRICES[currency].label} ${formatPrice(value, currency)}: 넣은 몰이 없습니다 — 그 통화의 몰 탭에 상품을 불러왔는지 확인하세요`, 'warn');
-    }
-    report.status(failCount === 0 ? '완료' : `실패 ${failCount}건`);
-  } catch (globalErr) {
-    report.row(`일괄 수정 중단: ${globalErr.message}`, 'error');
-    report.status('중단');
-  } finally {
-    isBulkRunning = false;
-    scheduleFrameSync();   // 도는 동안 좌측에서 바꾼 값을 이제 넣는다
-    bulkEditLive = null;
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-    }
-  }
 }
 
 // 일괄 등록·수정 중에는 모드를 못 바꾼다. 남은 몰의 함수는 탭의 모드를 보고 갈라지므로(registerCoupang →
@@ -3147,9 +2941,7 @@ function refuseModeChangeDuringBulk(mode) {
   const radio = document.querySelector(`.mode-radio[value="${currentMode}"]`);
   if (radio) radio.checked = true;
   const goesTo = currentMode === 'new' ? '수정 저장' : '신규 등록';
-  const msg = `⚠ ${bulkKind} 중에는 모드를 바꿀 수 없습니다 — 끝난 뒤 바꾸세요. 도중에 바꾸면 남은 몰이 ${goesTo}으로 넘어갑니다.`;
-  if (bulkEditLive) bulkEditLive.row(msg, 'warn');
-  else addLog(msg, 'warn');
+  addLog(`⚠ ${bulkKind} 중에는 모드를 바꿀 수 없습니다 — 끝난 뒤 바꾸세요. 도중에 바꾸면 남은 몰이 ${goesTo}으로 넘어갑니다.`, 'warn');
   return true;
 }
 
@@ -3158,6 +2950,7 @@ document.querySelectorAll('.mode-radio').forEach(radio => {
   radio.addEventListener('change', () => {
     if (refuseModeChangeDuringBulk(radio.value)) return;
     setSection8Mode(radio.value);
+    syncModeView();
     ipc.send('veryup-set-mode', currentMode);
     scheduleFrameSync();   // 수정 모드는 찾는 열쇠(SKU·상품ID·상품번호)만 넘긴다
     openDetailSidebar();
@@ -3171,8 +2964,10 @@ document.querySelectorAll('.mode-label').forEach(lbl => {
 
 // 일괄 등록 버튼
 $('btn-bulk-register')?.addEventListener('click', runBulkRegister);
-// 일괄 수정 버튼
-$('btn-bulk-edit')?.addEventListener('click', runBulkEdit);
+// 6몰 표: [← 6몰 표] · 본사몰 상품 찾기에서 고르기(목록 선택만 — vu-suggest choose 가 vuChoosing 을 건다) · 변경 판매가
+$('btn-grid-back').addEventListener('click', showMallGrid);
+$('inp-db-search').addEventListener('change', e => { if (e.target.dataset.vuChoosing === '1') setTimeout(loadMallGrid, 150); });
+for (const { id } of Object.values(EDIT_PRICES)) $(id)?.addEventListener('change', pushEditPrices);
 
 // 입력 확인 버튼
 btnRun.addEventListener('click', () => {
@@ -3209,7 +3004,9 @@ ipc.on('veryup-log', (event, { message, level }) => {
 ipc.on('veryup-set-mode', (event, mode) => {
   // 메인 프로세스(런처 등)가 모드를 바꾸라고 해도 일괄 등록 중엔 거절하고, 메인의 기억을 지금 모드로 되돌린다.
   if (refuseModeChangeDuringBulk(mode)) { ipc.send('veryup-set-mode', currentMode); return; }
+  const was = currentMode;
   setSection8Mode(mode);
+  if (mode !== was) syncModeView();   // 같은 모드면 보던 몰 탭을 그대로 둔다
   scheduleFrameSync();
 });
 
@@ -3235,12 +3032,15 @@ document.querySelectorAll('.board-preset').forEach(btn => {
 const savedBoard = loadBoardSelection();
 if (savedBoard) setBoardSelection(savedBoard);
 updateBoardPresets();
+syncModeView();   // 수정 모드면 되살린 선택의 첫 몰 폼 대신 6몰 표
 // Reloads retain the original URL query; restore the latest mode from main.
 // Ignore a delayed reply if the user or an IPC event has already changed modes.
 const revisionAtLoad = modeRevision;
 ipc.invoke('veryup-get-mode').then(mode => {
   if ((mode === 'new' || mode === 'edit') && modeRevision === revisionAtLoad && !refuseModeChangeDuringBulk(mode)) {
+    const was = currentMode;
     setSection8Mode(mode);
+    if (mode !== was) syncModeView();
   }
 }).catch(err => console.warn('모드 불러오기 실패:', err));
 </script>

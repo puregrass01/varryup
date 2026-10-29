@@ -17,7 +17,10 @@ export function registerImageLibraryIPC({ app, ipcMain, dialog, output, upload }
     if (result.canceled || !result.filePaths.length) return { canceled: true };
     return { profile: get().configure(id, folder ? { folder: result.filePaths[0] } : { thumbnail: result.filePaths[0], seed: false }) };
   }));
-  ipcMain.handle('image-library-prepare', safe((event, { id }) => get().prepare(id, message => {
-    if (!event.sender.isDestroyed()) event.sender.send('image-library-progress', { id, message });
-  })));
+  // 요청한 프레임에만 보낸다 — 폼(iframe) 갤러리의 업로드 진행이 셸의 [img] 패널 상태 줄을 덮어쓰지 않게.
+  const progress = (event, id) => message => {
+    try { if (!event.sender.isDestroyed()) event.senderFrame?.send('image-library-progress', { id, message }); } catch { /* 프레임이 닫힘 */ }
+  };
+  ipcMain.handle('image-library-prepare', safe((event, { id }) => get().prepare(id, progress(event, id))));
+  ipcMain.handle('image-library-host-files', safe((event, { files }) => get().hostFiles(files, progress(event, 'files'))));
 }

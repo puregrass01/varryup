@@ -9,8 +9,9 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 #mode-bar { flex-wrap:wrap; gap:6px; }
 #mode-bar button.mode-label { font:inherit; font-size:12px; cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--text-secondary); }
 #mode-bar button.mode-label:hover { background:var(--ovl-1); }
-#mode-bar button.is-active, #mode-bar button.is-active:hover { background:var(--accent); border-color:var(--accent); color:white; }
-#mode-bar button.mode-label:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+/* 켜진 작업 탭 = 모드 라디오와 같은 표시(워시 + 코발트 테두리 · 글자) */
+#mode-bar button.is-active, #mode-bar button.is-active:hover { background:var(--accent-wash); border-color:var(--accent); color:var(--accent); box-shadow:var(--shadow-key-press); }
+#mode-bar button.mode-label:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
 /* 설정 묶음(환율 · API KEY)은 모드 바 오른쪽 끝 */
 #mode-bar .mode-settings { display:flex; gap:6px; margin-left:auto; }
 #bulk-edit-workspace, #fx-workspace {
@@ -30,70 +31,78 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
   flex-shrink: 0;
 }
 .be-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:6px; }
-.be-head h2 { font-size:17px; margin:0; }
+.be-head h2 { font-family:var(--font-display); font-size:17px; font-weight:600; margin:0; }
 .be-head span { font-size:12px; color:var(--text-secondary); }
-.be-help { font-size:12px; color:var(--text-secondary); margin:2px 0 4px; line-height:1.45; }
-.be-platforms,.be-tools,.be-pager { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:4px 0; }
-.be-platforms { gap:5px; margin-bottom:8px; }
+.be-help { font-size:12px; color:var(--text-secondary); margin:2px 0 var(--space-xs); line-height:1.45; }
+.be-platforms,.be-tools,.be-pager { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:var(--space-xs) 0; }
+.be-platforms { gap:5px; margin-bottom:var(--space-sm); }
 
 /* 입력칸·셀렉트·버튼을 같은 높이(32px)와 테마 색으로 맞춘다. 환율 탭(#fx-workspace)도 같은 모양을 쓴다. */
 :is(#bulk-edit-workspace, #fx-workspace) select,
 :is(#bulk-edit-workspace, #fx-workspace) input:not([type="checkbox"]) {
   box-sizing:border-box; height:32px; padding:0 10px; font:inherit; font-size:13px;
-  color:var(--text-primary); background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius);
+  color:var(--text-primary); background:var(--bg-input); border:1px solid var(--input-border); border-radius:var(--radius);
 }
-:is(#bulk-edit-workspace, #fx-workspace) input::placeholder { color:var(--text-muted); }
+:is(#bulk-edit-workspace, #fx-workspace) input::placeholder { color:var(--text-muted); font-family:var(--font-body); }
+/* 금액 칸(숫자 · 국내 기준가)은 기계 값이라 고정폭 */
+:is(#bulk-edit-workspace, #fx-workspace) input:is([type="number"], [inputmode="numeric"], [inputmode="decimal"]) { font-family:var(--font-mono); }
 :is(#bulk-edit-workspace, #fx-workspace) input[type="checkbox"] { width:15px; height:15px; margin:0; accent-color:var(--accent); cursor:pointer; }
 :is(#bulk-edit-workspace, #fx-workspace) button {
   box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; gap:6px;
   height:32px; padding:0 12px; font:inherit; font-size:13px; font-weight:500; white-space:nowrap;
-  color:var(--text-primary); background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius);
+  color:var(--text-primary); background:var(--bg-panel); border:1px solid var(--rule-2); border-radius:var(--radius);
   cursor:pointer; transition:background var(--transition), border-color var(--transition), color var(--transition);
 }
-:is(#bulk-edit-workspace, #fx-workspace) button:hover:not(:disabled) { background:var(--ovl-1); border-color:var(--text-secondary); }
+:is(#bulk-edit-workspace, #fx-workspace) button:hover:not(:disabled) { background:var(--ovl-1); border-color:var(--input-border); }
 :is(#bulk-edit-workspace, #fx-workspace) button:focus-visible,
 :is(#bulk-edit-workspace, #fx-workspace) select:focus-visible,
-:is(#bulk-edit-workspace, #fx-workspace) input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+:is(#bulk-edit-workspace, #fx-workspace) input:focus-visible { outline:2px solid var(--focus); outline-offset:1px; }
+/* 고른 몰 칩: 납작하게, 코발트 워시 */
 :is(#bulk-edit-workspace, #fx-workspace) button[aria-selected="true"],
-:is(#bulk-edit-workspace, #fx-workspace) .be-primary { color:#fff; background:var(--accent); border-color:var(--accent); }
-:is(#bulk-edit-workspace, #fx-workspace) button[aria-selected="true"]:hover:not(:disabled),
-:is(#bulk-edit-workspace, #fx-workspace) .be-primary:hover:not(:disabled) { background:var(--accent-hover); border-color:var(--accent-hover); }
-:is(#bulk-edit-workspace, #fx-workspace) .be-primary { font-weight:600; }
+:is(#bulk-edit-workspace, #fx-workspace) button[aria-selected="true"]:hover:not(:disabled) { color:var(--accent); background:var(--accent-wash); border-color:var(--accent); }
+/* 저장 버튼(.be-primary)만 코발트 키캡 — theme.css .vu-key 와 같은 모양 */
+:is(#bulk-edit-workspace, #fx-workspace) .be-primary {
+  font-family:var(--font-display); font-weight:600; color:var(--accent-ink); background:var(--accent); border-color:var(--accent-hover);
+  box-shadow:var(--shadow-key-accent); transition:transform var(--dur-micro) ease-out, box-shadow var(--dur-micro) ease-out, background var(--transition);
+}
+:is(#bulk-edit-workspace, #fx-workspace) .be-primary:hover:not(:disabled) { background:var(--accent-hover); border-color:var(--accent-hover); transform:translateY(-1px); }
+:is(#bulk-edit-workspace, #fx-workspace) .be-primary:active:not(:disabled) { transform:translateY(2px); box-shadow:var(--shadow-key-press); }
+/* 꺼진 칸: 흐리게(opacity) 하면 글자 대비가 무너진다 — 트레이 색 + 흐린 글자 */
 :is(#bulk-edit-workspace, #fx-workspace) button:disabled,
 :is(#bulk-edit-workspace, #fx-workspace) input:disabled,
-:is(#bulk-edit-workspace, #fx-workspace) select:disabled { opacity:.5; cursor:default; }
+:is(#bulk-edit-workspace, #fx-workspace) select:disabled { color:var(--text-muted); background:var(--paper-3); border-color:var(--rule); box-shadow:none; cursor:default; }
 
 #bulk-edit-workspace .be-platforms button { height:34px; padding:0 10px; font-weight:600; }
-.be-platform-logo { width:18px; height:18px; object-fit:contain; background:#ffffff; border-radius:3px; padding:1px; box-sizing:border-box; flex-shrink:0; }
+.be-platform-logo { width:18px; height:18px; object-fit:contain; background:var(--logo-tile); border-radius:3px; padding:1px; box-sizing:border-box; flex-shrink:0; }
 .be-platform-logo-wide { width:auto; max-width:36px; }
 #be-api-query { flex:0 1 380px; min-width:220px; }
 /* 필터 레일: 표 왼쪽 180px, 표 안 검색이 맨 위, 칸은 세로로 쌓고 폭을 채운다. 높이가 모자라면 레일만 스크롤한다.
    padding 은 포커스 테두리(2px+1px)가 스크롤 칸에 잘리지 않게 둔다. */
 .be-body { display:flex; gap:12px; flex:1 1 0; min-height:90px; }
 /* 칸 사이를 좁게 잡아 1200x800 창에서 여섯 칸이 스크롤 없이 들어간다. */
-.be-filters { display:flex; flex-direction:column; gap:4px; flex:0 0 180px; min-height:0; overflow-y:auto; padding:3px; box-sizing:border-box; }
+.be-filters { display:flex; flex-direction:column; gap:var(--space-xs); flex:0 0 180px; min-height:0; overflow-y:auto; padding:3px; box-sizing:border-box; }
 .be-filters label { display:flex; flex-direction:column; gap:2px; font-size:12px; line-height:1.25; color:var(--text-secondary); }
 .be-filters select, .be-filters input[type="search"] { width:100%; }
 
 /* 작업 줄은 오른쪽 끝의 저장 묶음뿐이다(현재가·이미지는 보이는 쪽을 자동으로 읽는다). 판매가·이미지 입력은 표 머리 아래 줄(.be-th-tools).
    (선택은 표 머리의 전체선택으로 한다.) */
 .be-actions {
-  display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px; margin:8px 0 4px; padding:8px 10px;
-  background:var(--sunk); border:1px solid var(--border); border-radius:8px;
+  display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-sm) 18px; margin:var(--space-sm) 0 var(--space-xs); padding:var(--space-sm) 10px;
+  background:var(--sunk); border:1px solid var(--border); border-radius:var(--radius-md);
 }
 .be-group { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
 .be-group-end { margin-left:auto; }
 .be-unit { font-size:12px; font-weight:600; color:var(--text-secondary); min-width:28px; }
 /* 열 머리 아래 입력 줄: 칸 폭 안에서 줄을 바꿔 쌓는다(판매가 열 [칸][통화] / [값 출처][가격 적용], 사진 열 [URL] / [방식][이미지 적용]). */
-.be-table .be-th-tools td { padding:4px 8px 8px; background:var(--bg-panel); vertical-align:top; }
-.be-tool { display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
+.be-table .be-th-tools td { padding:var(--space-xs) var(--space-sm) var(--space-sm); background:var(--paper-2); vertical-align:top; }
+.be-tool { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-xs); }
 .be-tool select, .be-tool button { flex:1 1 auto; }
 #be-image-op { flex:1 1 0; min-width:0; }   /* 사진 열: [방식][이미지 적용] 을 한 줄에 — 남는 폭은 방식 칸이 갖는다 */
 #be-image-apply { flex:none; }
 /* width 를 auto 로 두면 숫자 칸의 기본 폭(약 170px)이 열 최소 폭이 되어 1200px 창에서 표가 넘친다 — 72px 에서 늘어나게만 한다. */
-#be-value { width:72px; flex:1 0 72px; }
+#be-value { width:72px; flex:1 0 72px; font-family:var(--font-mono); }
 #be-image-value { width:100%; }
-.be-state { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:4px 16px; margin:2px 0 6px; }
+.be-state { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:var(--space-xs) var(--space-md); margin:2px 0 6px; }
 .be-state .be-help { margin:0; }
 .be-th-check-label { display:inline-flex; align-items:center; gap:5px; cursor:pointer; user-select:none; font-size:12px; font-weight:600; }
 .be-scroll {
@@ -101,7 +110,7 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
   min-width: 0;
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
 }
 @media (max-height: 520px) {
   #bulk-edit-workspace { overflow-y: auto; }
@@ -112,29 +121,31 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 /* 머리 두 줄(열 이름 · 입력)을 함께 붙여 둔다 — 표를 내려도 입력이 보인다. 낮은 창(최소 640px)에서는 행 볼 자리를
    남기려고 예전처럼 열 이름 줄만 붙인다. */
 .be-table thead { position:sticky; top:0; z-index:2; }
-.be-table th { background:var(--bg-panel); text-align:left; white-space:nowrap; font-size:12px; font-weight:600; color:var(--text-secondary); }
+.be-table th { background:var(--paper-2); text-align:left; white-space:nowrap; font-size:12px; font-weight:600; color:var(--text-secondary); }
 @media (max-height: 760px) {
   .be-table thead { position:static; }
   .be-table th { position:sticky; top:0; z-index:1; }
 }
-.be-table th,.be-table td { padding:10px 8px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.be-table th,.be-table td { padding:10px var(--space-sm); border-bottom:1px solid var(--border); vertical-align:middle; }
 .be-table th.be-check-column,.be-table td.be-check-column { width:1%; text-align:center; }
-.be-table img { width:60px; height:52px; object-fit:contain; border-radius:5px; background:white; }
+.be-table img { width:60px; height:52px; object-fit:contain; border-radius:5px; background:var(--logo-tile); }
 .be-table .be-title { min-width:150px; max-width:430px; line-height:1.45; }
-.be-table small { display:block; color:var(--text-secondary); margin-top:4px; }
-.be-table input[type="number"] { width:100px; }
-.be-table tr.be-dirty { background:rgba(37,99,235,.07); }
-.be-table .be-price { min-width:64px; }
+.be-table small { display:block; color:var(--text-secondary); margin-top:var(--space-xs); }
+.be-table input[type="number"] { width:100px; font-family:var(--font-mono); }
+/* 바뀐 행: 옅은 워시 + 왼쪽 코발트 선. 진한 워시는 선택 표시와 헷갈린다 */
+.be-table tr.be-dirty { background:color-mix(in oklch, var(--accent-wash) 45%, transparent); }
+.be-table tr.be-dirty > td:first-child { box-shadow:inset 3px 0 0 var(--accent); }
+.be-table .be-price { min-width:64px; white-space:nowrap; font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
 /* 상품번호 / SKU: 표준 번호를 굵게, SKU·몰 ID 는 작게. 긴 SKU 목록은 칸 안에서 줄바꿈한다. */
 .be-table .be-identity { min-width:120px; max-width:220px; }
-.be-table .be-no { font-weight:600; white-space:nowrap; }
-.be-table .be-no.be-missing { font-weight:400; color:var(--text-muted); }
-.be-table .be-sku { font-family:Consolas, 'Courier New', monospace; font-size:11.5px; overflow-wrap:anywhere; }
-.be-table .be-own-id { font-size:11px; color:var(--text-muted); overflow-wrap:anywhere; }
+.be-table .be-no { font-family:var(--font-mono); font-weight:600; white-space:nowrap; }
+.be-table .be-no.be-missing { font-family:var(--font-body); font-weight:400; color:var(--text-muted); }
+.be-table .be-sku { font-family:var(--font-mono); font-size:11.5px; overflow-wrap:anywhere; }
+.be-table .be-own-id { font-family:var(--font-mono); font-size:11px; color:var(--text-muted); overflow-wrap:anywhere; }
 /* 처리 결과는 낱말 중간에서 끊지 않는다('현재가 조/회 전'). 넓힌 폭은 상품명 칸 최소 폭에서 가져온다. */
 .be-table .be-result { min-width:90px; max-width:250px; white-space:normal; word-break:keep-all; overflow-wrap:anywhere; font-size:12px; }
 #be-status { min-height:20px; font-size:13px; font-weight:500; }
-.be-pager { justify-content:flex-end; margin-top:8px; }
+.be-pager { justify-content:flex-end; margin-top:var(--space-sm); }
 .be-pager span { min-width:48px; text-align:center; font-size:13px; color:var(--text-secondary); }
 /* 사진 열은 약 200px. 타일을 54px 로 줄여 한 줄에 3장씩 둔다. */
 .be-photo-column { width:200px; min-width:200px; }
@@ -152,13 +163,16 @@ body[data-workspace-view] .mode-radio:checked + .mode-label .dot { background:tr
 
 #bulk-edit-workspace .be-image-open { display:block; height:auto; padding:0; border:0; border-radius:5px; background:transparent; cursor:zoom-in; }
 #bulk-edit-workspace .be-image-open:hover:not(:disabled) { background:transparent; }
-#bulk-edit-workspace .be-image-open:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
-.be-image-viewer { width:min(1100px, 92vw); height:90vh; padding:0; border:1px solid var(--border); border-radius:10px; color:var(--text-primary); background:var(--bg-panel); }
+#bulk-edit-workspace .be-image-open:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+.be-image-viewer { width:min(1100px, 92vw); height:90vh; padding:0; border:1px solid var(--border); border-radius:var(--radius-lg); color:var(--text-primary); background:var(--bg-panel); box-shadow:var(--shadow-panel); }
 .be-image-viewer[open] { display:flex; flex-direction:column; }
-.be-image-viewer::backdrop { background:rgba(0,0,0,.7); }
+.be-image-viewer::backdrop { background:var(--scrim); }
 .be-image-viewer-bar { display:flex; align-items:center; gap:10px; padding:12px; border-bottom:1px solid var(--border); }
 .be-image-viewer-bar strong { flex:1; overflow-wrap:anywhere; }
-.be-image-viewer-scroll { flex:1; min-height:0; overflow:auto; padding:12px; background:#fff; text-align:center; }
+.be-image-viewer-scroll { flex:1; min-height:0; overflow:auto; padding:12px; background:var(--logo-tile); text-align:center; }
 .be-image-viewer-scroll img { width:auto; max-width:100%; height:auto; max-height:none; vertical-align:top; }
 .be-image-viewer-scroll.be-original-size { text-align:left; }
 .be-image-viewer-scroll.be-original-size img { max-width:none; }
+@media (prefers-reduced-motion: reduce) {
+  :is(#bulk-edit-workspace, #fx-workspace) .be-primary:is(:hover, :active):not(:disabled) { transform:none; }
+}

@@ -200,6 +200,13 @@ const cases = [
       el.dispatchEvent(new Event('change', { bubbles: true }));
     });
   }, { brand: '벤츠', carmodel: 'S클래스', gen: '10세대 후기형', year: '26년 9월~', code: 'W223 F/L', no: '315', sku: '' }],   // 수정 모드는 SKU 가 찾는 열쇠라 만들지 않는다
+  ['수정 모드: 몰 상품명을 붙여 넣고 Enter → 상품명 낱말(광각 · 사이드 · 와이드미러)은 빼고 찾아 그 행을 고른다', async p => {
+    await p.locator('label[for="mode-edit"]').click();
+    await openDb(p);
+    await filter(p, 'inp-db-search', '제네시스 GV70 광각 사이드 와이드미러');
+    assert.equal((await shownRows(p)).length, 1, '한 행으로 좁혀져야 한다');
+    await p.keyboard.press('Enter');
+  }, { brand: '현대', no: 'H144', code: 'JK1', sku: 'GN0901NH144' }],   // 수정 모드 SKU = 그 차의 실제 리스팅(찾는 열쇠)
   ['수정 모드에서도 넥쏘를 고르면 찾는 열쇠(번호·SKU)가 채워진다', async p => {
     await p.locator('label[for="mode-edit"]').click();
     await openDb(p);

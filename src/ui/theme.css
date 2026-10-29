@@ -1,111 +1,230 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: Cobalt (by request) · dark: cobalt graphite (by request) · scope: app
+ * nav: the shell, kept · signature: the 6-mall edit grid, cut cards with one cobalt key per save · states: loading, empty, dirty, saving, error, disabled
+ * axes: light/grotesk-sans/cool · posture: restrained · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S3 R5 V3 · weakest: S, tokens alone read as any dev tool; specificity is carried by machine values in mono (SKU, price, ids) and the mall grid, not by decoration. No ASCII field, hero or photo in a work screen */
+/* Hallmark · dismissed 49 · the launcher buttons are whole app cards (name, one-line purpose, feature list) that wrap inside a fixed 3-card grid; nowrap would clip the Korean feature text */
+/* Hallmark · dismissed F7 · inputs share one recipe on purpose: a dense form where every text field is the same kind of box; roles differ by the mono face on machine values, not by fill */
+
 /**
  * VERY UP VER3 - Unified Theme Stylesheet (theme.css)
- * 공유 다크 / 라이트 테마 변수 정의.
- * index_up.html(부모 셸), index.html(등록 폼 iframe), index_seed.html, launcher.html 공통 사용.
+ * 밝게 = Cobalt(차가운 흰 종이 · 헤어라인 · 코발트 하나), 어둡게 = 같은 Cobalt 의 그래파이트 재질.
+ * 값은 여기만 가진다. 다른 파일은 이름(var(--…))만 쓴다 — 색·글꼴 리터럴 금지.
+ * index_up.html(부모 셸), index.html(등록 폼 iframe), index_seed.html 공통. 글꼴 파일은 fonts.css.
  */
 
+/* ── 밝게 (기본) ── */
 :root {
-  /* ── 레이아웃 & 기본 배경 (다크 테마 기본) ── */
-  --bg-base:        #0f172a;
-  --bg-color:       #0f172a;               /* style.css 호환용 */
-  --bg-panel:       #1e293b;
-  --panel-bg:       rgba(30, 41, 59, 0.7); /* style.css 호환용 */
-  --bg-card:        #263045;
-  --bg-input:       #0f172a;
-  --input-bg:       rgba(15, 23, 42, 0.6); /* style.css 호환용 */
-  --border:         #334155;
-  --panel-border:   var(--ovl-2);          /* style.css 호환용 */
-  --input-border:   var(--ovl-3);          /* style.css 호환용 */
+  /* 면: 종이 세 단 + 키 면 */
+  --bg-base:        oklch(96.2% 0.008 252);   /* 화면 바탕 */
+  --bg-panel:       oklch(98.6% 0.005 250);   /* 패널·카드 */
+  --bg-card:        oklch(98.6% 0.005 250);
+  --bg-input:       oklch(99.4% 0.003 250);   /* 입력칸 */
+  --paper-2:        oklch(96.2% 0.008 252);   /* 머리줄·줄무늬 한 단 */
+  --paper-3:        oklch(93% 0.011 252);     /* 꺼진 칸·트레이·비활성 */
 
-  /* ── 브랜드 & 상태 색상 ── */
-  --accent:         #3b82f6;
-  --primary:        #3b82f6;               /* style.css 호환용 */
-  --accent-hover:   #2563eb;
-  --primary-hover:  #2563eb;               /* style.css 호환용 */
-  --accent-success: #22c55e;
-  --accent-warn:    #f59e0b;
-  --warning:        #f59e0b;               /* style.css 호환용 */
-  --accent-danger:  #ef4444;
-  --danger:         #ef4444;               /* style.css 호환용 */
+  /* 선 */
+  --rule:           oklch(90% 0.009 252);     /* 1px 헤어라인 */
+  --rule-2:         oklch(83% 0.012 252);     /* 한 단 진한 선(키 테두리·구획) */
+  --input-border:   oklch(64% 0.016 256);     /* 입력칸 경계, 바탕 대비 3:1 이상 */
 
-  /* ── 텍스트 색상 ── */
-  --text-primary:   #f1f5f9;
-  --text-main:      #f8fafc;               /* style.css 호환용 */
-  --text-secondary: #94a3b8;
-  --text-dim:       #94a3b8;               /* style.css 호환용 */
-  --text-muted:     #475569;
-  --inactive-bg:    #1e293b;
-  --inactive-text:  #334155;
+  /* 글자 */
+  --text-primary:   oklch(21% 0.028 262);
+  --text-secondary: oklch(42% 0.020 259);
+  --text-muted:     oklch(50% 0.018 258);
+  --inactive-text:  oklch(50% 0.018 258);
 
-  /* ── 공통 크기 & 반경 ── */
+  /* 코발트 하나 */
+  --accent:         oklch(52% 0.19 258);
+  --accent-hover:   oklch(43% 0.20 262);
+  --accent-wash:    oklch(95% 0.028 256);     /* 선택 행·고른 칸 바탕 */
+  --accent-ink:     oklch(98.6% 0.005 250);   /* 코발트 면 위 글자 */
+  --focus:          oklch(52% 0.19 258);
+
+  /* 상태: 글자색 + 옅은 바탕. 글자는 바탕·워시 모두에서 4.5:1 이상 */
+  --accent-success: oklch(47% 0.12 150);
+  --success-wash:   oklch(95.5% 0.035 150);
+  --accent-warn:    oklch(50% 0.11 65);
+  --warn-wash:      oklch(95.5% 0.04 80);
+  --accent-danger:  oklch(50% 0.19 27);
+  --danger-wash:    oklch(95.5% 0.025 25);
+
+  /* 키캡 */
+  --key-face:       oklch(99.4% 0.003 250);
+  --key-edge:       oklch(80% 0.016 254);
+  --shadow-key:        0 3px 0 0 var(--key-edge), 0 6px 8px -4px oklch(21% 0.028 262 / 0.28), inset 0 1px 0 oklch(100% 0 0 / 0.9);
+  --shadow-key-accent: 0 3px 0 0 oklch(39% 0.16 260), 0 6px 8px -4px oklch(30% 0.12 260 / 0.45), inset 0 1px 0 oklch(100% 0 0 / 0.22);
+  --shadow-key-press:  inset 0 1px 2px oklch(21% 0.028 262 / 0.14);
+
+  /* 반투명 덧칠 & 그림자 */
+  --ovl-1:          oklch(21% 0.028 262 / 0.04);
+  --ovl-2:          oklch(21% 0.028 262 / 0.08);
+  --ovl-3:          oklch(21% 0.028 262 / 0.16);
+  --sunk:           oklch(21% 0.028 262 / 0.05);
+  --shadow-card:    0 1px 2px oklch(21% 0.028 262 / 0.06);
+  --shadow-panel:   0 1px 2px oklch(21% 0.028 262 / 0.06), 0 12px 32px -16px oklch(21% 0.028 262 / 0.22);
+  --scrim:          oklch(21% 0.028 262 / 0.7);  /* 대화상자 뒤 가림막(::backdrop) */
+
+  /* 로고 타일: 흰 패널 위에서 로고 경계가 보이도록 한 단 낮춘다 */
+  --logo-tile:      oklch(96.2% 0.008 252);
+
+  /* 글꼴 (fonts.css). 한글은 Plex KR 이 받는다 */
+  --font-body:      "IBM Plex Sans KR", "Malgun Gothic", system-ui, sans-serif;
+  --font-display:   "Familjen Grotesk", "IBM Plex Sans KR", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono:      "JetBrains Mono", "IBM Plex Sans KR", ui-monospace, Consolas, monospace;
+
+  /* 크기·반경·움직임 */
   --registration-width: 380px;
   --radius:         6px;
   --radius-sm:      6px;
-  --radius-md:      12px;
-  --radius-lg:      16px;
+  --radius-md:      8px;
+  --radius-lg:      8px;
+  --cut:            8px;     /* 작은 부품의 깎은 모서리 */
+  --cut-l:          16px;    /* 카드·패널의 깎은 모서리 */
   --transition:     0.15s ease;
+  --dur-micro:      120ms;
 
-  /* ── 반투명 오버레이 & 그림자 ── */
-  --ovl-1:          rgba(255, 255, 255, 0.05);
-  --ovl-2:          rgba(255, 255, 255, 0.10);
-  --ovl-3:          rgba(255, 255, 255, 0.16);
-  --sunk:           rgba(0, 0, 0, 0.22);
-  --shadow-panel:   0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  /* ── 옛 이름 → 위 값 (style.css·각 화면 호환). 여기서만 잇는다 ── */
+  --bg-color:       var(--bg-base);
+  --panel-bg:       var(--bg-panel);
+  --input-bg:       var(--bg-input);
+  --border:         var(--rule);
+  --panel-border:   var(--rule);
+  --primary:        var(--accent);
+  --primary-hover:  var(--accent-hover);
+  --warning:        var(--accent-warn);
+  --danger:         var(--accent-danger);
+  --text-main:      var(--text-primary);
+  --text-dim:       var(--text-secondary);
+  --inactive-bg:    var(--paper-3);
+  --btn-face:       var(--accent);           /* 주 실행 버튼 = 코발트 키 */
+  --btn-face-hover: var(--accent-hover);
+  --btn-text:       var(--accent-ink);
 
-  /* ── 버튼 & 로고 타일 ── */
-  --btn-face:       #111827;
-  --btn-face-hover: #000000;
-  --btn-text:       #ffffff;
-  --logo-tile:      #ffffff;
-
-  /* ── 로그 텍스트 색상 ── */
-  --log-ok:         #86efac;
-  --log-warn:       #fcd34d;
-  --log-err:        #fca5a5;
-  --log-system:     #94a3b8;
-  --log-process:    #60a5fa;
-  --log-success:    #34d399;
-  --log-error:      #f87171;
+  /* 로그 글자 */
+  --log-ok:         var(--accent-success);
+  --log-success:    var(--accent-success);
+  --log-warn:       var(--accent-warn);
+  --log-err:        var(--accent-danger);
+  --log-error:      var(--accent-danger);
+  --log-system:     var(--text-muted);
+  --log-process:    var(--accent);
 }
 
-/* ── 라이트 테마 (기본 모드) ── */
-:root[data-theme="light"], [data-theme="light"] {
-  --bg-base:        #eef2f7;
-  --bg-color:       #eef2f7;
-  --bg-panel:       #ffffff;
-  --panel-bg:       rgba(255, 255, 255, 0.94);
-  --bg-card:        #ffffff;
-  --bg-input:       #ffffff;
-  --input-bg:       #ffffff;
-  --border:         #d5dbe5;
-  --panel-border:   var(--ovl-2);
-  --input-border:   var(--ovl-3);
+/* ── 어둡게: 그래파이트. 코발트는 밝혀서 글자로도 읽히게, 그 위 글자는 어둡게 ── */
+:root[data-theme="dark"] {
+  --bg-base:        oklch(21% 0.024 262);
+  --bg-panel:       oklch(26.5% 0.026 262);
+  --bg-card:        oklch(26.5% 0.026 262);
+  --bg-input:       oklch(19% 0.024 262);
+  --paper-2:        oklch(29.5% 0.026 262);
+  --paper-3:        oklch(32.5% 0.026 262);
 
-  --accent:         #2563eb;
-  --primary:        #2563eb;
-  --accent-hover:   #1d4ed8;
-  --primary-hover:  #1d4ed8;
+  --rule:           oklch(35% 0.024 262);
+  --rule-2:         oklch(43% 0.026 260);
+  --input-border:   oklch(54% 0.024 258);
 
-  --text-primary:   #0f172a;
-  --text-main:      #0f172a;
-  --text-secondary: #52627a;
-  --text-dim:       #52627a;
-  --text-muted:     #7c8aa0;
-  --inactive-bg:    #e7ecf3;
-  --inactive-text:  #c3ccda;
+  --text-primary:   oklch(93% 0.010 250);
+  --text-secondary: oklch(81% 0.016 254);
+  --text-muted:     oklch(72% 0.022 256);
+  --inactive-text:  oklch(72% 0.022 256);
 
-  --ovl-1:          rgba(15, 23, 42, 0.04);
-  --ovl-2:          rgba(15, 23, 42, 0.08);
-  --ovl-3:          rgba(15, 23, 42, 0.16);
-  --sunk:           rgba(15, 23, 42, 0.05);
-  --shadow-panel:   0 4px 16px 0 rgba(15, 23, 42, 0.10);
-  --logo-tile:      #f1f4f8;
+  --accent:         oklch(70% 0.14 256);
+  --accent-hover:   oklch(76% 0.13 254);
+  --accent-wash:    oklch(31% 0.06 258);
+  --accent-ink:     oklch(21% 0.024 262);
+  --focus:          oklch(76% 0.13 254);
 
-  --log-ok:         #15803d;
-  --log-warn:       #a16207;
-  --log-err:        #b91c1c;
-  --log-system:     #64748b;
-  --log-process:    #1d4ed8;
-  --log-success:    #15803d;
-  --log-error:      #b91c1c;
+  --accent-success: oklch(80% 0.14 150);
+  --success-wash:   oklch(29% 0.05 150);
+  --accent-warn:    oklch(84% 0.13 80);
+  --warn-wash:      oklch(30% 0.05 75);
+  --accent-danger:  oklch(77% 0.13 25);
+  --danger-wash:    oklch(30% 0.06 25);
+
+  --key-face:       oklch(32.5% 0.026 262);
+  --key-edge:       oklch(15% 0.020 262);
+  --shadow-key:        0 3px 0 0 var(--key-edge), 0 6px 8px -4px oklch(0% 0 0 / 0.5), inset 0 1px 0 oklch(100% 0 0 / 0.07);
+  --shadow-key-accent: 0 3px 0 0 oklch(50% 0.15 258), 0 6px 8px -4px oklch(0% 0 0 / 0.5), inset 0 1px 0 oklch(100% 0 0 / 0.3);
+  --shadow-key-press:  inset 0 1px 2px oklch(0% 0 0 / 0.4);
+
+  --ovl-1:          oklch(93% 0.010 250 / 0.05);
+  --ovl-2:          oklch(93% 0.010 250 / 0.10);
+  --ovl-3:          oklch(93% 0.010 250 / 0.16);
+  --sunk:           oklch(0% 0 0 / 0.22);
+  --shadow-card:    0 1px 2px oklch(0% 0 0 / 0.35);
+  --shadow-panel:   0 1px 2px oklch(0% 0 0 / 0.35), 0 12px 32px -16px oklch(0% 0 0 / 0.6);
+  --scrim:          oklch(0% 0 0 / 0.7);
+
+  /* 로고는 밝은 바탕용이라 어둡게에서도 밝은 타일에 얹는다 */
+  --logo-tile:      oklch(93% 0.010 250);
+}
+
+/* ── 바탕 글꼴 ── */
+body { font-family: var(--font-body); }
+code, kbd, samp, pre { font-family: var(--font-mono); }
+/* 버튼·입력칸은 UA 글꼴(Arial · 맑은 고딕) 대신 물려받는다. :where 라 부품 규칙이 이긴다 */
+:where(button, input, select, textarea) { font-family: inherit; }
+/* 숫자 칸(가격 · 수량)은 기계 값이라 고정폭. 안내 글(placeholder)은 한글 문장이라 바탕 글꼴 */
+:where(input[type="number"], input[inputmode="numeric"], input[inputmode="decimal"]) { font-family: var(--font-mono); }
+:where(input, textarea)::placeholder { color: var(--text-muted); font-family: var(--font-body); }
+
+/* 키보드 초점은 어디서나 바로 보인다. :where 라 각 부품이 덮어쓸 수 있다 */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ── .vu-cut: 카드·패널 (두 모서리 깎기, 못 하면 둥근 모서리) ── */
+.vu-cut {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-card);
+}
+@supports (corner-shape: bevel) {
+  .vu-cut {
+    border-radius: var(--cut-l) 4px var(--cut-l) 4px;
+    corner-shape: bevel round bevel round;
+  }
+}
+
+/* ── .vu-key: 주 실행 버튼만. 아래 모서리가 있고 누르면 가라앉는다 ── */
+.vu-key {
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+  background: var(--key-face);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-weight: 600;
+  box-shadow: var(--shadow-key);
+  cursor: pointer;
+  transition: transform var(--dur-micro) ease-out, box-shadow var(--dur-micro) ease-out;
+}
+.vu-key.vu-key-accent {
+  background: var(--accent);
+  border-color: var(--accent-hover);
+  color: var(--accent-ink);
+  box-shadow: var(--shadow-key-accent);
+}
+.vu-key:hover:not(:disabled) { transform: translateY(-1px); }
+.vu-key:active:not(:disabled) { transform: translateY(2px); box-shadow: var(--shadow-key-press); }
+.vu-key:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.vu-key:disabled,
+.vu-key.vu-key-accent:disabled {
+  background: var(--paper-3);
+  border-color: var(--rule);
+  color: var(--text-muted);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* 움직임 줄이기: 키는 제자리, 나머지 전환·애니메이션도 즉시 끝낸다 */
+@media (prefers-reduced-motion: reduce) {
+  .vu-key, .vu-key:hover:not(:disabled), .vu-key:active:not(:disabled) { transform: none; }
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
 }

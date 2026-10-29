@@ -36,7 +36,7 @@ try {
   async function expectMode(mode) {
     const isNew = mode === 'new';
     assert.equal(await page.locator(`#mode-${mode}`).isChecked(), true);
-    assert.equal(await page.locator('#sec8-desc').textContent(), isNew ? '신규등록 — 실행 로그' : '단일 상품 수정 — 상품 편집');
+    assert.equal(await page.locator('#sec8-desc').textContent(), isNew ? '신규등록: 실행 로그' : '단일 상품 수정: 상품 편집');
     assert.equal(await page.locator('#btn-clear-log').getAttribute('title'), isNew ? '로그 지우기' : '선택한 폼 모두 닫기');
     assert.equal(await page.locator('#btn-run').isVisible(), isNew);
     // 로그는 두 모드 모두 보인다(수정 저장 결과·판매자 콘솔·일괄 결과).
@@ -95,7 +95,8 @@ try {
   await page.locator('label[for="mode-new"]').click();
   await expectMode('new');
   assert.equal(await page.locator('#card-area').textContent(), '');
-  assert.equal(await page.locator('#form-frame').isVisible(), true);
+  // 수정 모드의 폼은 6몰 표였다 — 신규 모드엔 표가 없고 켠 몰도 없으니 폼을 닫는다(표가 아직 뜨는 중이면 뜬 뒤 닫는다).
+  await page.locator('#form-frame').waitFor({ state: 'hidden' });
   await page.locator('label[for="mode-edit"]').click();
   await expectMode('edit');
   assert.equal(await page.evaluate(() => window.modeMessages.at(-1).mode), 'edit');

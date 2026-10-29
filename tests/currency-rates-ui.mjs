@@ -71,6 +71,7 @@ try {
 
   // API-loaded edit prices take precedence over the unrelated catalog price.
   await page.locator('label[for="mode-edit"]').click();
+  await page.locator('#cell-USA-open1').click();   // 수정 모드는 6몰 표부터 — 현황판 칸이 아마존 탭을 연다
   const frame = page.frameLocator('#form-frame');
   await page.waitForFunction(() => !!document.getElementById('form-frame').contentDocument.getElementById('amzSku').value);
   await frame.locator('#amzLoadBtn').click();

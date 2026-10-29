@@ -138,7 +138,7 @@ try {
     return tab.querySelector('#coupangRegisterBtn').getBoundingClientRect().width / inner;
   });
   assert.ok(editRatio > 0.45 && editRatio <= 0.51, `수정 모드 쿠팡 저장 버튼 폭 ${(editRatio * 100).toFixed(1)}% — 50% 근처여야 한다`);
-  assert.equal(await page.locator('#image-library').isVisible(), false, '수정 모드에선 이미지 목록이 숨는다');
+  assert.equal(await page.locator('#image-library').isVisible(), true, '수정 모드에도 이미지 목록이 보인다(6몰 카드에 끌어 놓기)');
 
   assert.deepEqual(errors, []);
   console.log('PASS: 가운데 탭 없음 · 현황판 칸 열림 표시 · 이미지 목록 폼 오른쪽 · 신규 폼 칸 정리 · 짝 칸 25% · 이미지 목록 접으면 폭 반환 · 이베이 칸 줄 맞춤 · 카테고리(브랜드·차종 없음) 드러남 · Enter 로 폼 열기 · 수정 모드 상품ID 숨김 · 수정 모드 한 줄 칸 50%');

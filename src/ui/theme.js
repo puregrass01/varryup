@@ -14,14 +14,22 @@
     catch (e) { return 'light'; }
   };
 
+  // 버튼에는 누르면 갈 쪽을 그린다: 어두울 때 해, 밝을 때 달. 색은 버튼 글자색을 따른다.
+  const SVG = (d) => '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+  const ICON = {
+    dark: SVG('<circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1"/>'),
+    light: SVG('<path d="M13.5 9.6A5.6 5.6 0 0 1 6.4 2.5a5.6 5.6 0 1 0 7.1 7.1z"/>'),
+  };
+
   let onApply = null;
 
   function applyTheme(theme) {
     theme = theme === 'dark' ? 'dark' : 'light';
     document.documentElement.dataset.theme = theme;
     for (const btn of document.querySelectorAll('[data-theme-toggle]')) {
-      btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+      btn.innerHTML = ICON[theme];
       btn.title = theme === 'dark' ? '밝게 보기' : '어둡게 보기';
+      btn.setAttribute('aria-label', btn.title);
     }
     try { localStorage.setItem(KEY, theme); } catch (e) {}
     if (onApply) onApply(theme);   // iframe 을 가진 화면이 자기 쪽을 맞출 기회

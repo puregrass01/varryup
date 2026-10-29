@@ -1,51 +1,24 @@
-/* ══════════════════════════════════════════════════════════════
-   VU Product Table — Theme Harmonized Styling
-   Supports both Light (default) and Dark modes
-══════════════════════════════════════════════════════════════ */
-
-/* ── Dark Theme (Default & Fallback) ── */
+/* VU Product Table — 값은 theme.css 토큰만 쓴다(밝게·어둡게 둘 다 거기서 바뀐다). */
 :root {
-  --vu-pt-bg: var(--bg-panel, var(--panel-bg, #1e293b));
-  --vu-pt-filter-bg: var(--bg-card, var(--panel-bg, #202b3d));
-  --vu-pt-input-bg: var(--bg-input, var(--input-bg, #0f172a));
-  --vu-pt-border: var(--border, var(--panel-border, #334155));
-  --vu-pt-border-subtle: #293548;
-  --vu-pt-text: var(--text-primary, var(--text-main, #f1f5f9));
-  --vu-pt-text-muted: var(--text-secondary, var(--text-dim, #94a3b8));
-  --vu-pt-text-dim: var(--text-muted, #64748b);
-  --vu-pt-th-bg: #263045;
-  --vu-pt-th-text: #cbd5e1;
-  --vu-pt-td-bg: var(--bg-panel, var(--panel-bg, #1e293b));
-  --vu-pt-td-alt: #222d3f;
-  --vu-pt-hover: rgba(59, 130, 246, 0.15);
-  --vu-pt-selected: rgba(59, 130, 246, 0.25);
-  --vu-pt-accent: var(--accent, var(--primary, #3b82f6));
-  --vu-pt-accent-hover: var(--accent-hover, var(--primary-hover, #2563eb));
-  --vu-pt-btn-bg: #2563eb;
-  --vu-pt-btn-text: #ffffff;
-}
-
-/* ── Light Theme ── */
-:root[data-theme="light"],
-[data-theme="light"] {
-  --vu-pt-bg: var(--bg-panel, var(--panel-bg, #ffffff));
-  --vu-pt-filter-bg: var(--ovl-1, #f8fafc);
-  --vu-pt-input-bg: var(--bg-input, var(--input-bg, #ffffff));
-  --vu-pt-border: var(--border, var(--panel-border, #d5dbe5));
-  --vu-pt-border-subtle: #edf2f7;
-  --vu-pt-text: var(--text-primary, var(--text-main, #0f172a));
-  --vu-pt-text-muted: var(--text-secondary, var(--text-dim, #52627a));
-  --vu-pt-text-dim: var(--text-muted, #7c8aa0);
-  --vu-pt-th-bg: #f1f5f9;
-  --vu-pt-th-text: #1e293b;
-  --vu-pt-td-bg: #ffffff;
-  --vu-pt-td-alt: #f8fafc;
-  --vu-pt-hover: rgba(37, 99, 235, 0.06);
-  --vu-pt-selected: rgba(37, 99, 235, 0.12);
-  --vu-pt-accent: var(--accent, var(--primary, #2563eb));
-  --vu-pt-accent-hover: var(--accent-hover, var(--primary-hover, #1d4ed8));
-  --vu-pt-btn-bg: #2563eb;
-  --vu-pt-btn-text: #ffffff;
+  --vu-pt-bg: var(--bg-panel);
+  --vu-pt-filter-bg: var(--paper-2);
+  --vu-pt-input-bg: var(--bg-input);
+  --vu-pt-border: var(--rule);
+  --vu-pt-input-border: var(--input-border);
+  --vu-pt-border-subtle: var(--rule);
+  --vu-pt-text: var(--text-primary);
+  --vu-pt-text-muted: var(--text-secondary);
+  --vu-pt-text-dim: var(--text-muted);
+  --vu-pt-th-bg: var(--paper-2);
+  --vu-pt-th-text: var(--text-secondary);
+  --vu-pt-td-bg: var(--bg-panel);
+  --vu-pt-td-alt: var(--paper-2);
+  --vu-pt-hover: var(--ovl-1);
+  --vu-pt-selected: var(--accent-wash);
+  --vu-pt-accent: var(--accent);
+  --vu-pt-accent-hover: var(--accent-hover);
+  --vu-pt-btn-bg: var(--accent);
+  --vu-pt-btn-text: var(--accent-ink);
 }
 
 /* ── Product Table Component ── */
@@ -60,8 +33,8 @@
 .vu-product-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 8px;
-  padding: 8px 10px;
+  gap: 6px var(--space-sm);
+  padding: var(--space-sm) 10px;
   background: var(--vu-pt-filter-bg);
   border: 1px solid var(--vu-pt-border);
   border-radius: 6px;
@@ -86,21 +59,21 @@
   min-height: 26px;
   height: 26px;
   padding: 2px 7px;
-  border: 1px solid var(--vu-pt-border);
+  border: 1px solid var(--vu-pt-input-border);
   border-radius: 4px;
   background: var(--vu-pt-input-bg);
   color: var(--vu-pt-text);
   font: inherit;
   font-size: 11px;
   box-sizing: border-box;
-  outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color var(--transition);
 }
 
-.vu-product-filter select:focus,
-.vu-product-filter input:focus {
+.vu-product-filter select:focus-visible,
+.vu-product-filter input:focus-visible {
   border-color: var(--vu-pt-accent);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
 }
 
 .vu-product-search {
@@ -109,7 +82,7 @@
 
 /* 집계 카운트 라벨 */
 .vu-product-count {
-  padding: 6px 4px;
+  padding: 6px var(--space-xs);
   color: var(--vu-pt-text-muted);
   font-size: 11px;
   font-weight: 500;
@@ -215,6 +188,7 @@
 .vu-product-id {
   min-width: 100px;
   max-width: 160px;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-size: 11px;
   color: var(--vu-pt-text);
@@ -263,24 +237,24 @@
   font-weight: 600;
   white-space: nowrap;
   height: 24px;
-  transition: all 0.15s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: background var(--transition), border-color var(--transition), color var(--transition);
 }
 
 .vu-product-table button:hover:not(:disabled) {
   background: var(--vu-pt-accent-hover);
   border-color: var(--vu-pt-accent-hover);
-  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.25);
 }
 
+/* 꺼진 버튼은 트레이 색 + 흐린 글자(흐리게 하면 대비가 무너진다) */
 .vu-product-table button:disabled {
-  opacity: .45;
+  background: var(--paper-3);
+  border-color: var(--rule);
+  color: var(--text-muted);
   cursor: default;
-  box-shadow: none;
 }
 
 .vu-product-table :focus-visible {
-  outline: 2px solid var(--vu-pt-accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -290,7 +264,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: var(--space-sm);
   color: var(--vu-pt-text-muted);
   font-size: 11px;
 }
@@ -302,7 +276,7 @@
 .vu-product-pager button {
   background: var(--vu-pt-input-bg);
   color: var(--vu-pt-text);
-  border: 1px solid var(--vu-pt-border);
+  border: 1px solid var(--rule-2);
   font-weight: 500;
 }
 
@@ -314,7 +288,7 @@
 
 /* 오류 및 빈 상태 */
 .vu-product-error {
-  color: #ef4444;
+  color: var(--accent-danger);
   margin-top: 6px;
   font-size: 11px;
 }

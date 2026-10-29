@@ -1,12 +1,12 @@
 /* 일일 환율 자동 변경 패널 (fx-auto-price.js). 모드 바 '환율' 탭(#fx-workspace)에서 늘 펼쳐 둔다. 길면 탭 칸이 스크롤한다. */
-.fx-panel { flex-shrink:0; margin:0 0 8px; border:1px solid var(--border); border-radius:8px; background:var(--sunk); }
-.fx-summary { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; padding:7px 10px; font-size:13px; }
-.fx-title { margin:0; font-size:17px; font-weight:600; }
-.fx-chip { padding:1px 8px; border-radius:999px; font-size:11px; font-weight:600; border:1px solid var(--border); color:var(--text-secondary); }
+.fx-panel { flex-shrink:0; margin:0 0 var(--space-sm); border:1px solid var(--border); border-radius:var(--radius-md); background:var(--sunk); }
+.fx-summary { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-xs) 10px; padding:7px 10px; font-size:13px; }
+.fx-title { margin:0; font-family:var(--font-display); font-size:17px; font-weight:600; }
+.fx-chip { padding:1px var(--space-sm); border-radius:999px; font-size:11px; font-weight:600; border:1px solid var(--border); color:var(--text-secondary); }
 .fx-chip[data-state="on"] { color:var(--log-ok); border-color:currentColor; }
 .fx-chip[data-state="running"] { color:var(--accent); border-color:currentColor; }
 .fx-brief { font-size:12px; color:var(--text-secondary); min-width:0; overflow-wrap:anywhere; }
-.fx-body { display:flex; flex-direction:column; gap:8px; padding:4px 12px 12px; }
+.fx-body { display:flex; flex-direction:column; gap:var(--space-sm); padding:var(--space-xs) 12px 12px; }
 .fx-line { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; }
 .fx-label { font-size:12px; font-weight:600; color:var(--text-secondary); }
 .fx-check { display:inline-flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; user-select:none; }
@@ -14,13 +14,14 @@
 .fx-warn { margin:0; font-size:12px; line-height:1.5; color:var(--log-warn); }
 .fx-tiers { display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
 .fx-tier-table { border-collapse:collapse; font-size:13px; }
-.fx-tier-table th { padding:2px 10px 4px 0; text-align:left; font-size:12px; font-weight:600; color:var(--text-secondary); white-space:nowrap; }
+.fx-tier-table th { padding:2px 10px var(--space-xs) 0; text-align:left; font-size:12px; font-weight:600; color:var(--text-secondary); white-space:nowrap; }
 .fx-tier-table td { padding:2px 10px 2px 0; white-space:nowrap; }
 .fx-tier-table td input[type="text"] { width:150px; }
 .fx-tier-table .fx-preview, .fx-tier-table .fx-linked { font-size:12px; color:var(--text-secondary); font-variant-numeric:tabular-nums; }
+.fx-tier-table .fx-preview { font-family:var(--font-mono); }
 .fx-actions .fx-status { font-size:13px; font-weight:500; }
 .fx-dirty { font-size:12px; color:var(--log-warn); }
 .fx-last { display:flex; flex-direction:column; gap:2px; }
-.fx-imweb { display:flex; flex-direction:column; gap:6px; padding-top:8px; border-top:1px solid var(--border); }
-.fx-last p { margin:0; font-size:12px; line-height:1.5; font-variant-numeric:tabular-nums; }
-.fx-last .fx-last-head { font-weight:600; color:var(--text-secondary); }
+.fx-imweb { display:flex; flex-direction:column; gap:6px; padding-top:var(--space-sm); border-top:1px solid var(--border); }
+.fx-last p { margin:0; font-family:var(--font-mono); font-size:12px; line-height:1.5; font-variant-numeric:tabular-nums; }
+.fx-last .fx-last-head { font-family:var(--font-body); font-weight:600; color:var(--text-secondary); }

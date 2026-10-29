@@ -25,7 +25,8 @@ try {
         if (channel === 'ebay-preview') return { success: true, data: { sku: data.sku, offer: { marketplaceId: 'EBAY_US', title: data.title } } };
         if (channel === 'ebay-save-draft') return { success: true, data: { sku: data.sku, offerId: 'offer-1', status: 'DRAFT' } };
         if (channel === 'ebay-publish') return { success: true, data: { listingId: 'listing-1' } };
-        if (channel === 'ebay-load-product') return { success: true, data: { sku: data, inventory: { product: { title: 'Existing mirror' }, availability: { shipToLocationAvailability: { quantity: 5 } } }, offer: { offerId: 'offer-1', status: 'PUBLISHED', availableQuantity: 5, pricingSummary: { price: { value: '59.99', currency: 'USD' } } } } };
+        if (channel === 'ebay-update-images') { window.__ebTitle = data.title; return { success: true, data: { status: 'UPDATED' } }; }
+        if (channel === 'ebay-load-product') return { success: true, data: { sku: data, inventory: { product: { title: window.__ebTitle || 'Existing mirror' },availability: { shipToLocationAvailability: { quantity: 5 } } }, offer: { offerId: 'offer-1', status: 'PUBLISHED', availableQuantity: 5, pricingSummary: { price: { value: '59.99', currency: 'USD' } } } } };
         if (channel === 'ebay-update') return { success: true, data: { status: 'UPDATED' } };
         return { success: false, error: 'Offline test stub' };
       } } };
@@ -57,6 +58,21 @@ try {
   await page.locator('#ebEditPrice').fill('60.00'); await page.locator('#ebEditQuantity').fill('3'); await page.locator('#ebUpdate').click();
   await page.waitForFunction(() => window.__ebCalls.some(c => c.channel === 'ebay-update'));
   assert.deepEqual(await page.evaluate(() => window.__ebCalls.find(c => c.channel === 'ebay-update').data), { sku: 'OG-123-L', price: '60.00', quantity: '3' });
+  assert.equal(await page.evaluate(() => window.__ebCalls.some(c => c.channel === 'ebay-update-images')), false, '제목을 안 고쳤으면 inventory PUT 을 보내지 않는다');
+  // 제목: 불러온 값이 칸에 들어오고, 값을 넣고 input 만 보내면 update 가 집는다(그리드가 이렇게 묶는다).
+  await page.waitForFunction(() => !document.getElementById('ebUpdate').disabled);
+  assert.equal(await page.locator('#ebEditTitle').inputValue(), 'Existing mirror');
+  const setTitle = t => page.evaluate(t => { const el = document.getElementById('ebEditTitle'); el.value = t; el.dispatchEvent(new Event('input', { bubbles: true })); }, t);
+  await setTitle('x'.repeat(81));
+  const before = await page.evaluate(() => window.__ebCalls.length);
+  const tooLong = await page.evaluate(() => window.ebayUpdate()); assert.equal(tooLong.ok, false); assert.match(tooLong.error, /1~80자/);
+  assert.equal(await page.evaluate(() => window.__ebCalls.length), before, '80자 넘는 제목은 아무것도 보내지 않는다');
+  await setTitle('OpticGlass Right Mirror');
+  assert.equal((await page.evaluate(() => window.ebayUpdate())).ok, true);
+  assert.deepEqual(await page.evaluate(() => window.__ebCalls.find(c => c.channel === 'ebay-update-images').data),
+    { sku: 'OG-123-L', title: 'OpticGlass Right Mirror', expectedTitle: 'Existing mirror' });
+  assert.equal(await page.evaluate(() => window.__ebCalls.filter(c => c.channel === 'ebay-update').length), 1, '제목만 바꾸면 가격·수량은 보내지 않는다');
+  assert.equal(await page.locator('#ebEditTitle').inputValue(), 'OpticGlass Right Mirror');
   await page.locator('#ebEditSku').fill('different'); assert.equal(await page.locator('#ebUpdate').isDisabled(), true);
   await page.locator('#ebMode').selectOption('new'); await page.locator('#ebayTab').scrollIntoViewIfNeeded();
   const output = path.resolve('scratch/ebay-ui'); fs.mkdirSync(output, { recursive: true });
@@ -116,7 +132,8 @@ try {
   await frame.locator('#ebEditForm').waitFor({ state: 'visible' });
   assert.equal(await frame.locator('#ebMode').inputValue(), 'edit');
   await parent.evaluate(() => { uncheckAllAndClearCards(); updateEmptyState(); });
-  assert.equal(await parent.locator('#form-frame').isVisible(), false);
+  // 수정 모드에서 선택을 다 끄면 폼을 닫는 대신 6몰 표로 돌아간다(mall-grid.js).
+  assert.equal(await frame.locator('#mallGridTab').isVisible(), true);
   const ebayErrors = errors.filter(error => /ebay|eb[A-Z]/i.test(error));
   assert.deepEqual(ebayErrors, []);
   assert.deepEqual(errors, []);

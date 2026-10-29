@@ -24,22 +24,23 @@ function setSection8Mode(mode, force = false) {
     for (const el of document.querySelectorAll('.edit-only')) {
       el.style.display = mode === 'edit' ? '' : 'none';
     }
-    // Existing-product images are edited in their marketplace tab.
+    // 이미지 목록은 두 모드 모두 보인다. 수정 모드에선 폼을 채우지 않고(fillFrame 은 신규만),
+    // 줄을 6몰 카드 이미지 칸에 끌어 놓아 붙인다(image-library.js → image-gallery.js).
     const library = document.getElementById('image-library');
-    if (library) library.hidden = mode === 'edit';
+    if (library) library.hidden = false;
     const infoTitle = document.getElementById('product-info-title');
     if (infoTitle) infoTitle.textContent = mode === 'new' ? '상품 정보' : '상품 정보 (검색 조건)';
     // 로그(#log-window)는 두 모드 모두 보이고 모드를 바꿔도 지우지 않는다 — 수정 저장·콘솔·일괄 결과가 여기 남는다.
     if (changed) cardArea.innerHTML = '';
     if (mode === 'new') {
       cardArea.style.display = 'none';
-      if (sec8Desc) sec8Desc.textContent = '신규등록 — 실행 로그';
+      if (sec8Desc) sec8Desc.textContent = '신규등록: 실행 로그';
       if (btnClear) { btnClear.title = '로그 지우기'; btnClear.textContent = '비우기'; }
       const emptyText = $('empty-state-text');
       if (emptyText) emptyText.textContent = '현황판에서 플랫폼을 클릭하면 등록 폼이 열립니다.';
     } else {
       cardArea.style.display = 'flex';
-      if (sec8Desc) sec8Desc.textContent = '단일 상품 수정 — 상품 편집';
+      if (sec8Desc) sec8Desc.textContent = '단일 상품 수정: 상품 편집';
       // 수정 모드에서는 로그가 아니라 현황판에서 켠 몰을 모두 끈다 — 이름이 '비우기'면 로그 지우기로 읽힌다.
       if (btnClear) { btnClear.title = '선택한 폼 모두 닫기'; btnClear.textContent = '선택 해제'; }
       const emptyText = $('empty-state-text');

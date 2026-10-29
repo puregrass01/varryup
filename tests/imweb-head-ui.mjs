@@ -205,8 +205,8 @@ try {
   const lastLog = () => np.evaluate(() => window.headLogs.at(-1));
   // 입력 검사 거부: IPC 없이 { ok:false, error } 이고 그 문장이 로그에도 남는다
   await np.evaluate(() => { document.getElementById('ihSpecUrl').value = ''; });
-  assert.deepEqual(await np.evaluate(() => registerImwebHead()), { ok: false, error: '국내용 조견표가 없습니다 — 좌측 🇰🇷 KOREA 사진 불러오기로 조견표를 넣어 주세요.' });
-  assert.deepEqual(await lastLog(), { target: 'imwebHead', message: '국내용 조견표가 없습니다 — 좌측 🇰🇷 KOREA 사진 불러오기로 조견표를 넣어 주세요.', type: 'error' });
+  assert.deepEqual(await np.evaluate(() => registerImwebHead()), { ok: false, error: '국내용 조견표가 없습니다 — 좌측 Korea 사진 불러오기로 조견표를 넣어 주세요.' });
+  assert.deepEqual(await lastLog(), { target: 'imwebHead', message: '국내용 조견표가 없습니다 — 좌측 Korea 사진 불러오기로 조견표를 넣어 주세요.', type: 'error' });
   assert.equal((await headCalls()).length, 0);
   await np.evaluate(() => { document.getElementById('ihSpecUrl').value = 'https://img/chart-kr.jpg'; });
 

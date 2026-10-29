@@ -1,61 +1,111 @@
 /* ===== VERY UP VER3 - Launcher CSS ===== */
-
-:root {
-    --seed-primary: #10b981;
-    --seed-glow: rgba(16, 185, 129, 0.35);
-    --up-primary: #3b82f6;
-    --map-primary: #8b5cf6;
-    --up-glow: rgba(59, 130, 246, 0.35);
-    --bg: #080f1e;
-    --text: #f1f5f9;
-    --text-dim: #94a3b8;
-    --card-bg: rgba(255, 255, 255, 0.04);
-    --card-border: rgba(255, 255, 255, 0.1);
-    --radius: 20px;
-
-    /* 로그인 오버레이 + 창 버튼. 밝은 화면에서는 전부 뒤집힌다. */
-    --panel: #1a2130;
-    --line: #2a3346;
-    --field: #0f1420;
-    --chip: rgba(255, 255, 255, 0.08);
-    --chip-hover: rgba(255, 255, 255, 0.2);
-    --err: #e8807f;
-    --btn-face: #111827;
-    --btn-text: #ffffff;
-}
-
-/* ── 라이트 테마 (기본) ── */
-:root[data-theme="light"] {
-    --bg: #eef2f7;
-    --text: #0f172a;
-    --text-dim: #52627a;
-    --card-bg: rgba(15, 23, 42, 0.03);
-    --card-border: rgba(15, 23, 42, 0.12);
-    /* 배경 글로우는 밝은 바탕에서 탁하게만 보인다 → 확 낮춘다. */
-    --seed-glow: rgba(16, 185, 129, 0.14);
-    --up-glow: rgba(59, 130, 246, 0.14);
-
-    --panel: #ffffff;
-    --line: #d5dbe5;
-    --field: #ffffff;
-    --chip: rgba(15, 23, 42, 0.07);
-    --chip-hover: rgba(15, 23, 42, 0.16);
-    --err: #b91c1c;
-}
+/* 색·글꼴 값은 theme.css 가 가진다. 여기서는 이름(var(--…))만 쓴다. */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+html { overflow: clip; }
+
 body {
-    font-family: 'Inter', sans-serif;
-    background: var(--bg);
-    color: var(--text);
+    font-family: var(--font-body);
+    background: var(--bg-base);
+    color: var(--text-primary);
     height: 100vh;
-    overflow: hidden;
+    overflow: clip;
     display: flex;
     align-items: center;
     justify-content: center;
     -webkit-app-region: drag;
 }
+
+/* ── 창 머리줄 + 창 버튼 ── */
+.win-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    -webkit-app-region: drag;
+    z-index: 9999;
+}
+.win-title {
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.win-btns { display: flex; gap: 6px; -webkit-app-region: no-drag; }
+.win-btn {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    background: var(--ovl-2);
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+.win-btn:hover { background: var(--ovl-3); color: var(--text-primary); }
+.win-btn.win-close:hover { background: var(--danger-wash); color: var(--accent-danger); border-color: var(--accent-danger); }
+
+/* ── 직원 로그인 오버레이 ── */
+.login-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+    background: var(--bg-base);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.login-card {
+    width: 320px;
+    max-width: 86vw;
+    padding: 30px 26px;
+    box-shadow: var(--shadow-panel);
+}
+.login-brand { text-align: center; }
+.login-brand-name {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+}
+.login-brand-sub { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+.login-form { margin-top: 22px; display: flex; flex-direction: column; gap: 12px; }
+.login-input {
+    padding: 11px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--input-border);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.login-input::placeholder { color: var(--text-muted); }
+.login-input:focus { border-color: var(--accent); }
+.login-input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.login-btn { padding: 12px; font-size: 15px; }
+.login-alt {
+    padding: 10px;
+    border: 1px solid var(--rule-2);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.login-alt:hover { background: var(--ovl-1); color: var(--text-primary); }
+.login-err { color: var(--accent-danger); font-size: 13px; text-align: center; line-height: 1.4; }
+.login-hint { color: var(--text-secondary); font-size: 11.5px; text-align: center; line-height: 1.5; }
 
 /* ── 배경 ── */
 .launcher-bg {
@@ -66,18 +116,6 @@ body {
     align-items: center;
     justify-content: center;
 }
-
-.glow {
-    position: absolute;
-    width: 500px;
-    height: 500px;
-    border-radius: 50%;
-    filter: blur(120px);
-    opacity: 0.5;
-    pointer-events: none;
-}
-.glow-left  { background: var(--seed-glow); left: -150px; top: 50%; transform: translateY(-50%); }
-.glow-right { background: var(--up-glow);   right: -150px; top: 50%; transform: translateY(-50%); }
 
 /* ── 래퍼 ── */
 .launcher-wrap {
@@ -98,29 +136,29 @@ body {
     gap: 14px;
 }
 .launcher-logo h1 {
-    font-family: 'Outfit', sans-serif;
+    font-family: var(--font-display);
+    text-wrap: balance;
     font-size: 3.2rem;
-    font-weight: 800;
-    background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    letter-spacing: -1px;
+    font-weight: 600;
+    line-height: 1.02;
+    color: var(--text-primary);
+    letter-spacing: -0.028em;
 }
 .ver-badge {
-    background: var(--chip);
-    border: 1px solid var(--card-border);
-    color: var(--text-dim);
-    font-size: 0.8rem;
-    font-weight: 600;
-    padding: 4px 10px;
-    border-radius: 20px;
-    letter-spacing: 0.05em;
+    background: var(--paper-3);
+    border: 1px solid var(--rule);
+    color: var(--text-secondary);
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: var(--radius);
     align-self: flex-start;
     margin-top: 8px;
 }
 
 .launcher-sub {
-    color: var(--text-dim);
+    color: var(--text-secondary);
     font-size: 1rem;
     margin-top: -16px;
 }
@@ -134,7 +172,7 @@ body {
     max-width: 780px;
 }
 
-/* ── 앱 카드 ── */
+/* ── 앱 카드 — 깎은 카드(.vu-cut). 고르면 코발트 테두리 ── */
 /* 한글은 기본 줄바꿈 규칙상 음절 아무 데서나 끊긴다 → 680px 창에서 '베리씨 / 드' 처럼
    단어 한가운데가 갈라졌다. keep-all 이면 단어 단위로만 끊는다. */
 .app-card, .launcher-sub, .ver-badge { word-break: keep-all; }
@@ -145,70 +183,44 @@ body {
     align-items: center;
     gap: 16px;
     padding: 22px 18px;
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: var(--radius);
     cursor: pointer;
     text-align: left;
-    color: var(--text);
-    transition: all 0.25s ease;
-    overflow: hidden;
-    backdrop-filter: blur(12px);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    transition: transform 0.2s ease-out, border-color 0.2s, box-shadow 0.2s;
 }
-
-.app-card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: var(--radius);
-    opacity: 0;
-    transition: opacity 0.25s;
-}
-
-.app-card:hover { transform: translateY(-4px); border-color: transparent; }
-.app-card:active { transform: translateY(-2px); }
-
-/* 씨드 카드 */
-.seed-card::before { background: linear-gradient(135deg, rgba(16,185,129,0.12), transparent); }
-.seed-card:hover { box-shadow: 0 0 0 1px var(--seed-primary), 0 16px 40px rgba(16,185,129,0.25); }
-.seed-card:hover::before { opacity: 1; }
-
-/* 업 카드 */
-.up-card::before { background: linear-gradient(135deg, rgba(59,130,246,0.12), transparent); }
-.up-card:hover { box-shadow: 0 0 0 1px var(--up-primary), 0 16px 40px rgba(59,130,246,0.25); }
-.up-card:hover::before { opacity: 1; }
+.app-card:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: var(--shadow-panel); }
+.app-card:active { transform: translateY(0); }
 
 /* 맵 카드 — 런처는 680px 고정폭이라 3열이 안 들어간다. 2행을 통째로 쓴다. */
 .map-card { grid-column: 1 / -1; padding: 16px 18px; }
-.map-card::before { background: linear-gradient(135deg, rgba(139,92,246,0.12), transparent); }
-.map-card:hover { box-shadow: 0 0 0 1px var(--map-primary), 0 16px 40px rgba(139,92,246,0.25); }
-.map-card:hover::before { opacity: 1; }
 
 /* ── 아이콘 ── */
 .card-icon {
     flex-shrink: 0;
     width: 72px;
     height: 72px;
-    border-radius: 16px;
+    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
+    background: var(--accent-wash);
+    color: var(--accent);
 }
-.seed-icon { background: rgba(16,185,129,0.15); color: var(--seed-primary); }
-.up-icon   { background: rgba(59,130,246,0.15);  color: var(--up-primary); }
-.map-icon  { background: rgba(139,92,246,0.15); color: var(--map-primary); }
 
 /* ── 카드 콘텐츠 ── */
 .card-content { flex: 1; }
 .card-content h2 {
-    font-family: 'Outfit', sans-serif;
+    font-family: var(--font-display);
+    text-wrap: balance;
     font-size: 1.5rem;
-    font-weight: 700;
+    font-weight: 600;
+    letter-spacing: -0.02em;
     margin-bottom: 4px;
 }
 .card-content p {
     font-size: 0.82rem;
-    color: var(--text-dim);
+    color: var(--text-secondary);
     margin-bottom: 10px;
     line-height: 1.4;
 }
@@ -220,30 +232,26 @@ body {
 }
 .card-features li {
     font-size: 0.78rem;
-    color: var(--text-dim);
+    color: var(--text-secondary);
 }
 
 /* ── 화살표 ── */
+/* 쉴 때도 보인다(흐린 글자) — 올리면 코발트로 한 칸 나아간다 */
 .card-arrow {
     font-size: 1.4rem;
-    opacity: 0;
+    color: var(--text-muted);
     transform: translateX(-8px);
-    transition: all 0.2s;
+    transition: color 0.2s, transform 0.2s;
     flex-shrink: 0;
 }
-.app-card:hover .card-arrow {
-    opacity: 0.6;
+.app-card:hover .card-arrow,
+.app-card:focus-visible .card-arrow {
+    color: var(--accent);
     transform: translateX(0);
 }
-.seed-card:hover .card-arrow { color: var(--seed-primary); opacity: 1; }
-.up-card:hover   .card-arrow { color: var(--up-primary);   opacity: 1; }
-.map-card:hover  .card-arrow { color: var(--map-primary);  opacity: 1; }
 
 /* ── 푸터 ── */
 .launcher-footer {
     font-size: 0.72rem;
-    /* 0.4 알파는 밝은 배경에서 배경과 구분이 안 된다(밝기 차 80). */
-    color: var(--text-dim);
-    opacity: 0.7;
-    letter-spacing: 0.05em;
+    color: var(--text-muted);
 }

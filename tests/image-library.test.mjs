@@ -72,6 +72,22 @@ test('prepare uploads once, assigns main and extras separately, reuses verified 
   assert.equal(bundle.subImages.length, 3); assert.ok(!bundle.detailHtml.includes(bundle.mainImageUrl));
   await lib.prepare('amazon'); assert.equal(uploads.length, 4);
 });
+test('hostFiles: 끌어 놓은 로컬 파일을 ESM 에 올리고 같은 내용은 다시 올리지 않으며, 이미지가 아닌 파일이 섞이면 하나도 올리지 않는다', async t => {
+  const { dir, folder, lib, uploads } = fixture(t);
+  const one = path.join(folder, '1.jpg'), copy = path.join(dir, '복사본 1.jpg');
+  fs.copyFileSync(one, copy);
+  const { urls } = await lib.hostFiles([one, copy, path.join(folder, '2.jpg')]);
+  assert.equal(uploads.length, 2, '같은 내용 두 장은 한 번만 올린다');
+  assert.equal(urls.length, 2);
+  assert.ok(urls.every(u => /^https:\/\/ai\.esmplus\.com\/uploaded\/vu_[0-9a-f]{64}\.jpg$/.test(u)), '이름이 겹치지 않게 내용 해시 이름으로 올린다');
+  assert.deepEqual((await lib.hostFiles([copy])).urls, [urls[0]]);
+  assert.equal(uploads.length, 2, '올린 적 있는 내용은 저장된 주소를 쓴다');
+  await assert.rejects(lib.hostFiles([path.join(folder, '10.jpg'), path.join(folder, 'ignore.txt')]), /ignore\.txt: 지원 형식/);
+  await assert.rejects(lib.hostFiles([path.join(dir, 'missing.png')]), /missing\.png: 파일을 찾을 수 없습니다/);
+  await assert.rejects(lib.hostFiles([]), /올릴 이미지 파일이 없습니다/);
+  assert.equal(uploads.length, 2);
+  assert.equal(lib.busy, false);
+});
 test('same filename with new VerySeed content gets a new URL without overwriting old uploads', async t => {
   const { lib, uploads, output } = fixture(t);
   const first = await lib.prepare('amazon');

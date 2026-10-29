@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Amazon } from '../src/platforms/amazon.js';
+import { registerBulkPriceIPC } from '../src/bulk_price_ipc.js';
 
 const MP = 'ATVPDKIKX0DER';
 const config = {
@@ -70,7 +71,7 @@ test('제목만 수정하면 제목 속성만 PATCH로 보내고 이미지·불�
   const patch = calls[1].body;
   assert.equal(patch.productType, 'AUTO_PART');
   assert.deepEqual(patch.patches.map(p => p.path), ['/attributes/item_name']);
-  assert.deepEqual(patch.patches[0], { op: 'replace', path: '/attributes/item_name', value: [{ value: '새 제목', marketplace_id: MP }] });
+  assert.deepEqual(patch.patches[0], { op: 'replace', path: '/attributes/item_name', value: [{ value: '새 제목', language_tag: 'en_US', marketplace_id: MP }] });
   assert.deepEqual(result.updatedAttributes, ['item_name']);
   assert.equal(result.submissionId, 'sub-1');
 });
@@ -150,6 +151,83 @@ test('바뀐 값이 없으면 아마존에 수정 요청을 보내지 않는다'
 
   assert.deepEqual(calls.map(c => c.method), ['GET']);
   assert.equal(result.status, 'SKIPPED');
+});
+
+// 아마존 탭 수정 폼은 불러온 값을 모두 다시 보낸다(registerAmazon). 대표 이미지·브랜드·불릿이 그대로면 다시 PATCH 하지 않는다.
+const formResend = (extra = {}) => ({ sku: 'SKU-1', marketplaceId: MP, titleEn: 'Old Title', brand: 'RealBrand', price: '100', stock: '5',
+  mainImageUrl: 'https://img.example.com/main.jpg', bulletPoints: '기존 불릿 1\n기존 불릿 2', description: '', currency: 'USD', ...extra });
+
+test('폼이 불러온 값을 그대로 다시 보내면 PATCH 하지 않는다(SKIPPED · 변경 없음)', async t => {
+  const { amazon, calls } = setup(t, call => (call.method === 'GET' ? ok(existingListing()) : ok({ status: 'ACCEPTED' })));
+  const result = await amazon.updateExistingProduct(formResend({
+    replaceImageUrls: ['https://img.example.com/main.jpg', 'https://img.example.com/sub1.jpg'],
+    expectedImageUrls: ['https://img.example.com/main.jpg', 'https://img.example.com/sub1.jpg'] }));
+  assert.deepEqual(calls.map(c => c.method), ['GET']);
+  assert.equal(result.status, 'SKIPPED');
+});
+
+test('폼에서 가격만 바꾸면 가격만 PATCH — 바뀌지 않은 대표 이미지·제목·브랜드·재고는 보내지 않는다', async t => {
+  const { amazon, calls } = setup(t, call => (call.method === 'GET' ? ok(existingListing()) : ok({ status: 'ACCEPTED' })));
+  const result = await amazon.updateExistingProduct(formResend({ price: '120' }));
+  assert.deepEqual(calls[1].body.patches.map(p => p.path), ['/attributes/purchasable_offer']);
+  assert.deepEqual(result.updatedAttributes, ['purchasable_offer']);
+});
+
+test('이미지를 뒤에서 한 장 지우기만 하면 그 슬롯 delete 만 보낸다(대표 이미지는 그대로라 빠진다)', async t => {
+  const { amazon, calls } = setup(t, call => (call.method === 'GET' ? ok(existingListing()) : ok({ status: 'ACCEPTED' })));
+  await amazon.updateExistingProduct(formResend({ replaceImageUrls: ['https://img.example.com/main.jpg'],
+    expectedImageUrls: ['https://img.example.com/main.jpg', 'https://img.example.com/sub1.jpg'] }));
+  assert.deepEqual(calls[1].body.patches.map(p => [p.op, p.path]), [['delete', '/attributes/other_product_image_locator_1']]);
+});
+
+// 일괄 저장(bulk-save-batch) 의 상품명 — 아마존 미국·일본. 리스팅 GET 은 PATCH 가 바꾼 이름을 돌려준다.
+function nameFixture(t, marketplaceId, itemName, { lag = false } = {}) {
+  const listing = existingListing();
+  listing.summaries[0].marketplaceId = marketplaceId;
+  listing.attributes.item_name = [itemName];
+  const { amazon, calls } = setup(t, call => {
+    if (call.method === 'PATCH') { if (!lag) listing.attributes.item_name = call.body.patches[0].value; return ok({ status: 'ACCEPTED' }); }
+    return ok(listing);
+  });
+  const handlers = {};
+  registerBulkPriceIPC({ ipcMain: { handle: (name, fn) => handlers[name] = fn }, amazon: () => amazon,
+    readCatalog: () => ({ variants: [], listings: [] }), sleep: async () => {}, log: { error() {} } });
+  let n = 0;
+  const save = async (scope, job) => {
+    const res = await handlers['bulk-save-batch'](null, { jobId: 'amazon-name-' + (++n), scope, jobs: [{ type: 'name', id: 'SKU-1', ...job }] });
+    return res.success ? res.data.results[0] : res;
+  };
+  return { calls, save, handlers };
+}
+
+test('상품명(아마존 미국): item_name 만 PATCH(언어 태그 en_US) 하고 다시 읽어 확인한다', async t => {
+  const { calls, save, handlers } = nameFixture(t, MP, { value: 'Old Title', marketplace_id: MP });
+  const loaded = await handlers['bulk-price-load-many'](null, { scope: 'amazon-us', ids: ['SKU-1'], includeImages: true });
+  assert.equal(loaded.data.items[0].rows[0].name, 'Old Title', '불러온 줄의 name 이 expectedName 이다');
+  const r = await save('amazon-us', { expectedName: 'Old Title', newName: 'New Title' });
+  assert.deepEqual([r.success, r.data?.status], [true, 'VERIFIED'], r.error);
+  const patch = calls.find(c => c.method === 'PATCH');
+  assert.deepEqual(patch.body.patches, [{ op: 'replace', path: '/attributes/item_name', value: [{ value: 'New Title', language_tag: 'en_US', marketplace_id: MP }] }]);
+});
+
+test('상품명(아마존 일본): 기존 언어 태그(ja_JP)를 지키고, 불러온 뒤 바뀐 이름 · 같은 이름은 보내지 않는다', async t => {
+  const JP = 'A1VC38T7YXB528';
+  const { calls, save } = nameFixture(t, JP, { value: '旧タイトル', language_tag: 'ja_JP', marketplace_id: JP });
+  const stale = await save('amazon-jp', { expectedName: '他の名前', newName: '新タイトル' });
+  assert.deepEqual([stale.success, stale.stage], [false, 'pre-send']);
+  assert.match(stale.error, /불러온 뒤 상품명이 바뀌었습니다\(지금 旧タイトル\)/);
+  const same = await save('amazon-jp', { expectedName: '旧タイトル', newName: ' 旧タイトル ' });
+  assert.deepEqual([same.success, same.data?.status], [true, 'UNCHANGED']);
+  assert.equal(calls.filter(c => c.method === 'PATCH').length, 0);
+  const r = await save('amazon-jp', { expectedName: '旧タイトル', newName: '新タイトル' });
+  assert.deepEqual([r.success, r.data?.status], [true, 'VERIFIED'], r.error);
+  assert.deepEqual(calls.find(c => c.method === 'PATCH').body.patches[0].value, [{ value: '新タイトル', language_tag: 'ja_JP', marketplace_id: JP }]);
+});
+
+test('상품명(아마존): 접수됐지만 아직 반영 전이면 판매가처럼 ACCEPTED 로 끝낸다(실패로 보이지 않게)', async t => {
+  const { save } = nameFixture(t, MP, { value: 'Old Title', marketplace_id: MP }, { lag: true });
+  const r = await save('amazon-us', { expectedName: 'Old Title', newName: 'New Title' });
+  assert.deepEqual([r.success, r.data?.status], [true, 'ACCEPTED'], r.error);
 });
 
 test('신규 등록은 기존처럼 전체 문서 PUT을 그대로 사용한다', async t => {

@@ -19,7 +19,7 @@
   const button = (action, text, id = '') => `<button type="button" class="btn btn-outline btn-sm" data-eb="${action}" ${id ? `id="${id}"` : ''}>${text}</button>`;
   panel.innerHTML = `
     <div class="panel-header" style="display:flex;justify-content:space-between"><h2>eBay 미국 상품 등록 (USD)</h2><span class="status-badge" id="ebStatus">설정 확인 중</span></div>
-    <details id="ebApiAccordion" class="api-accordion"><summary class="api-accordion-summary"><span>🔑 eBay API 설정 · 판매자 연결</span></summary>
+    <details id="ebApiAccordion" class="api-accordion"><summary class="api-accordion-summary"><span>eBay API 설정 · 판매자 연결</span></summary>
       <div class="api-accordion-content">
         <div class="form-group"><label class="form-label" for="ebEnvironment">환경</label><select id="ebEnvironment" class="form-input"><option value="sandbox">Sandbox · 테스트</option><option value="production">Production · 실제 판매</option></select></div>
         <p class="help-text">환경별 eBay 개발자 키와 판매자 동의가 필요합니다. 미국 고정가·새 상품·단일 SKU를 지원합니다.</p>
@@ -68,7 +68,7 @@
       <pre id="ebPreview" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto"></pre>
     </div>
     <div id="ebEditForm" hidden>
-      <div id="ebMigrationCard" style="background:var(--input-bg, rgba(255,255,255,0.05));border:1px solid var(--border-color, #444);border-radius:6px;padding:8px 10px;margin-bottom:8px">
+      <div id="ebMigrationCard" style="background:var(--paper-2);border:1px solid var(--rule);border-radius:var(--radius);padding:8px 10px;margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <div>
             <strong>기존 eBay 활성 리스팅 동기화 (로컬 캐시 + 즉시 이관)</strong>
@@ -80,8 +80,8 @@
         </div>
         <div id="ebMigrateProgress" style="display:none;margin-top:10px">
           <div style="font-size:12px;margin-bottom:4px" id="ebMigrateProgressText">동기화 진행 중...</div>
-          <div style="width:100%;height:6px;background:#333;border-radius:3px;overflow:hidden">
-            <div id="ebMigrateProgressBar" style="width:0%;height:100%;background:#3b82f6;transition:width 0.2s"></div>
+          <div style="width:100%;height:6px;background:var(--paper-3);border-radius:3px;overflow:hidden">
+            <div id="ebMigrateProgressBar" style="width:0%;height:100%;background:var(--accent)"></div>
           </div>
         </div>
       </div>
@@ -90,6 +90,7 @@
       <div id="ebSearchResults" aria-live="polite" style="margin:6px 0"></div>
       <div class="inline-field">${input('ebEditSku', '조회할 SKU 또는 Listing ID', 'SKU 또는 12자리 Listing ID', 'text', 'shell-owned')}${button('load', '상품 불러오기')}</div>
       <p id="ebLoaded" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0">상품을 먼저 조회해주세요.</p>
+      ${input('ebEditTitle', '영문 상품명 (최대 80자)', '바꿀 때만 고치세요 — 상품 이미지와 같은 요청으로 저장됩니다')}
       <h3 style="margin:2px 0;font-size:0.85rem">사진 · 상품 이미지</h3><div id="ebEditImageList"></div>
       <div class="form-group row dual-input"><div class="input-col">${input('ebEditPrice', '변경 판매가 (USD)', '', 'number')}</div><div class="input-col">${input('ebEditQuantity', '변경 미국 판매 수량', '', 'number')}</div></div>
       <p class="help-text">전체 재고와 타 국가 판매 수량은 변경하지 않습니다. 미국 판매 수량은 조회된 전체 재고 이하로 입력하세요.</p>
@@ -242,6 +243,7 @@
     }
     loaded = result; loadedKey = sku;
     $('ebEditPrice').value = loaded.offer.pricingSummary?.price?.value || ''; $('ebEditQuantity').value = loaded.offer.availableQuantity ?? '';
+    $('ebEditTitle').value = loaded.inventory.product?.title || '';
     $('ebLoaded').textContent = `${loaded.inventory.product?.title || loaded.sku}\n상태: ${loaded.offer.status} · Offer: ${loaded.offer.offerId}\nListing: ${loaded.offer.listing?.listingId || '-'} · 전체 재고: ${loaded.inventory.availability?.shipToLocationAvailability?.quantity ?? '-'}`;
     log('상품 상태를 조회했습니다.', 'success');
   }
@@ -376,29 +378,40 @@
       if (imageSaveUncertain) throw new Error('이전 이미지 요청 결과를 확인하려면 상품을 다시 불러오세요.');
       if (editImages?.length === 0) throw new Error('상품 이미지는 최소 1장 필요합니다. 상품을 다시 불러오세요.');
       const images = editImages ? [...editImages] : null;
-      // 이미지만 바꿨으면 가격·수량 수정을 보내지 않는다. 수량 칸(불러온 시점 값)으로 덮으면 그 뒤 팔린 수량이 되살아난다.
+      // 제목은 이미지와 같은 inventory_item PUT 으로 간다. 안 고쳤으면 보내지 않는다(앞뒤 공백 차이는 고친 게 아니다).
+      const loadedTitle = product.inventory.product?.title || '';
+      const title = value('ebEditTitle'), titleChanged = title !== loadedTitle.trim();
+      if (titleChanged && (!title || title.length > 80)) throw new Error(`영문 상품명은 1~80자로 입력해주세요(지금 ${title.length}자). 아무것도 보내지 않았습니다.`);
+      const inventoryWhat = [images && '이미지', titleChanged && '제목'].filter(Boolean).join('·');
+      // 이미지·제목만 바꿨으면 가격·수량 수정을 보내지 않는다. 수량 칸(불러온 시점 값)으로 덮으면 그 뒤 팔린 수량이 되살아난다.
       const unchanged = (id, was) => value(id) !== '' && Number(value(id)) === Number(was);
       const loadedPrice = product.offer.pricingSummary?.price?.value;
       const quantityChanged = !unchanged('ebEditQuantity', product.offer.availableQuantity);
-      const sendOffer = !images || !unchanged('ebEditPrice', loadedPrice) || quantityChanged;
+      const sendOffer = !inventoryWhat || !unchanged('ebEditPrice', loadedPrice) || quantityChanged;
       // 수량을 안 고쳤으면 가격만 보낸다(메인이 불러온 가격과 다시 비교). 예전에는 가격만 바꿔도 불러올 때의 수량을
       // 같이 보내서, 그 사이 팔린 수량이 되살아났다 — 셸의 일괄 수정도 이 길을 탄다.
       if (sendOffer) showWarnings(await call('update', quantityChanged
         ? { sku, price: value('ebEditPrice'), quantity: value('ebEditQuantity') }
         : { sku, price: value('ebEditPrice'), priceOnly: true, expectedPrice: loadedPrice }));
-      if (images) {
+      if (inventoryWhat) {
         try {
-          await call('update-images', { sku, images, expectedImages: product.inventory.product?.imageUrls || [] });
+          await call('update-images', { sku,
+            ...(images ? { images, expectedImages: product.inventory.product?.imageUrls || [] } : {}),
+            ...(titleChanged ? { title, expectedTitle: loadedTitle } : {}) });
           editImages = null;
         } catch (e) {
           imageSaveUncertain = true;
-          throw new Error((sendOffer ? (quantityChanged ? '가격·수량은' : '가격은') + ' 저장됐지만 ' : '') + '이미지 저장은 확인이 필요합니다. 상품을 다시 불러오세요: ' + e.message);
+          throw new Error((sendOffer ? (quantityChanged ? '가격·수량은' : '가격은') + ' 저장됐지만 ' : '') + `${inventoryWhat} 저장은 확인이 필요합니다. 상품을 다시 불러오세요: ` + e.message);
         }
       }
       const what = quantityChanged ? '가격·미국 판매 수량' : '가격';
-      log(!images ? `${what}을 수정했습니다.` : sendOffer ? `${what}·이미지를 수정했습니다.`
-        : '이미지를 수정했습니다. 가격·수량은 그대로라 보내지 않았습니다.', 'success');
+      const eul = s => s + (s.endsWith('이미지') ? '를' : '을');
+      log(!inventoryWhat ? `${eul(what)} 수정했습니다.` : sendOffer ? `${eul(`${what}·${inventoryWhat}`)} 수정했습니다.`
+        : `${eul(inventoryWhat)} 수정했습니다. 가격·수량은 그대로라 보내지 않았습니다.`, 'success');
       await loadProduct();
+      // 이미지처럼 다시 읽어 확인한다 — eBay 가 받은 뒤에도 다른 제목이면 실패로 알린다.
+      if (titleChanged && loaded && (loaded.inventory.product?.title || '').trim() !== title)
+        throw new Error(`제목을 보냈지만 다시 읽은 제목이 다릅니다: ${loaded.inventory.product?.title || '빈칸'}`);
     },
     async publishLoaded() { const { sku } = requireLoaded(); const result = await call('publish', sku); showWarnings(result); log(`게시 완료 · Listing ${result.listingId}`, 'success'); await loadProduct(); },
     async withdraw() { const { sku } = requireLoaded(); if (!window.confirm(`${sku} 상품의 미국 판매를 중단하시겠습니까?`)) return; await call('withdraw', sku); log('판매 중단 요청이 완료되었습니다.', 'success'); await loadProduct(); }
@@ -441,8 +454,9 @@
     if (error) { log(error, 'error'); return Promise.resolve({ ok: false, error }); }
     return runAction('update');
   };
-  // 셸의 일괄 수정이 묻는다: 불러온 상품이 있나(index.html editItemOf).
-  window.ebayEditItem = () => (loaded ? { id: loaded.sku, name: loaded.inventory?.product?.title || loaded.sku } : null);
+  // 셸의 일괄 수정이 묻는다: 불러온 상품이 있나(index.html editItemOf). 6몰 표(mall-grid.js)는 상태 · 불러온 수량 · 이미지 초안도 본다.
+  window.ebayEditItem = () => (loaded ? { id: loaded.sku, name: loaded.inventory?.product?.title || loaded.sku,
+    status: loaded.offer?.status, quantity: loaded.offer?.availableQuantity, imageDraft: !!editImages } : null);
   $('ebNewForm').addEventListener('input', () => { savedDraft = null; refreshButtons(); });
   $('ebEditSku').addEventListener('input', () => { loaded = null; refreshButtons(); });
   [...Object.values(configMap), 'ebClientSecret', 'ebRefreshToken'].forEach(id => $(id).addEventListener('input', () => { configDirty = true; invalidate(); $('ebStatus').textContent = '설정 변경됨 · 저장 후 진행하세요'; }));
@@ -453,9 +467,10 @@
   $('ebCategoryId').addEventListener('input', () => { $('ebAspectFields').replaceChildren(); aspectCategory = ''; });
   $('ebMode').addEventListener('change', () => { $('ebNewForm').hidden = value('ebMode') !== 'new'; $('ebEditForm').hidden = value('ebMode') !== 'edit'; });
   $('ebPrice').step = $('ebEditPrice').step = '0.01'; $('ebPrice').min = $('ebEditPrice').min = '0.01'; $('ebQuantity').step = $('ebEditQuantity').step = '1'; $('ebQuantity').min = '1'; $('ebEditQuantity').min = '0';
-  $('ebTitle').maxLength = 80; $('ebSku').maxLength = $('ebEditSku').maxLength = 50;
+  $('ebTitle').maxLength = $('ebEditTitle').maxLength = 80; $('ebSku').maxLength = $('ebEditSku').maxLength = 50;
   ['ebWeight', 'ebLength', 'ebWidth', 'ebHeight'].forEach(id => { $(id).step = 'any'; $(id).min = '0.001'; });
-  ['draft', 'publish', 'publishLoaded', 'update'].forEach(action => { const b = panel.querySelector(`[data-eb="${action}"]`); b.classList.remove('btn-outline'); b.classList.add('btn-gradient'); });
+  ['draft', 'publish', 'publishLoaded', 'update'].forEach(action => { const b = panel.querySelector(`[data-eb="${action}"]`); b.classList.remove('btn-outline'); b.classList.add('btn-gradient', 'vu-key', 'vu-key-accent'); });
+  panel.querySelector('[data-eb="load"]').classList.add('vu-key');
   // eBay 제목은 80자다(아마존은 200자). 넘쳐도 잘라내지 않고 알려만 준다 — 어디를 줄일지는
   // 사람이 정해야 하고, 말없이 자르면 연식 같은 검색 키워드가 먼저 날아간다.
   //

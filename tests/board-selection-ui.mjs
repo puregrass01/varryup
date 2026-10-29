@@ -82,7 +82,8 @@ try {
 
   await countTabSwitches();
   await preset('all');
-  assert.deepEqual(await selected(), [...ALL].sort(), '전체 = 켤 수 있는 열두 칸');
+  // 아마존 미국·일본은 둘 중 하나만 켠다 — 전체는 미국 아마존을 기본으로 둔다.
+  assert.deepEqual(await selected(), ALL.filter(c => c !== 'JAPAN-open1').sort(), '전체 = 켤 수 있는 칸(일본 아마존 빼고)');
   assert.deepEqual(await pressed(), ['all']);
   assert.ok(await page.evaluate(() => window.tabSwitches) <= 1,
     `칸 여러 개를 바꿔도 폼 탭은 한 번만 옮긴다 (${await page.evaluate(() => window.tabSwitches)}번)`);

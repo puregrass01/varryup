@@ -182,6 +182,15 @@ function cloneAttr(value) {
   return value === undefined || value === null ? value : JSON.parse(JSON.stringify(value));
 }
 
+/** 수정 비교용: 그 마켓에서 보이는 값만 뽑는다(언어 태그·다른 마켓 값·오퍼 부가 항목은 비교하지 않는다). 읽기(productForEdit)와 같은 값이다. */
+function marketView(key, rows, marketplaceId) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (key === 'fulfillment_availability') return list.filter(a => a?.fulfillment_channel_code === 'DEFAULT').map(a => Number(a.quantity));
+  const mine = list.filter(v => !v?.marketplace_id || v.marketplace_id === marketplaceId);
+  if (key === 'purchasable_offer') return mine.filter(o => !o?.audience || o.audience === 'ALL').map(o => Number(o?.our_price?.[0]?.schedule?.[0]?.value_with_tax));
+  return mine.map(v => v?.value ?? v?.media_location);
+}
+
 /**
  * Listings Items PUT/PATCH 응답이 실제로 접수됐는지 확인한다.
  * SP-API 는 검증 실패를 HTTP 200 + status:"INVALID" + issues[] 로 돌려준다. 예전엔 이걸 그대로
@@ -839,7 +848,11 @@ export class Amazon {
     const attributes = {};
 
     const title = String((isBlank(data.titleEn) ? data.title : data.titleEn) ?? '').trim();
-    if (title) attributes.item_name = [{ value: title, marketplace_id: marketplaceId }];
+    if (title) {
+      // 언어 태그는 지금 리스팅 값을 따르고, 없으면 마켓 기본(미국 en_US · 일본 ja_JP — amazon_jp_draft.js 와 같다).
+      const old = existingAttrs.item_name?.find(v => v.marketplace_id === marketplaceId) || existingAttrs.item_name?.find(v => !v.marketplace_id);
+      attributes.item_name = [{ value: title, language_tag: old?.language_tag || (marketplaceId === JP_MARKETPLACE_ID ? 'ja_JP' : 'en_US'), marketplace_id: marketplaceId }];
+    }
 
     if (!isBlank(data.brand)) {
       attributes.brand = [{ value: String(data.brand).trim(), marketplace_id: marketplaceId }];
@@ -963,8 +976,13 @@ export class Amazon {
         }
       }
     }
+    // 폼은 불러온 값을 모두 다시 보낸다(대표 이미지·브랜드·가격 포함). 지금 리스팅과 같은 속성은 빼고 바뀐 것만 PATCH 한다.
+    for (const key of Object.keys(attributes)) {
+      if (JSON.stringify(marketView(key, attributes[key], marketplaceId)) === JSON.stringify(marketView(key, existingAttrs[key], marketplaceId)))
+        delete attributes[key];
+    }
     const changedKeys = Object.keys(attributes);
-    if (changedKeys.length === 0) {
+    if (changedKeys.length === 0 && imageDeletes.length === 0) {
       console.log(`[Amazon] 변경할 값이 없어 수정 요청을 보내지 않았습니다: SKU=${sku}`);
       return { sku, status: 'SKIPPED', submissionId: 'NO_CHANGES', updatedAttributes: [], raw: null };
     }

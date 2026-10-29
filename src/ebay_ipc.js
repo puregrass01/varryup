@@ -62,6 +62,7 @@ export function registerEbayIPC({ app, ipcMain, safeStorage, shell, uiDirectory,
     return s.migrateListings(ids, p => event.senderFrame?.send('ebay-migrate-progress', { stage: 'migrate', ...p }));
   });
   handle('ebay-update', (s, input) => s.updatePriceQuantity(input));
-  handle('ebay-update-images', (s, input) => s.updateImages(input));
+  // 이름은 예전 그대로지만 제목(title·expectedTitle)도 같은 inventory_item PUT 으로 싣는다.
+  handle('ebay-update-images',(s, input) => s.updateImages(input));
   handle('ebay-withdraw', (s, sku) => s.withdraw(sku));
 }

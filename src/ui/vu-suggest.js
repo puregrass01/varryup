@@ -42,22 +42,17 @@
   }
 
   const CSS = [
-    '.vu-combo{position:absolute;z-index:9999;max-height:240px;overflow-y:auto;overflow-x:hidden;background:#1b1f27;border:1px solid rgba(255,255,255,0.18);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.45);padding:4px;box-sizing:border-box;}',
-    '.vu-combo-item{padding:6px 10px;font-size:13px;color:#e6e9ee;border-radius:5px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
-    '.vu-combo-item[aria-selected=\"true\"]{background:rgba(255,255,255,0.12);}',
-    '.vu-combo-empty{padding:8px 10px;font-size:12px;color:#8b93a1;}',
+    // 색은 theme.css 토큰만 쓴다 — 밝게·어둡게 모두 토큰이 바뀐다(셸·iframe 둘 다 theme.css 를 싣는다).
+    '.vu-combo{position:absolute;z-index:9999;max-height:240px;overflow-y:auto;overflow-x:hidden;background:var(--bg-panel);border:1px solid var(--rule-2);border-radius:var(--radius);box-shadow:var(--shadow-panel);padding:4px;box-sizing:border-box;}',
+    '.vu-combo-item{padding:6px 10px;font-size:13px;color:var(--text-primary);border-radius:4px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
+    '.vu-combo-item[aria-selected=\"true\"]{background:var(--accent-wash);}',
+    '.vu-combo-empty{padding:8px 10px;font-size:12px;color:var(--text-muted);}',
     '.vu-combo::-webkit-scrollbar{width:10px;}',
-    '.vu-combo::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.22);border-radius:5px;}',
+    '.vu-combo::-webkit-scrollbar-thumb{background:var(--ovl-3);border-radius:5px;}',
     '.vu-combo::-webkit-scrollbar-track{background:transparent;}',
-    // 밝은 테마. 목록 색이 어두운 값으로 박혀 있어서 흰 화면에 검은 목록이 떴다.
-    ':root[data-theme="light"] .vu-combo{background:#fff;border-color:rgba(15,23,42,0.16);box-shadow:0 8px 24px rgba(15,23,42,0.14);}',
-    ':root[data-theme="light"] .vu-combo-item{color:#0f172a;}',
-    ':root[data-theme="light"] .vu-combo-item[aria-selected="true"]{background:rgba(37,99,235,0.10);}',
-    ':root[data-theme="light"] .vu-combo-empty{color:#64748b;}',
-    ':root[data-theme="light"] .vu-combo::-webkit-scrollbar-thumb{background:rgba(15,23,42,0.20);}',
     // 마우스를 올린 항목도 드러나야 한다(키보드 선택만 표시됐다).
-    '.vu-combo-item:hover{background:rgba(255,255,255,0.08);}',
-    ':root[data-theme="light"] .vu-combo-item:hover{background:rgba(15,23,42,0.05);}'
+    '.vu-combo-item:hover{background:var(--ovl-1);}',
+    '.vu-combo-item[aria-selected=\"true\"]:hover{background:var(--accent-wash);}'
   ].join('');
 
   function ensureStyle(doc) {
@@ -79,6 +74,8 @@
   function place(doc, open) {
     const r = open.input.getBoundingClientRect();
     const view = doc.defaultView;
+    // 숨은 칸(코드가 값을 채운 접힌 칸)은 상자가 없어 목록이 창 왼쪽 위(0,0)에 떴다 — 목록은 두되 보이지 않게
+    open.el.style.visibility = open.input.getClientRects().length ? '' : 'hidden';
     open.el.style.left = (r.left + view.scrollX) + 'px';
     open.el.style.top = (r.bottom + view.scrollY + 2) + 'px';
     // 행 목록('2세대 · 12.03~19.05 · F20/F21 · No.101')은 2단 칸(160px 남짓)보다 길다.
@@ -98,10 +95,14 @@
   // 입력값으로 거른다. 빈 값이면 전체를 보여준다 — 목록이 있다는 걸 알 수 있어야 한다.
   // 앞부분 일치를 먼저 올린다: '벤' 을 치면 '벤츠' 가 '스즈벤' 보다 위에 와야 한다.
   // 행은 보이는 글 전체로 거른다 — 연식 칸에서 'F20' 을 쳐도 그 차량코드 행이 걸린다.
+  // 몰 상품명을 그대로 붙여 넣어도 찾게('제네시스 GV70 광각 사이드 와이드미러', '…[No.K107]') 상품명에만 붙는 낱말 · 괄호는 단어에서 뺀다.
+  const NAME_NOISE = new Set(['옵틱글래스', 'optic-glass', 'opticglass', 'ogwm', '광각', '광각미러', '사이드', '와이드', '와이드미러', '사이드미러', '미러']);
   function filterValues(values, query) {
     const q = String(query || '').trim().toLowerCase();
     if (!q) return values.slice();
-    const words = q.split(/\s+/), starts = [], contains = [];
+    const all = q.split(/\s+/).map(w => w.replace(/[[\]()]/g, '')).filter(Boolean);
+    const kept = all.filter(w => !NAME_NOISE.has(w));
+    const words = kept.length ? kept : all, starts = [], contains = [];
     for (const v of values) {
       const lower = labelOf(v).toLowerCase();
       if (lower.indexOf(q) === 0) starts.push(v);
@@ -589,18 +590,25 @@
   // 신규 등록할 차(DB 에 없음)는 한 줄로 붙여 넣는다: 'No.1108번  F150  12세대 중기형  11~14  P415'
   // = 상품번호 · 차종 · 세대 · 연식 · 차량코드. 시트에서 복사한 탭(또는 두 칸 이상 띄움)으로 나누고, 한 칸씩 띄운 줄은
   // 연식 모양(11~14 · 12.03~19.05 · 26년 9월~)을 기준으로 나눈다(차종은 한 낱말). 'No.' 로 시작하지 않으면 null.
-  const YEAR = String.raw`(?:\d{2}년\s*\d{1,2}월|\d{2}(?:\.\d{1,2})?)\s*~\s*(?:\d{2}년\s*\d{1,2}월|\d{2}(?:\.\d{1,2})?)?`;
+  // 끝은 '~' 또는 '-'(카탈로그 표기 10.03-12.06 · 20.12-현재), 끝 연식은 없어도 되고 '현재' 도 된다.
+  const YEAR = String.raw`(?:\d{2}년\s*\d{1,2}월|\d{2}(?:\.\d{1,2})?)\s*[~-]\s*(?:\d{2}년\s*\d{1,2}월|\d{2}(?:\.\d{1,2})?|현재)?`;
   function parseDbLine(text) {
-    const raw = nz(text);
+    const raw = String(text ?? '').trim();   // nz 는 겹친 띄움을 하나로 줄여 아래 '두 칸 이상' 나누기를 못 하게 한다
     if (!/^No\.?\s*[A-Za-z]?\d/i.test(raw)) return null;
     let parts = raw.split(/\t+|\s{2,}/).map(nz).filter(Boolean);
     if (parts.length < 3) {
       const m = raw.replace(/\s+/g, ' ').match(new RegExp(String.raw`^(\S+)\s+(\S+)\s*(.*?)\s*(${YEAR})\s*(.*)$`));
       if (!m) return null;
       parts = m.slice(1).map(nz);
+      // 차종이 여러 낱말이면('더뉴 스포티지') 카탈로그 차종과 맞는 가장 긴 앞 낱말까지를 차종으로 본다.
+      const words = [parts[1], ...parts[2].split(' ')].filter(Boolean);
+      for (let k = words.length; k > 1; k--) {
+        const cand = words.slice(0, k).join(' ');
+        if ((vehicle?.variants || []).some(v => squash(v.model) === squash(cand))) { parts[1] = cand; parts[2] = words.slice(k).join(' '); break; }
+      }
     }
     const [no, model, gen = '', year = '', code = ''] = parts;
-    return { no: bareNoOf(no), model, gen, year, code };
+    return { no: bareNoOf(no.replace(/번/g, '')), model, gen, year, code };   // 'No.K107번-2' → K107-2
   }
   // 차종으로 제조사를 정한다 — 좌측 목록(카테고리)이나 카탈로그에서 그 차종을 가진 제조사가 하나일 때만.
   function brandOfModel(model) {

@@ -1,7 +1,7 @@
 import { updateEbayPricesBatch } from './ebay_bulk_prices.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { EbayAPI, EbayAPIError, EBAY_SCOPES } from './ebay_api.js';
-import { buildEbayPayload, priceQuantity, validateAspects, validateSku } from './ebay_payload.js';
+import { buildEbayPayload, priceQuantity, validateAspects, validateSku, validateTitle } from './ebay_payload.js';
 import { effectiveQuery, matchesProduct } from './product_search.js';
 import { markPreSend } from '../utils/api_error.js';
 import { parseImageUrls, sameImages } from '../utils/bulk_images.js';
@@ -510,20 +510,25 @@ export class Ebay {
     });
   }
 
-  async updateImages({ sku, images, expectedImages }) {
+  // 이미지·제목은 둘 다 inventory_item 전체 PUT 으로만 바뀐다 — 한 번에 보낸다. 안 넘긴 쪽(null/undefined)은
+  // 지금 eBay 값 그대로 다시 실린다. 각각 불러올 때 값(expected*)과 다르면 보내지 않는다.
+  async updateImages({ sku, images, expectedImages, title, expectedTitle }) {
     return this.exclusive(async () => {
-      let current, urls;
+      let current, urls, nextTitle;
       try {
-        urls = parseImageUrls(images, 'ebay');
+        if (images != null) urls = parseImageUrls(images, 'ebay');
+        if (title != null) nextTitle = validateTitle(title);
+        if (!urls && !nextTitle) throw new Error('바꿀 이미지·제목이 없습니다.');
         current = await this.load(sku, { allowMigration: false });
-        if (current.offer.status !== 'PUBLISHED') throw new Error('게시된 상품만 이미지를 수정할 수 있습니다.');
-        if (!sameImages(current.inventory.product?.imageUrls || [], expectedImages)) throw new Error('이미지가 변경됐습니다. 다시 불러오세요.');
+        if (current.offer.status !== 'PUBLISHED') throw new Error('게시된 상품만 이미지·제목을 수정할 수 있습니다.');
+        if (urls && !sameImages(current.inventory.product?.imageUrls || [], expectedImages)) throw new Error('이미지가 변경됐습니다. 다시 불러오세요.');
+        if (nextTitle && (current.inventory.product?.title || '') !== String(expectedTitle ?? '')) throw new Error('제목이 변경됐습니다. 다시 불러오세요.');
       } catch (e) { throw markPreSend(e); }
       const { api } = this.client();
       // Inventory replacement requires the latest complete writable representation.
       const payload = JSON.parse(JSON.stringify(current.inventory));
       for (const field of ['sku', 'locale', 'inventoryItemGroupKeys']) delete payload[field];
-      payload.product = { ...payload.product, imageUrls: urls };
+      payload.product = { ...payload.product, ...(urls ? { imageUrls: urls } : {}), ...(nextTitle ? { title: nextTitle } : {}) };
       await api.request('PUT', `/sell/inventory/v1/inventory_item/${encodeURIComponent(current.sku)}`, payload);
       return { status: 'UPDATED' };
     });

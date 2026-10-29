@@ -170,7 +170,7 @@ test('상품명(아임웹 자사몰 탭): 그 구역 이름만 바꾸고 다시 
   assert.deepEqual([same.success, same.data?.status], [true, 'UNCHANGED']);
   const b2b = await save({ scope: 'imweb-b2b', id: '712', expectedName: 'x', newName: 'y' }, 'name');
   assert.deepEqual([b2b.success, b2b.stage], [false, 'pre-send']);
-  assert.match(b2b.error, /본사몰 구역에서만/);
+  assert.match(b2b.error, /본사몰 구역\(한국·미국·일본\)과 아마존\(미국·일본\)에서만/);
   assert.deepEqual(head.calls, [['name', '3', 'uUS']], '보낸 것은 미국 구역 이름 하나');
   // 탭의 저장 한 번: 바뀐 가격 줄 · 이름 · 이미지를 한 작업으로 보낸다(BUSY · 진행 이벤트를 같이 쓴다).
   const loaded = await call('bulk-images-load', { scope: 'imweb-ko', id: '3' });

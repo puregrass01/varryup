@@ -1,0 +1,43 @@
+/* 단일 상품 수정 — 여섯 몰 카드(mall-grid.js). 색 · 글꼴 · 모서리는 theme.css 변수만 쓴다. 카드 모양은 .vu-cut, 저장 키는 .vu-key */
+.embedded-platform .tab-pane#mallGridTab, #mallGridTab { max-width: none; }
+.mg-bar { display: flex; gap: var(--space-sm); align-items: center; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); }
+.mg-status { flex: 1; font-size: 12px; color: var(--text-secondary); }
+.mg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.mg-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px 12px 12px; background: var(--bg-card); color: var(--text-primary); transition: border-color var(--transition); }
+/* 바뀐 카드: 코발트 테두리. 바뀐 칸은 아래 '· 바뀜' 글자로도 표시된다 */
+.mg-card.mg-changed { border-color: var(--accent); }
+.mg-head { display: flex; align-items: center; gap: var(--space-sm); width: 100%; margin: -2px 0 2px; padding: 0 0 var(--space-sm); border: 0; border-bottom: 1px solid var(--rule); background: transparent; color: var(--text-primary); text-align: left; cursor: pointer; font: inherit; }
+.mg-head:hover .mg-open { color: var(--accent); }
+.mg-head:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.mg-name { font-family: var(--font-display); font-weight: 500; font-size: 14px; }
+.mg-logo { width: 22px; height: 22px; object-fit: contain; border-radius: 4px; background: var(--logo-tile); border: 1px solid var(--rule); }
+.mg-open { margin-left: auto; font-size: 11px; font-weight: 400; color: var(--text-secondary); transition: color var(--transition); }
+.mg-ro, .mg-note { margin: 0; font-size: 11px; color: var(--text-secondary); }
+.mg-missing { margin: 0; font-weight: 600; color: var(--text-secondary); }
+.mg-error { margin: 0; font-size: 12px; color: var(--accent-danger); }
+.mg-warn { margin: 0; padding: var(--space-xs) var(--space-sm); font-size: 12px; color: var(--accent-warn); background: var(--warn-wash); border-radius: var(--radius); }
+.mg-warn:empty { display: none; }
+.mg-field { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--text-secondary); }
+/* 몰 카드 입력칸: 헤어라인 + 입력 반경, 값은 기계 글꼴(SKU · 번호 · 가격) */
+.mg-card input.form-input { width: 100%; max-width: 100%; min-height: 30px; padding: 5px var(--space-sm); font-size: 12.5px; }
+.mg-card input[type="number"] { font-family: var(--font-mono); }
+/* 바뀐 칸: 코발트 워시 + 왼쪽 코발트 선, 라벨 끝에 '· 바뀜' (색만으로 알리지 않는다) */
+.mg-card input.mg-dirty { background: var(--accent-wash); color: var(--text-primary); border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.mg-field:has(input.mg-dirty) > span:first-child::after { content: ' · 바뀜'; color: var(--accent); font-weight: 600; }
+.mg-label { font-size: 11px; color: var(--text-secondary); }
+.mg-opt-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.mg-opt-table th { text-align: left; font-weight: 400; color: var(--text-secondary); border-bottom: 1px solid var(--rule); padding: 2px; }
+.mg-opt-table td { padding: 2px; border-bottom: 1px solid var(--rule); }
+.mg-opt-table input { width: 100%; min-width: 0; }
+/* 삭제 칸은 글자 폭만, 이름 칸이 먼저 줄어든다('삭/제' 로 꺾이지 않게) */
+.mg-opt-table td:last-child { width: 1%; }
+.mg-opt-table button { white-space: nowrap; }
+.mg-foot { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: var(--space-sm); border-top: 1px solid var(--rule); }
+.mg-foot .mg-save { padding: 6px var(--space-md); }
+.mg-result { flex: 1; margin: 0; font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.mg-result[data-tone="ok"] { color: var(--accent-success); }
+.mg-result[data-tone="err"] { color: var(--accent-danger); }
+.mg-result[data-tone="warn"] { color: var(--accent-warn); }
+/* 이미지 목록이 옆에 서면 폼이 600px 남짓이다. 두 줄은 지키고, 옵션 표가 든 카드(네이버)만 한 줄을 다 쓴다 */
+@media (max-width: 720px) { .mg-card:has(.mg-opt-table) { grid-column: 1 / -1; } }
+@media (max-width: 520px) { .mg-grid { grid-template-columns: minmax(0, 1fr); } }

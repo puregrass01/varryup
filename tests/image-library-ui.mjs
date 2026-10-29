@@ -13,9 +13,10 @@ try {
     const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
     const profiles = ['domestic', 'amazon', 'ebay'].map(id => ({ id, label: id, folder: `${id}/기본 이미지`, seed: id !== 'domestic', errors: [], signature: id,
       items: ['대표.jpg', '1.jpg', '2.jpg'].map((name, i) => ({ name, role: i ? '상세' : '대표', path: `${id}/${name}`, selected: true, previewUrl: png })) }));
-    window.require = () => ({ ipcRenderer: { on() {}, send() {}, async invoke(channel, data) {
+    window.require = () => ({ webUtils: { getPathForFile: f => 'C:/사진/' + f.name }, ipcRenderer: { on() {}, send() {}, async invoke(channel, data) {
       window.calls.push({ channel, data });
       if (channel === 'image-library-load') return { success: true, profiles };
+      if (channel === 'image-library-host-files') return { success: true, urls: data.files.map(f => 'https://ai.esmplus.com/uploaded/vu_' + f.split('/').pop()) };
       if (channel === 'image-library-prepare') {
         const p = profiles.find(p => p.id === data.id); const urls = p.items.filter(i => i.selected).map((_, i) => `https://ai.esmplus.com/test/${data.id}-${i}.jpg`);
         return { success: true, profile: p, bundle: { signature: p.signature, mainImageUrl: urls[0], imageUrls: urls, subImages: urls.slice(1), detailHtml: '<p>detail</p>' } };
@@ -100,6 +101,13 @@ try {
   await page.evaluate(() => { const dt = new DataTransfer(); dt.setData('text/plain', "<img src='https://ai.esmplus.com/yhshma/a.jpg' /><img src='https://ai.esmplus.com/yhshma/b.jpg' />");
     document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); });
   await page.waitForFunction(() => calls.findLast(c => c.channel === 'image-library-configure').data.changes.addDetails?.length === 2);
+  // 탐색기 이미지 파일을 목록에 끌어 놓으면 ESM 에 올린 주소가 상세 끝에 붙는다.
+  await page.evaluate(() => { const dt = new DataTransfer(); dt.items.add(new File(['x'], 'local3.jpg', { type: 'image/jpeg' }));
+    const list = document.getElementById('vu-image-list');
+    list.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    list.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })); });
+  await page.waitForFunction(() => calls.findLast(c => c.channel === 'image-library-configure').data.changes.addDetails?.[0] === 'https://ai.esmplus.com/uploaded/vu_local3.jpg');
+  assert.deepEqual(await page.evaluate(() => calls.findLast(c => c.channel === 'image-library-host-files').data.files), ['C:/사진/local3.jpg']);
   await page.locator('#vu-image-html-open').click();
   const before = await page.evaluate(() => calls.length), html = await page.locator('#vu-image-html').inputValue();
   await page.locator('#vu-image-html').evaluate(el => { const dt = new DataTransfer(); dt.setData('text/plain', '<img src="https://ai.esmplus.com/yhshma/c.jpg">'); el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); });

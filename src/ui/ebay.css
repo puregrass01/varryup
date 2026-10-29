@@ -1,11 +1,11 @@
 /* Scoped additions; all existing platforms retain their current template. */
-#ebayTab .help-text { color: var(--text-dim); font-size: 0.8rem; line-height: 1.65; margin: 10px 0 16px; }
-#ebayTab .step-indicator { margin-top: 24px; }
-#ebayTab .panel-header { flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+#ebayTab .help-text { color: var(--text-dim); font-size: 0.8rem; line-height: 1.65; margin: 10px 0 var(--space-md); }
+#ebayTab .step-indicator { margin-top: var(--space-lg); }
+#ebayTab .panel-header { flex-wrap: wrap; gap: var(--space-sm); align-items: flex-start; }
 #ebayTab .btn-row { flex-wrap: wrap; margin: 12px 0; }
 #ebayTab textarea { resize: vertical; }
-#ebayTab #ebPreview:not(:empty) { background: var(--input-bg); padding: 16px; border-radius: var(--radius-sm); margin-top: 16px; }
-#ebayTab details { margin-bottom: 16px; }
+#ebayTab #ebPreview:not(:empty) { background: var(--input-bg); padding: var(--space-md); border-radius: var(--radius-sm); margin-top: var(--space-md); }
+#ebayTab details { margin-bottom: var(--space-md); }
 /* 정책 ID 3종: 목록(datalist) 아이콘을 오른쪽에서 왼쪽으로 옮긴다.
    인디케이터만 흐름에서 빼 왼쪽에 고정하므로 입력값은 그대로 왼쪽부터 읽힌다
    (direction:rtl 은 값까지 우측정렬돼 쓰지 않는다).
@@ -15,6 +15,8 @@
 #ebayTab #ebPayment[list]::-webkit-calendar-picker-indicator,
 #ebayTab #ebReturn[list]::-webkit-calendar-picker-indicator { position: absolute; left: 10px; margin: 0; }
 /* 브랜드 · MPN · 판매가 · 재고 한 줄(25% 씩) */
-#ebayTab .quad-input { width: 100%; max-width: 100%; }
+#ebayTab .quad-input { width: 100%; max-width: 100%; align-items: flex-end; }
 #ebayTab .quad-input > .input-col { flex: 1 1 0; min-width: 0; }
 @media (max-width: 720px) { #ebayTab .dual-input { flex-direction: column; } }
+/* 폼이 좁으면(이미지 목록이 옆에 선 1200 창) 네 칸을 2 x 2 로 — 한 줄이면 칸이 60px 남짓이라 라벨 · 예시가 잘린다 */
+@media (max-width: 760px) { #ebayTab .dual-input.quad-input { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } }

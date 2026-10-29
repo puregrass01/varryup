@@ -24,10 +24,18 @@
       text.append(node('small', item.error || (item.source === 'esm' ? 'ESM 이미지' : item.url ? '호스팅 저장됨' : (i === 0 && p.seed ? 'VerySeed GLOBAL 최신 사진' : '적용 시 주소 확인'))));
       if (i === 0 && item.modified) text.append(node('small', new Date(item.modified).toLocaleString('ko-KR')));
       label.append(check, img, text); row.append(label);
-      // 상세 줄은 끌어다 놓아 순서를 바꾼다(대표는 늘 첫 줄이라 끌 수도, 그 위에 놓을 수도 없다).
+      // 상세 줄은 끌어다 놓아 순서를 바꾼다(대표는 늘 첫 줄이라 순서는 못 바꾸고, 그 위에 놓을 수도 없다).
+      // 주소가 있는 줄은 그 주소도 싣는다 — 수정 모드의 6몰 카드(iframe 갤러리)에 놓으면 이미지 끝에 붙는다(image-gallery.js).
+      // 작업 중에 그린 줄은 run() 이 끝날 때 data-drag 로 다시 켠다(예전엔 작업 중 그린 줄이 계속 못 끌렸다).
+      const url = item.url || '';
+      if (url || i > 0) { row.dataset.drag = '1'; row.draggable = !busy; }
+      if (url) {
+        row.title = '끌어서 순서 바꾸기 · 6몰 카드 이미지 칸에 놓으면 추가';
+        row.addEventListener('dragstart', e => { e.dataTransfer.effectAllowed = 'copyMove'; e.dataTransfer.setData('text/uri-list', url); e.dataTransfer.setData('text/plain', url); });
+      }
       if (i > 0) {
-        row.draggable = !busy; row.title = '끌어서 순서 바꾸기';
-        row.addEventListener('dragstart', e => { dragging = i; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('application/x-vu-row', String(i)); });
+        row.title ||= '끌어서 순서 바꾸기';
+        row.addEventListener('dragstart', e => { dragging = i; e.dataTransfer.setData('application/x-vu-row', String(i)); });
         row.addEventListener('dragend', () => { dragging = 0; });
         row.addEventListener('dragover', e => { if (dragging) e.preventDefault(); });
         row.addEventListener('drop', e => {
@@ -50,7 +58,8 @@
     if (busy) return;
     busy = true; draw();
     try { await fn(); return true; } catch (e) { status(e.message); return false; }
-    finally { busy = false; root.querySelectorAll('button, select, input, textarea').forEach(el => el.disabled = false); const first = root.querySelector('input[type=checkbox]'); if (first) first.disabled = true; }
+    finally { busy = false; root.querySelectorAll('button, select, input, textarea').forEach(el => el.disabled = false); const first = root.querySelector('input[type=checkbox]'); if (first) first.disabled = true;
+      root.querySelectorAll('.vu-image-row[data-drag]').forEach(row => { row.draggable = true; }); }
   }
   async function change(changes) {
     return run(async () => {
@@ -105,6 +114,7 @@
     esmUrls,   // 일괄 수정 이미지 주소 칸도 같은 해석을 쓴다
     async init(options) {
       ipc = options.ipc; afterChange = options.onChange; root = document.getElementById('image-library');
+      root.classList.add('vu-cut');
       root.innerHTML = `<summary>[img] 이미지</summary>
         <select id="vu-image-profile" aria-label="이미지 쇼핑몰"><option value="domestic">국내 공통</option><option value="amazon">Amazon</option><option value="ebay">eBay</option></select>
         <div id="vu-image-folder" class="vu-image-path"></div>
@@ -112,7 +122,7 @@
         <div id="vu-image-html-editor" hidden><label for="vu-image-html">ESM 상세 이미지 HTML</label><textarea id="vu-image-html" rows="5" placeholder='<img src="https://ai.esmplus.com/…">'></textarea><button type="button" id="vu-image-html-save">HTML 저장</button><button type="button" id="vu-image-html-cancel">취소</button></div>
         <div id="vu-image-list" class="vu-image-list"></div><div id="vu-image-status" class="vu-image-status" role="status"></div>
         <button type="button" id="vu-image-prepare" class="vu-image-prepare">일괄 적용</button>
-        <small>기본 상세 이미지는 로컬 폴더 없이 표시됩니다. 기존 상품 수정에는 자동 적용하지 않습니다.</small>`;
+        <small>기본 상세 이미지는 로컬 폴더 없이 표시됩니다. 탐색기 이미지 파일을 목록에 끌어 놓으면 ESM에 올려 끝에 붙입니다. 기존 상품 수정에는 자동 적용하지 않습니다 — 줄을 6몰 카드 이미지 칸에 끌어 놓으면 그 몰 목록 끝에 붙습니다.</small>`;
       $('vu-image-profile').onchange = e => { selected = e.target.value; $('vu-image-html-editor').hidden = true; draw(); };
       // 편집기는 목록에 보이는 순서(끌어 옮긴 순서, 체크 끈 것 포함)로 연다 — 저장하면 이 줄 순서가 곧 목록 순서다.
       $('vu-image-html-open').onclick = () => { const p = profiles.get(selected);
@@ -153,14 +163,35 @@
       let inner = false;
       root.addEventListener('dragstart', () => { inner = true; });
       root.addEventListener('dragend', () => { inner = false; });
-      const offered = types => ['application/x-vu-photo', 'text/uri-list', 'text/html', 'text/plain'].some(t => types.includes(t));
-      for (const type of ['dragenter', 'dragover']) root.addEventListener(type, e => { if (!busy && !inner && !e.target.closest?.('textarea') && offered(e.dataTransfer.types)) e.preventDefault(); });
+      const offered = types => ['application/x-vu-photo', 'Files', 'text/uri-list', 'text/html', 'text/plain'].some(t => types.includes(t));
+      // 탐색기(로컬 폴더)의 이미지 파일은 ESM 에 올린 주소로 바꿔 같은 자리에 넣는다(같은 내용은 기존 주소 재사용).
+      const host = async files => {
+        let urls = null;   // run() 은 성공 여부만 돌려준다
+        await run(async () => {
+          status(`ESM에 이미지 ${files.length}장 올리는 중… (ESM 로그인이 필요하면 창이 뜹니다)`);
+          urls = (await request('image-library-host-files', { files })).urls;
+        });
+        return urls;
+      };
+      for (const type of ['dragenter', 'dragover']) root.addEventListener(type, e => {
+        // 작업 중에도 파일은 받는다 — 놓으면 '끝난 뒤 다시' 안내가 나온다(안 받으면 아무 일도 안 일어난다).
+        const t = e.dataTransfer.types;
+        if (!inner && !e.target.closest?.('textarea') && offered(t) && (!busy || t.includes('Files'))) e.preventDefault();
+      });
       root.addEventListener('drop', e => {
         const dt = e.dataTransfer, file = dt.getData('application/x-vu-photo');
         // 다른 앱(Edge 페이지)도 이 형식을 실을 수 있다 — 이 창 미리보기에서 시작한 드래그의 경로만 받는다(UNC 경로면 Windows 가 그 호스트에 접속).
         if (file && file === window.vuPhotoDrag) { e.preventDefault(); change({ thumbnail: file, seed: false }); return; }
         if (inner) return;
         const urls = esmUrls(dt.getData('text/html'), dt.getData('text/uri-list') || dt.getData('text/plain'));
+        // ESM 페이지에서 끈 그림도 파일(가상)을 같이 싣는다 — ESM 주소가 있으면 그 주소를 쓰고 다시 올리지 않는다.
+        const files = urls.length ? [] : [...dt.files].map(f => require('electron').webUtils.getPathForFile(f)).filter(Boolean);
+        if (files.length) {
+          e.preventDefault();
+          if (busy) return status('이미지 작업이 끝난 뒤 다시 넣어주세요.');
+          host(files).then(urls => urls && add(urls));
+          return;
+        }
         if (!urls.length && e.target.closest?.('textarea')) return;   // ESM 주소가 아닌 글자는 편집 칸에 그대로 들어간다
         e.preventDefault();   // 편집 칸 커서 자리에 끼어 들어가 기존 <img src> 를 깨뜨리지 않게 한다
         add(urls);

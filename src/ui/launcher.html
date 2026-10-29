@@ -4,51 +4,43 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VERY UP VER3 - 런처</title>
+    <meta name="description" content="베리씨드, 베리업, 베리맵 가운데 시작할 프로그램을 고르는 VERY UP 런처">
     <script src="theme.js"></script>
+    <link rel="stylesheet" href="fonts.css">
+    <link rel="stylesheet" href="theme.css">
     <link rel="stylesheet" href="launcher.css">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
     <!-- 커스텀 윈도우 컨트롤 -->
-    <div style="position:fixed;top:0;left:0;right:0;height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;-webkit-app-region:drag;z-index:9999;">
-        <span style="font-size:0.75rem;color:var(--text);font-family:'Outfit',sans-serif;letter-spacing:0.05em;font-weight:600;">VERY UP VER3</span>
-        <div style="-webkit-app-region:no-drag;display:flex;gap:6px;">
-            <button data-theme-toggle title="밝게 / 어둡게"
-                style="width:28px;height:28px;border-radius:50%;border:none;background:var(--chip);color:var(--text-dim);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;"
-                onmouseover="this.style.background='var(--chip-hover)'" onmouseout="this.style.background='var(--chip)'">🌙</button>
-            <button onclick="const {ipcRenderer}=require('electron');ipcRenderer.send('minimize-win')" title="최소화"
-                style="width:28px;height:28px;border-radius:50%;border:none;background:var(--chip);color:var(--text-dim);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;"
-                onmouseover="this.style.background='var(--chip-hover)'" onmouseout="this.style.background='var(--chip)'">─</button>
-            <button onclick="const {ipcRenderer}=require('electron');ipcRenderer.send('close-win')" title="닫기"
-                style="width:28px;height:28px;border-radius:50%;border:none;background:var(--chip);color:var(--text-dim);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;"
-                onmouseover="this.style.background='rgba(220,50,50,0.7)';this.style.color='#fff'" onmouseout="this.style.background='var(--chip)';this.style.color='var(--text-dim)'">✕</button>
+    <div class="win-bar">
+        <span class="win-title wordmark">VERY UP VER3</span>
+        <div class="win-btns">
+            <button type="button" class="win-btn" data-theme-toggle title="밝게 / 어둡게"></button>
+            <button type="button" class="win-btn" onclick="const {ipcRenderer}=require('electron');ipcRenderer.send('minimize-win')" title="최소화" aria-label="최소화">─</button>
+            <button type="button" class="win-btn win-close" onclick="const {ipcRenderer}=require('electron');ipcRenderer.send('close-win')" title="닫기" aria-label="닫기">✕</button>
         </div>
     </div>
     <!-- 직원 로그인 오버레이 (로그인 전엔 이 화면이 카드를 가린다) -->
-    <div id="loginOverlay" style="position:fixed;inset:0;z-index:5000;background:var(--bg);display:flex;align-items:center;justify-content:center;">
-        <div style="width:320px;max-width:86vw;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:30px 26px;box-shadow:0 20px 60px rgba(15,23,42,.22);">
-            <div style="text-align:center;font-family:'Outfit',sans-serif;">
-                <div style="font-size:22px;font-weight:800;color:var(--text);letter-spacing:-.01em;">VERY UP</div>
-                <div style="font-size:12px;color:var(--text-dim);margin-top:3px;">직원 로그인</div>
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-card vu-cut">
+            <div class="login-brand">
+                <div class="login-brand-name">VERY UP</div>
+                <div class="login-brand-sub">직원 로그인</div>
             </div>
-            <div style="margin-top:22px;display:flex;flex-direction:column;gap:12px;">
-                <input id="li_user" placeholder="아이디" autocomplete="username"
-                    style="padding:11px 12px;border-radius:9px;border:1px solid var(--line);background:var(--field);color:var(--text);font-size:14px;outline:none;">
-                <input id="li_pw" type="password" placeholder="비밀번호" autocomplete="current-password"
-                    style="padding:11px 12px;border-radius:9px;border:1px solid var(--line);background:var(--field);color:var(--text);font-size:14px;outline:none;">
-                <button id="li_btn" onclick="doLogin()"
-                    style="padding:12px;border:none;border-radius:9px;background:var(--btn-face);color:var(--btn-text);font-size:15px;font-weight:600;cursor:pointer;">로그인</button>
-                <div id="li_err" style="display:none;color:var(--err);font-size:13px;text-align:center;line-height:1.4;"></div>
+            <div class="login-form">
+                <input id="li_user" class="login-input" placeholder="아이디" autocomplete="username">
+                <input id="li_pw" class="login-input" type="password" placeholder="비밀번호" autocomplete="current-password">
+                <button id="li_btn" class="login-btn vu-key vu-key-accent" onclick="doLogin()">로그인</button>
+                <div id="li_err" class="login-err" style="display:none;"></div>
                 <!-- 관리자 서버(직원·인증키·로그)를 기본 브라우저로 연다. 주소는 메인 프로세스가 만든다. -->
-                <button id="li_server" onclick="openAdminServer()" title="관리자 서버 로그인 페이지를 브라우저로 엽니다"
-                    style="padding:10px;border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--text-dim);font-size:13px;cursor:pointer;">
+                <button id="li_server" class="login-alt" onclick="openAdminServer()" title="관리자 서버 로그인 페이지를 브라우저로 엽니다">
                     서버 열기
                 </button>
                 <!-- 서버에 닿지 못했을 때만 나타난다. 비밀번호가 틀린 경우에는 뜨지 않는다. -->
-                <button id="li_local" onclick="enterLocalMode()" style="display:none;padding:10px;border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--text-dim);font-size:13px;cursor:pointer;">
+                <button id="li_local" class="login-alt" onclick="enterLocalMode()" style="display:none;">
                     서버 없이 로컬 모드로 시작
                 </button>
-                <div id="li_localhint" style="display:none;color:var(--text-dim);font-size:11.5px;text-align:center;line-height:1.5;">
+                <div id="li_localhint" class="login-hint" style="display:none;">
                     각 플랫폼 탭에서 직접 입력한 API 키로 동작합니다.
                 </div>
             </div>
@@ -56,10 +48,6 @@
     </div>
 
     <div class="launcher-bg">
-        <!-- 배경 글로우 -->
-        <div class="glow glow-left"></div>
-        <div class="glow glow-right"></div>
-
         <div class="launcher-wrap">
             <!-- 로고 -->
             <div class="launcher-logo">
@@ -72,9 +60,9 @@
             <div class="card-grid">
 
                 <!-- 베리씨드 카드 -->
-                <button class="app-card seed-card" onclick="launchSeed()">
+                <button class="app-card seed-card vu-cut" onclick="launchSeed()">
                     <div class="card-icon seed-icon">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <svg aria-hidden="true" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                             <path d="M12 22V12"/>
                             <path d="M12 12C12 7 7 4 2 4c0 5 3 9 10 8"/>
                             <path d="M12 12c0-5 5-8 10-8 0 5-3 9-10 8"/>
@@ -82,20 +70,19 @@
                     </div>
                     <div class="card-content">
                         <h2>베리씨드</h2>
-                        <p>AI 이미지 생성 &amp; ESM 이미지 호스팅</p>
+                        <p><abbr>AI</abbr> 이미지 생성 &amp; <abbr>ESM</abbr> 이미지 호스팅</p>
                         <ul class="card-features">
-                            <li>🇰🇷 KOREA &nbsp;🇺🇸 USA</li>
-                            <li>🇯🇵 JAPAN &nbsp;🇦🇪 ARAB</li>
+                            <li>한국, 미국, 일본, 아랍</li>
                             <li>국가별 템플릿 이미지 생성</li>
                         </ul>
                     </div>
-                    <div class="card-arrow">→</div>
+                    <div class="card-arrow" aria-hidden="true">→</div>
                 </button>
 
                 <!-- 베리업 카드 -->
-                <button class="app-card up-card" onclick="launchUp()">
+                <button class="app-card up-card vu-cut" onclick="launchUp()">
                     <div class="card-icon up-icon">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <svg aria-hidden="true" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
                             <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
                             <polyline points="7.5 19.79 7.5 14.6 3 12"/>
@@ -110,16 +97,16 @@
                         <ul class="card-features">
                             <li>신규 등록 / 상품 수정 모드</li>
                             <li>국가 × 플랫폼 현황판</li>
-                            <li>KOREA · USA · JAPAN · ARAB</li>
+                            <li>한국, 미국, 일본, 아랍</li>
                         </ul>
                     </div>
-                    <div class="card-arrow">→</div>
+                    <div class="card-arrow" aria-hidden="true">→</div>
                 </button>
 
                 <!-- 베리맵 카드 -->
-                <button class="app-card map-card" onclick="launchMap()">
+                <button class="app-card map-card vu-cut" onclick="launchMap()">
                     <div class="card-icon map-icon">
-                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <svg aria-hidden="true" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                             <polygon points="1 6 8 3 16 6 23 3 23 18 16 21 8 18 1 21 1 6"/>
                             <line x1="8" y1="3" x2="8" y2="18"/>
                             <line x1="16" y1="6" x2="16" y2="21"/>
@@ -129,7 +116,7 @@
                         <h2>베리맵</h2>
                         <p>차종 코드표 ↔ 채널 등록 현황 대조</p>
                     </div>
-                    <div class="card-arrow">→</div>
+                    <div class="card-arrow" aria-hidden="true">→</div>
                 </button>
 
             </div>

@@ -227,6 +227,15 @@ test('실제 상품 불러오기·저장 IPC는 닫힌 브라우저에 접근하
   assert.equal(failure.error, 'API credentials missing');
 });
 
+test('묶음 이미지가 있어도 끝에 붙이기만 하면 기존 상세를 그대로 두고, 순서를 바꾸면 거부한다', () => {
+  const grouped = '<div class="se-component se-imageGroup"><img src="https://img.example/g1.jpg"><img src="https://img.example/g2.jpg"></div><p>고지</p>';
+  const images = extractNaverDetailImages(grouped);
+  const added = replaceNaverDetailImages(grouped, [...images, { isNew: true, url: 'https://ai.esmplus.com/x/add.jpg' }]);
+  assert.ok(added.startsWith(grouped), '기존 상세(묶음 포함)는 바이트 그대로');
+  assert.match(added.slice(grouped.length), /^<div><img src="https:\/\/ai\.esmplus\.com\/x\/add\.jpg"/, '묶음 안이 아니라 끝에 붙는다');
+  assert.throws(() => replaceNaverDetailImages(grouped, [images[1], images[0], { isNew: true, url: 'https://ai.esmplus.com/x/add.jpg' }]), /묶음 이미지/);
+});
+
 // ── 신규 복사등록 (커머스API) ──────────────────────────────────────
 function copyTemplate() {
   const body = fixture();

@@ -59,8 +59,11 @@ export function extractNaverDetailImages(html = '') {
 export function replaceNaverDetailImages(html, wanted) {
   if (!Array.isArray(wanted)) throw new Error('상세이미지 목록이 올바르지 않습니다.');
   const blocks = imageBlocks(html);
-  if (wanted.length === blocks.length && wanted.every((im, i) => !im.isNew && im.id === blocks[i].id && im.url === blocks[i].url)) return html;
-  if (blocks.some(b => b.grouped)) throw new Error('묶음 이미지가 포함된 상세설명은 이 화면에서 이미지 순서를 바꿀 수 없습니다. 이미지 목록을 다시 불러와 주세요.');
+  const original = (im, i) => !im.isNew && im.id === blocks[i]?.id && im.url === blocks[i]?.url;
+  if (wanted.length === blocks.length && wanted.every(original)) return html;
+  // 기존 이미지를 그대로 두고 끝에 붙이기만 하면 묶음 이미지도 건드리지 않는다(아래 루프가 마지막 블록 뒤에 붙인다).
+  const appendOnly = wanted.length > blocks.length && blocks.every((_, i) => original(wanted[i], i)) && wanted.slice(blocks.length).every(im => im.isNew);
+  if (!appendOnly && blocks.some(b => b.grouped)) throw new Error('묶음 이미지가 포함된 상세설명은 이 화면에서 이미지 순서를 바꿀 수 없습니다. 이미지 목록을 다시 불러와 주세요.');
   const byId = new Map(blocks.map(b => [b.id, b]));
   const used = new Set();
   const next = wanted.map(im => {
@@ -76,6 +79,8 @@ export function replaceNaverDetailImages(html, wanted) {
     return original.html;
   });
   if (!blocks.length) return next.join('') + html;
+  // 마지막 이미지가 묶음 안에 있으면 그 묶음 안이 아니라 상세 끝에 붙인다.
+  if (appendOnly && blocks.at(-1).grouped) return html + next.slice(blocks.length).join('');
   let out = '', cursor = 0;
   blocks.forEach((block, i) => {
     if (block.start < cursor) throw new Error('중첩된 상세이미지 구조를 안전하게 수정할 수 없습니다.');

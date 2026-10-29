@@ -156,6 +156,19 @@ test('price update changes only the US offer and checks item-level failures', as
   remote.behavior = async (m, url) => url.endsWith('bulk_update_price_quantity') ? { responses: [{ statusCode: 400, errors: [{ message: 'Price rejected' }] }] } : undefined;
   await assert.rejects(service.updatePriceQuantity({ sku: product.sku, price: 60, quantity: 3 }), /Price rejected/);
 });
+test('title edit rides the inventory_item PUT, keeps images, and is guarded before sending', async t => {
+  const { service, remote } = fixture(t); await service.saveDraft(product); await service.publish(product.sku);
+  const sent = () => remote.calls.filter(c => c.method === 'PUT').length, before = sent();
+  for (const title of ['', '   ', 'x'.repeat(81)])
+    await assert.rejects(service.updateImages({ sku: product.sku, title, expectedTitle: product.title }), /1~80자/);
+  await assert.rejects(service.updateImages({ sku: product.sku, title: 'New', expectedTitle: 'stale' }), /제목이 변경/);
+  await assert.rejects(service.updateImages({ sku: product.sku }), /바꿀 이미지·제목이 없/);
+  assert.equal(sent(), before, 'nothing is sent when validation or the expected title fails');
+  await service.updateImages({ sku: product.sku, title: '  OpticGlass Right Mirror  ', expectedTitle: product.title });
+  assert.equal(remote.inventory.product.title, 'OpticGlass Right Mirror');
+  assert.deepEqual(remote.inventory.product.imageUrls, ['https://images.example.com/glass.jpg'], 'images untouched when only the title changes');
+  assert.equal(remote.inventory.product.description, 'Mirror glass\n<script>no</script>');
+});
 test('price update that eBay accepted is not reported as failed when the local cache update throws', async t => {
   const { service, store } = fixture(t); await service.saveDraft(product); await service.publish(product.sku);
   store.updateCachedListing = () => { throw new SyntaxError('broken listings cache'); };

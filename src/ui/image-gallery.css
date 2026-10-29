@@ -1,34 +1,43 @@
-.vu-image-gallery { display:flex; flex-wrap:wrap; gap:12px; margin:4px 0; max-height:320px; overflow:auto; padding:4px; }
+.vu-image-gallery { display:flex; flex-wrap:wrap; gap:12px; margin:var(--space-xs) 0; max-height:320px; overflow:auto; padding:var(--space-xs); }
 .vu-image-tile { position:relative; margin:0; width:70px; }
-.vu-image-tile img { width:70px; height:70px; object-fit:contain; background:#fff; border-radius:5px; }
-.vu-image-tile figcaption { font-size:11px; text-align:center; color:var(--text-secondary,#64748b); }
+.vu-image-tile img { width:70px; height:70px; object-fit:contain; background:var(--logo-tile); border:1px solid var(--rule); border-radius:5px; box-sizing:border-box; }
+.vu-image-tile figcaption { font-family:var(--font-body); font-size:11px; text-align:center; color:var(--text-secondary); }
 .vu-image-tile .vu-image-open { display:block; border:0; padding:0; background:transparent; cursor:zoom-in; }
 .vu-image-tile .vu-image-remove,
 #bulk-edit-workspace .vu-image-tile .vu-image-remove {
-  position:absolute; top:0; right:0; width:22px; height:22px; padding:0; border:1px solid #fff;
-  border-radius:50%; background:#b91c1c; color:#fff; font:700 18px/1 Arial,sans-serif;
+  position:absolute; top:0; right:0; width:22px; height:22px; padding:0; border:1px solid var(--rule-2);
+  border-radius:50%; background:var(--bg-panel); color:var(--text-primary); font:700 18px/1 var(--font-body);
   display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:0;
 }
 .vu-image-tile:hover .vu-image-remove, .vu-image-tile:focus-within .vu-image-remove,
 #bulk-edit-workspace .vu-image-tile:hover .vu-image-remove,
 #bulk-edit-workspace .vu-image-tile:focus-within .vu-image-remove { opacity:1; }
-.vu-image-tile .vu-image-remove:focus-visible { opacity:1; outline:2px solid var(--accent,#2563eb); outline-offset:2px; }
-#bulk-edit-workspace .vu-image-tile .vu-image-remove:hover:not(:disabled) { background:#991b1b; color:#fff; }
+.vu-image-tile .vu-image-remove:focus-visible { opacity:1; outline:2px solid var(--focus); outline-offset:2px; }
+/* ✖ 는 판 바탕 + 진한 글자(두 모드 4.5:1 이상), 올리면 위험 워시 + 빨강 */
+.vu-image-tile .vu-image-remove:hover:not(:disabled),
+#bulk-edit-workspace .vu-image-tile .vu-image-remove:hover:not(:disabled) { background:var(--danger-wash); border-color:var(--accent-danger); color:var(--accent-danger); }
 /* 비활성 ✖(작업 중·읽기 전용)는 회색 반투명. 위 빨강·hover 규칙보다 특이도를 높여야 이긴다(예전엔 빨강이 이겼다). */
 .vu-image-tile .vu-image-remove:disabled,
-#bulk-edit-workspace .vu-image-tile .vu-image-remove:disabled { cursor:not-allowed; background:var(--text-muted,#64748b); }
+#bulk-edit-workspace .vu-image-tile .vu-image-remove:disabled { cursor:not-allowed; background:var(--paper-3); border-color:var(--rule); color:var(--text-muted); }
 .vu-image-tile:hover .vu-image-remove:disabled, .vu-image-tile:focus-within .vu-image-remove:disabled,
 #bulk-edit-workspace .vu-image-tile:hover .vu-image-remove:disabled,
-#bulk-edit-workspace .vu-image-tile:focus-within .vu-image-remove:disabled { opacity:.5; }
-.vu-image-moves { display:flex; gap:4px; justify-content:center; }
-.vu-image-moves button { padding:0 6px; border:1px solid var(--border,#cbd5e1); border-radius:4px; background:transparent; color:inherit; cursor:pointer; }
-.vu-image-save-hint, .vu-image-empty { font-size:12px; color:var(--text-secondary,#64748b); margin:2px 0; }
-.vu-image-add { width:70px; height:70px; padding:4px; border:1px dashed var(--border,#cbd5e1); border-radius:5px; background:transparent; color:inherit; font-size:11px; cursor:pointer; }
-.vu-image-import { display:flex; gap:8px; align-items:center; margin:4px 0; }
-.vu-image-import textarea { flex:1; min-width:0; padding:8px; border:1px solid var(--border,#cbd5e1); border-radius:5px; color:inherit; background:var(--bg-card,#fff); }
-.vu-image-import button { padding:8px; border:1px solid var(--border,#cbd5e1); border-radius:5px; color:inherit; background:var(--bg-card,#fff); cursor:pointer; }
-.vu-image-dialog { max-width:90vw; max-height:90vh; overflow:auto; background:var(--bg-card,#fff); color:var(--text-primary,#111); border-radius:8px; }
-.vu-image-dialog::backdrop { background:#0009; }
+#bulk-edit-workspace .vu-image-tile:focus-within .vu-image-remove:disabled { opacity:.5; cursor:not-allowed; }
+.vu-image-moves { display:flex; gap:var(--space-xs); justify-content:center; }
+.vu-image-moves button { font:inherit; padding:0 6px; border:1px solid var(--rule-2); border-radius:4px; background:transparent; color:inherit; cursor:pointer; }
+.vu-image-moves button:hover:not(:disabled) { background:var(--ovl-1); }
+.vu-image-moves button:disabled { color:var(--text-muted); border-color:var(--rule); cursor:default; }
+.vu-image-save-hint, .vu-image-empty { font-size:12px; color:var(--text-secondary); margin:2px 0; }
+.vu-image-add { font:inherit; width:70px; height:70px; padding:var(--space-xs); border:1px dashed var(--input-border); border-radius:5px; background:transparent; color:inherit; font-size:11px; cursor:pointer; }
+.vu-image-add:hover:not(:disabled) { background:var(--ovl-1); border-color:var(--accent); }
+/* 탐색기 이미지 파일 · 이미지 목록 줄을 끌고 들어오면 놓을 자리를 보여 준다 */
+.vu-image-gallery.vu-image-dropping { outline:2px dashed var(--accent); outline-offset:-2px; border-radius:6px; background:var(--accent-wash); }
+.vu-image-import { display:flex; gap:var(--space-sm); align-items:center; margin:var(--space-xs) 0; }
+.vu-image-import textarea { flex:1; min-width:0; padding:var(--space-sm); border:1px solid var(--input-border); border-radius:5px; color:inherit; background:var(--bg-input); font-family:var(--font-mono); font-size:12px; }
+.vu-image-import button { font:inherit; padding:var(--space-sm); border:1px solid var(--rule-2); border-radius:5px; color:inherit; background:var(--bg-panel); cursor:pointer; }
+.vu-image-import button:hover:not(:disabled) { background:var(--ovl-1); }
+:is(.vu-image-add, .vu-image-import button):disabled { color:var(--text-muted); background:var(--paper-3); border-color:var(--rule); cursor:default; }
+.vu-image-dialog { max-width:90vw; max-height:90vh; overflow:auto; background:var(--bg-panel); color:var(--text-primary); border:1px solid var(--rule); border-radius:var(--radius-md); box-shadow:var(--shadow-panel); }
+.vu-image-dialog::backdrop { background:var(--scrim); }
 .vu-image-dialog > button { display:block; position:sticky; top:0; margin-left:auto; cursor:pointer; }
-.vu-image-dialog > img { max-width:100%; height:auto; display:block; }
+.vu-image-dialog > img { max-width:100%; height:auto; display:block; background:var(--logo-tile); }
 @media (hover:none) { .vu-image-tile .vu-image-remove, #bulk-edit-workspace .vu-image-tile .vu-image-remove { opacity:1; } }

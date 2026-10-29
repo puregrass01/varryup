@@ -4,6 +4,13 @@ export function validateSku(value) {
   return sku;
 }
 
+// eBay 상품명은 80자까지다 — 신규 등록과 기존 상품 제목 수정이 같이 쓴다.
+export function validateTitle(value) {
+  const title = String(value || '').trim();
+  if (!title || title.length > 80) throw new Error('영문 상품명은 1~80자로 입력해주세요.');
+  return title;
+}
+
 export function priceQuantity(data) {
   const price = String(data.price ?? '').trim();
   const quantity = String(data.quantity ?? '').trim();
@@ -43,8 +50,7 @@ export function buildEbayPayload(data, config) {
   const sku = validateSku(data.sku);
   const { price, quantity } = priceQuantity(data);
   if (quantity === 0) throw new Error('신규 상품 재고는 1개 이상이어야 합니다.');
-  const title = String(data.title || '').trim();
-  if (!title || title.length > 80) throw new Error('영문 상품명은 1~80자로 입력해주세요.');
+  const title = validateTitle(data.title);
   const description = String(data.description || '').trim();
   if (!description || description.length > 50000) throw new Error('상품 설명은 1~50000자로 입력해주세요.');
   if (!/^\d+$/.test(String(data.categoryId || ''))) throw new Error('미국 최하위 카테고리 ID를 입력해주세요.');

@@ -260,24 +260,24 @@ const 차량들 = [
     ],
   },
   {
-    이름: '아마존 일본까지 켬 — 아마존 탭은 마지막으로 누른 나라 마켓',
+    이름: '아마존 일본을 켬 — 미국 아마존은 꺼진다(아마존 탭은 한 번에 한 마켓)',
     켜기: [['JAPAN', 'open1', true]],
     기대: [
+      ['현황판', 'on:USA.open1', '미국 아마존 꺼짐', false],
       ['아마존', 'amzMarketplaceId', '마켓 (일본)', 'A1VC38T7YXB528'],
       ['아마존', 'amzCurrency',      '통화',        'JPY'],
     ],
   },
   {
-    이름: '└ 켜져 있는 미국 아마존 칸을 누름 — 끄지 않고 미국 마켓으로 바꾼다',
+    이름: '└ 미국 아마존 칸을 누름 — 미국 아마존이 켜지고 일본 아마존은 꺼진다',
     누르기: [['USA', 'open1']],
-    확인: true,
+    확인: true,   // 이 뒤 일괄 등록 장면들의 입력 확인 대화상자도 '확인'으로 답한다
     기대: [
-      ['현황판', 'on:USA.open1', '미국 아마존 켜진 채', true],
+      ['현황판', 'on:USA.open1', '미국 아마존 켜짐', true],
+      ['현황판', 'on:JAPAN.open1', '일본 아마존 꺼짐', false],
       ['아마존', 'amzMarketplaceId', '마켓 (미국)', 'ATVPDKIKX0DER'],
       ['아마존', 'amzCurrency',      '통화',        'USD'],
       ['아마존', 'amzTitle', '상품명', AMZ + 'BMW 1 Series 2nd gen 12.03~19 F20' + AMZ_END],
-      // 예전에는 일본이 켜져 있으면 무조건 일본이라 미국에는 한 건도 안 갔다.
-      ['셸 로그', 'log:아마존 미국·일본을 둘 다 켰습니다', '한 번에 한 마켓 경고', true],
     ],
   },
   {
@@ -431,9 +431,9 @@ const 차량들 = [
     ],
   },
   {
-    이름: '└ 아마존 일본을 다시 끔(뒤의 셸 동작 검사는 미국만 켠 상태를 쓴다)',
-    켜기: [['JAPAN', 'open1', false]],
-    기대: [['현황판', 'on:JAPAN.open1', '아마존 일본 꺼짐', false]],
+    이름: '└ 미국 아마존을 다시 켬 — 일본은 저절로 꺼진다(뒤의 셸 동작 검사는 미국만 켠 상태를 쓴다)',
+    켜기: [['USA', 'open1', true]],
+    기대: [['현황판', 'on:JAPAN.open1', '아마존 일본 꺼짐', false], ['현황판', 'on:USA.open1', '아마존 미국 켜짐', true]],
   },
 ];
 
@@ -1041,33 +1041,32 @@ try {
     ]);
   }
   {
-    // 아마존 미국·일본을 둘 다 켜면 채우기가 채운 마켓(마지막으로 누른 칸)에만 올리고, 다른 마켓은 안 올렸다고 알린다.
-    await page.evaluate(() => { handleCheck('JAPAN', 'open1', true); openPlatformTab('amazonTab', 'USA'); });
-    await 채우기끝();
-    const us = await 일괄(다성공, 이베이성공);
-    const usMarket = await 폼.evaluate(() => window.__bulk.find(b => b.fn === 'registerAmazon')?.market);
-    const usLast = await page.evaluate(() => lastAmazonCountry);
-    await page.evaluate(() => openPlatformTab('amazonTab', 'JAPAN'));
-    await 채우기끝();
+    // 아마존 미국·일본은 둘 중 하나만 켜진다. 일본을 켜면 미국이 꺼지고 일괄 등록은 일본 마켓으로만, 미국을 다시 켜면 반대.
     // 현황판에는 지금 올리는 마켓 칸만 '열림' 으로 표시된다(가운데 쇼핑몰 탭을 현황판으로 합쳤다).
     const viewing = () => page.evaluate(() => [...document.querySelectorAll('#board-body .platform-cell.viewing')].map(td => td.dataset.country + '-' + td.dataset.type).join(','));
+    await page.evaluate(() => handleCheck('JAPAN', 'open1', true));
+    await 채우기끝();
+    const jpBoard = await page.evaluate(() => [checked.USA.open1, checked.JAPAN.open1]);
     const jpViewing = await viewing();
     const jp = await 일괄(다성공, 이베이성공);
     const jpMarket = await 폼.evaluate(() => window.__bulk.find(b => b.fn === 'registerAmazon')?.market);
-    await page.evaluate(() => openPlatformTab('amazonTab', 'USA'));
+    await page.evaluate(() => handleCheck('USA', 'open1', true));
     await 채우기끝();
+    const usBoard = await page.evaluate(() => [checked.USA.open1, checked.JAPAN.open1]);
     const usViewing = await viewing();
-    await page.evaluate(() => handleCheck('JAPAN', 'open1', false));
-    await 채우기끝();
-    판정('일괄 등록 — 아마존 미국·일본 둘 다 켬', [
-      ['아마존',  '미국 칸 누름 → 미국 마켓',  usMarket, 'ATVPDKIKX0DER'],
-      ['셸 로그', '미국으로 등록',             us.includes('[아마존 미국] 등록 완료'), true],
-      ['셸 로그', '일본은 안 올렸다고 알림',   us.includes('일본 아마존은 이번에 올리지 않았습니다'), true],
-      ['셸',      '누른 나라 그대로',          usLast, 'USA'],
-      ['아마존',  '일본 칸 누름 → 일본 마켓',  jpMarket, 'A1VC38T7YXB528'],
+    const us = await 일괄(다성공, 이베이성공);
+    const usMarket = await 폼.evaluate(() => window.__bulk.find(b => b.fn === 'registerAmazon')?.market);
+    const allPreset = await page.evaluate(() => { const s = presetSelection(BOARD_PRESETS.all); return [s.USA.open1, s.JAPAN.open1, s.USA.open2, s.KOREA.open1]; });
+    판정('일괄 등록 — 아마존 미국·일본은 하나만', [
+      ['현황판',  "'전체' = 미국 아마존 기본(일본 아마존 끔)", JSON.stringify(allPreset), '[true,false,true,true]'],
+      ['현황판',  '일본을 켜면 미국은 꺼짐',   JSON.stringify(jpBoard), '[false,true]'],
+      ['아마존',  '일본 마켓으로 등록',        jpMarket, 'A1VC38T7YXB528'],
       ['셸 로그', '일본으로 등록',             jp.includes('[아마존 일본] 등록 완료'), true],
-      ['셸 로그', '미국은 안 올렸다고 알림',   jp.includes('미국 아마존은 이번에 올리지 않았습니다'), true],
+      ['셸 로그', '둘 다 켬 경고 없음',        jp.includes('둘 다 켰습니다'), false],
       ['셸',      '일본 마켓 → 현황판 일본 아마존 칸만 열림', jpViewing, 'JAPAN-open1'],
+      ['현황판',  '미국을 켜면 일본은 꺼짐',   JSON.stringify(usBoard), '[true,false]'],
+      ['아마존',  '미국 마켓으로 등록',        usMarket, 'ATVPDKIKX0DER'],
+      ['셸 로그', '미국으로 등록',             us.includes('[아마존 미국] 등록 완료'), true],
       ['셸',      '미국 마켓 → 현황판 미국 아마존 칸만 열림', usViewing, 'USA-open1'],
     ]);
   }

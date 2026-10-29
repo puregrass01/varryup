@@ -5,18 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VERY UP VER3 - 베리씨드</title>
     <script src="theme.js"></script>
+    <link rel="stylesheet" href="fonts.css">
     <link rel="stylesheet" href="theme.css">
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
     <style>
-        /* ── 베리씨드 전용 스타일 ── */
+        /* ── 베리씨드 전용 스타일. 색·글꼴 값은 theme.css 만 가진다 — 여기서는 이름만 쓴다 ── */
         .seed-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 12px 20px;
-            background: rgba(16,185,129,0.08);
-            border-bottom: 1px solid rgba(16,185,129,0.2);
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--rule);
             flex-shrink: 0;
             -webkit-app-region: drag;
         }
@@ -30,30 +30,49 @@
             display: flex;
             align-items: center;
             gap: 6px;
-            background: var(--ovl-1);
-            border: 1px solid var(--ovl-2);
-            color: var(--text-dim);
+            background: transparent;
+            border: 1px solid var(--rule-2);
+            color: var(--text-secondary);
             padding: 6px 12px;
-            border-radius: 8px;
+            border-radius: var(--radius);
             cursor: pointer;
+            font-family: var(--font-body);
             font-size: 0.82rem;
-            transition: all 0.2s;
+            transition: background 0.2s, color 0.2s;
             -webkit-app-region: no-drag;
         }
-        .back-btn:hover { background: var(--ovl-2); color: var(--text-main); }
+        .back-btn:hover { background: var(--ovl-1); color: var(--text-primary); }
         .seed-title {
-            font-family: 'Outfit', sans-serif;
+            font-family: var(--font-display);
             font-size: 1.2rem;
-            font-weight: 700;
-            color: var(--text-main);
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
         }
+        /* 창 버튼 — 셸(index_up.html)과 같은 모양, 닫기만 hover 에 위험색 */
+        .win-btns { display: flex; gap: 6px; -webkit-app-region: no-drag; }
+        .win-btn {
+            width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid transparent;
+            border-radius: var(--radius);
+            background: var(--ovl-2);
+            color: var(--text-secondary);
+            font-family: var(--font-body);
+            font-size: 13px;
+            cursor: pointer;
+            transition: background var(--transition), color var(--transition);
+        }
+        .win-btn:hover { background: var(--ovl-3); color: var(--text-primary); }
+        .win-btn.win-close:hover { background: var(--danger-wash); color: var(--accent-danger); border-color: var(--accent-danger); }
+        .win-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
         /* ── 국가 탭 ── */
         .country-tabs {
             display: flex;
             gap: 4px;
             padding: 10px 20px 0;
-            background: var(--sunk);
-            border-bottom: 1px solid var(--panel-border);
+            background: var(--paper-2);
+            border-bottom: 1px solid var(--rule);
             flex-shrink: 0;
             -webkit-app-region: no-drag;
         }
@@ -64,34 +83,35 @@
             padding: 10px 20px;
             background: transparent;
             border: none;
-            border-bottom: 3px solid transparent;
-            color: var(--text-dim);
+            border-bottom: 2px solid transparent;
+            color: var(--text-secondary);
             cursor: pointer;
+            font-family: var(--font-body);
             font-size: 0.9rem;
-            font-weight: 600;
-            transition: all 0.2s;
-            border-radius: 6px 6px 0 0;
+            font-weight: 500;
+            transition: color 0.2s, background 0.2s, border-color 0.2s;
+            border-radius: var(--radius) var(--radius) 0 0;
             white-space: nowrap;
         }
-        .country-tab-btn:hover { color: var(--text-main); background: var(--ovl-1); }
+        .country-tab-btn:hover { color: var(--text-primary); background: var(--ovl-1); }
         .country-tab-btn.active {
-            color: #10b981;
-            border-bottom-color: #10b981;
-            background: rgba(16,185,129,0.08);
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+            background: var(--bg-panel);
         }
-        .country-flag { font-size: 1.1rem; }
+        .country-flag { height: 12px; width: auto; border: 1px solid var(--rule); vertical-align: -1px; }
 
         /* ── 국가 패널 ── */
         .country-panel { display: none; flex: 1; overflow: hidden; flex-direction: column; }
         .country-panel.active { display: flex; }
 
-        /* ── 서브탭 (AI / ESM) ── */
+        /* ── 서브탭 (AI / ESM) — 납작한 선택지, 고른 것은 코발트 워시 ── */
         .sub-tabs {
             display: flex;
             gap: 4px;
             padding: 8px 16px;
-            background: var(--sunk);
-            border-bottom: 1px solid var(--panel-border);
+            background: var(--paper-2);
+            border-bottom: 1px solid var(--rule);
             flex-shrink: 0;
         }
         .sub-tab-btn {
@@ -99,25 +119,22 @@
             align-items: center;
             gap: 6px;
             padding: 7px 16px;
-            background: var(--ovl-1);
-            border: 1px solid var(--panel-border);
-            border-radius: 8px;
-            color: var(--text-dim);
+            background: var(--bg-panel);
+            border: 1px solid var(--rule-2);
+            border-radius: var(--radius);
+            color: var(--text-secondary);
             cursor: pointer;
+            font-family: var(--font-body);
             font-size: 0.82rem;
             font-weight: 500;
-            transition: all 0.2s;
+            transition: color 0.2s, background 0.2s, border-color 0.2s;
         }
-        .sub-tab-btn:hover { color: var(--text-main); }
-        .sub-tab-btn.active {
-            background: rgba(59,130,246,0.15);
-            border-color: rgba(59,130,246,0.4);
-            color: #60a5fa;
-        }
+        .sub-tab-btn:hover { color: var(--text-primary); }
+        .sub-tab-btn.active,
         .sub-tab-btn.esm-active {
-            background: rgba(139,92,246,0.15);
-            border-color: rgba(139,92,246,0.4);
-            color: #a78bfa;
+            background: var(--accent-wash);
+            border-color: var(--accent);
+            color: var(--accent);
         }
 
         /* ── 서브탭 콘텐츠 ── */
@@ -135,60 +152,79 @@
         .left-panel { flex: 1; }
         .right-panel { flex: 1; display: flex; flex-direction: column; }
         .section-title {
-            color: var(--text-main);
+            font-family: var(--font-display);
+            color: var(--text-primary);
             font-size: 1rem;
             font-weight: 600;
             margin: 0 0 14px;
             padding-bottom: 8px;
-            border-bottom: 1px solid var(--panel-border);
+            border-bottom: 1px solid var(--rule);
         }
         .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .radio-group-row { display: flex; gap: 14px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
         .radio-label, .checkbox-label {
             display: flex; align-items: center; gap: 7px;
-            font-size: 0.83rem; color: var(--text-main); cursor: pointer;
+            font-size: 0.83rem; color: var(--text-primary); cursor: pointer;
         }
         .radio-label input[type="radio"],
-        .checkbox-label input[type="checkbox"] { accent-color: #3b82f6; width: 15px; height: 15px; }
+        .checkbox-label input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
+        /* 결과 카드 — 깎은 카드(theme.css .vu-cut 과 같은 모양) */
         .result-container {
             margin-top: 14px; display: none;
-            background: var(--sunk); padding: 14px;
-            border-radius: 8px; border: 1px solid var(--panel-border);
+            background: var(--bg-panel); padding: 14px;
+            border-radius: var(--radius-md); border: 1px solid var(--rule);
+            box-shadow: var(--shadow-card);
         }
-        .result-container p { font-size: 0.82rem; color: var(--text-dim); margin-top: 0; margin-bottom: 8px; }
+        .result-container p { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0; margin-bottom: 8px; }
         #aiResultImage { width: 100%; height: auto; display: block; border-radius: 4px; }
         .loader-text {
             display: none; text-align: center; margin-top: 16px;
-            font-size: 0.88rem; color: #3b82f6;
-            background: rgba(59,130,246,0.1); padding: 14px; border-radius: 8px;
+            font-size: 0.88rem; color: var(--accent);
+            background: var(--accent-wash); padding: 14px; border-radius: var(--radius);
         }
+        /* 주 실행 = 코발트 키(theme.css .vu-key.vu-key-accent 와 같은 값) */
         .btn-generate {
             width: 100%;
-            background: linear-gradient(135deg, #3b82f6, #10b981);
-            color: #fff; border: none; font-weight: 600;
-            padding: 12px; border-radius: 8px; font-size: 0.95rem;
-            cursor: pointer; transition: all 0.2s; margin-top: 12px;
+            background: var(--accent);
+            color: var(--accent-ink);
+            border: 1px solid var(--accent-hover);
+            box-shadow: var(--shadow-key-accent);
+            font-family: var(--font-display);
+            font-weight: 600;
+            padding: 12px; border-radius: var(--radius); font-size: 0.95rem;
+            cursor: pointer; margin-top: 12px;
+            transition: transform var(--dur-micro) ease-out, box-shadow var(--dur-micro) ease-out;
             display: flex; align-items: center; justify-content: center; gap: 8px;
         }
-        .btn-generate:hover { opacity: 0.9; transform: translateY(-1px); }
-        .btn-generate:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-generate:hover:not(:disabled) { transform: translateY(-1px); }
+        .btn-generate:active:not(:disabled) { transform: translateY(2px); box-shadow: var(--shadow-key-press); }
+        .btn-generate:disabled {
+            background: var(--paper-3); border-color: var(--rule); color: var(--text-muted);
+            box-shadow: none; cursor: not-allowed;
+        }
+        /* 내려받기 = 무늬 없는 키 */
         .btn-download {
             display: none; width: 100%; margin-top: 12px;
-            background: #334155; color: #fff; border: none;
-            padding: 10px; border-radius: 8px; font-weight: 500;
-            cursor: pointer; transition: background 0.2s;
+            background: var(--key-face); color: var(--text-primary);
+            border: 1px solid var(--rule-2); box-shadow: var(--shadow-key);
+            padding: 10px; border-radius: var(--radius);
+            font-family: var(--font-display); font-weight: 600;
+            cursor: pointer;
+            transition: transform var(--dur-micro) ease-out, box-shadow var(--dur-micro) ease-out;
             align-items: center; justify-content: center; gap: 8px;
         }
-        .btn-download:hover { background: #475569; }
+        .btn-download:hover { transform: translateY(-1px); }
+        .btn-download:active { transform: translateY(2px); box-shadow: var(--shadow-key-press); }
         .bsa-instruction {
-            display: none; color: #fff; background: #ef4444;
-            padding: 10px; border-radius: 8px; font-weight: bold;
+            display: none; color: var(--accent-danger); background: var(--danger-wash);
+            border: 1px solid var(--accent-danger);
+            padding: 10px; border-radius: var(--radius); font-weight: 600;
             font-size: 0.95rem; margin-bottom: 12px; text-align: center;
         }
         .bsa-size-control {
             display: none; margin-top: 12px; text-align: center;
-            background: var(--panel-bg); padding: 10px;
-            border-radius: 8px; border: 1px solid var(--panel-border);
+            background: var(--bg-panel); padding: 10px;
+            border-radius: var(--radius); border: 1px solid var(--rule);
         }
 
         /* ── ESM 탭 ── */
@@ -196,50 +232,57 @@
         .category-toggle { display: flex; gap: 8px; flex-wrap: wrap; }
         .toggle-btn {
             display: flex; align-items: center; gap: 6px;
-            padding: 8px 16px; border-radius: 8px;
-            border: 1px solid var(--panel-border);
-            background: transparent; color: var(--text-dim);
-            cursor: pointer; font-size: 0.85rem; transition: all 0.2s;
+            padding: 8px 16px; border-radius: var(--radius);
+            border: 1px solid var(--rule-2);
+            background: transparent; color: var(--text-secondary);
+            font-family: var(--font-body);
+            cursor: pointer; font-size: 0.85rem;
+            transition: color 0.2s, background 0.2s, border-color 0.2s;
         }
         .toggle-btn.active {
-            background: rgba(139,92,246,0.15);
-            border-color: #8b5cf6; color: #a78bfa;
+            background: var(--accent-wash);
+            border-color: var(--accent); color: var(--accent);
         }
         .file-upload-box {
-            border: 2px dashed var(--panel-border); border-radius: 8px;
+            border: 1px dashed var(--input-border); border-radius: var(--radius);
             padding: 20px; text-align: center; cursor: pointer;
-            transition: all 0.2s; min-height: 80px;
+            transition: border-color 0.2s, background 0.2s; min-height: 80px;
             display: flex; align-items: center; justify-content: center;
         }
-        .file-upload-box:hover { border-color: #8b5cf6; background: rgba(139,92,246,0.05); }
-        .upload-placeholder { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--text-dim); font-size: 0.82rem; }
+        .file-upload-box:hover { border-color: var(--accent); background: var(--accent-wash); }
+        .upload-placeholder { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 0.82rem; }
         .image-preview { max-width: 100%; border-radius: 4px; }
         .path-display {
             display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
-            background: var(--sunk); padding: 8px 12px; border-radius: 6px;
+            background: var(--paper-2); border: 1px solid var(--rule);
+            padding: 8px 12px; border-radius: var(--radius);
+            font-family: var(--font-mono);
             font-size: 0.8rem;
         }
-        .path-segment { color: #60a5fa; font-weight: 500; }
-        .path-arrow { color: var(--text-dim); }
+        .path-segment { color: var(--accent); font-weight: 500; }
+        .path-arrow { color: var(--text-secondary); }
         .folder-list-area { display: flex; gap: 8px; align-items: center; }
         .folder-list-area select { flex: 1; }
         .html-output-area { position: relative; }
         .btn-copy {
             position: absolute; top: 6px; right: 6px;
-            background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3);
-            color: #60a5fa; padding: 4px 10px; border-radius: 6px;
+            background: var(--bg-panel); border: 1px solid var(--rule-2);
+            color: var(--accent); padding: 4px 10px; border-radius: var(--radius);
+            font-family: var(--font-body);
             cursor: pointer; font-size: 0.78rem; display: flex; align-items: center; gap: 4px;
+            transition: background 0.2s;
         }
-        .btn-copy:hover { background: rgba(59,130,246,0.3); }
+        .btn-copy:hover { background: var(--accent-wash); }
         .log-container { margin-top: 16px; }
-        .log-header h3 { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 6px; }
+        .log-header h3 { font-family: var(--font-display); font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
         .log-window {
-            background: var(--sunk); border-radius: 6px;
-            border: 1px solid var(--panel-border);
-            padding: 8px; height: 120px; overflow-y: auto; font-size: 0.78rem;
+            background: var(--paper-2); border-radius: var(--radius);
+            border: 1px solid var(--rule);
+            padding: 8px; height: 120px; overflow-y: auto;
+            font-family: var(--font-mono); font-size: 0.78rem;
         }
         .log-entry { padding: 2px 0; }
-        .log-entry.system { color: var(--text-dim); }
+        .log-entry.system { color: var(--log-system); }
         .log-entry.success { color: var(--log-success); }
         .log-entry.error { color: var(--log-error); }
         .log-entry.process { color: var(--log-process); }
@@ -247,26 +290,22 @@
         /* ── 국가 배지 ── */
         .country-badge {
             display: inline-flex; align-items: center; gap: 5px;
-            background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2);
-            color: #34d399; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem;
+            background: var(--accent-wash); border: 1px solid var(--rule);
+            color: var(--accent); padding: 3px 10px; border-radius: var(--radius); font-size: 0.75rem;
         }
 
-        /* ── 라이트 테마 보정 ─────────────────────────────────────────
-           강조색이 전부 '어두운 바탕에 뜨는 밝은 색' 이라, 밝은 바탕에서는 배경과
-           붙어 버린다(밝기 차 90 미만). 같은 계열의 진한 색으로 바꾼다. */
-        :root[data-theme="light"] .country-tab-btn.active { color: #047857; border-bottom-color: #047857; }
-        :root[data-theme="light"] .sub-tab-btn.active     { color: #1d4ed8; }
-        :root[data-theme="light"] .sub-tab-btn.esm-active { color: #6d28d9; }
-        :root[data-theme="light"] .toggle-btn.active      { color: #6d28d9; border-color: #6d28d9; }
-        :root[data-theme="light"] .path-segment           { color: #1d4ed8; }
-        :root[data-theme="light"] .btn-copy               { color: #1d4ed8; }
-        :root[data-theme="light"] .country-badge          { color: #047857; }
-        :root[data-theme="light"] .loader-text            { color: #1d4ed8; }
-
         /* ── 드래그 가능 BSA 로고 ── */
-        .ai-image-wrapper { position: relative; display: inline-block; width: 100%; border: 1px solid var(--panel-border); border-radius: 4px; overflow: hidden; }
+        .ai-image-wrapper { position: relative; display: inline-block; width: 100%; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
         .draggable-bsa { position: absolute; cursor: grab; user-select: none; z-index: 10; }
         .draggable-bsa:active { cursor: grabbing; }
+
+        /* 카드·결과 칸은 두 모서리를 깎는다 */
+        @supports (corner-shape: bevel) {
+            .result-container {
+                border-radius: var(--cut-l) 4px var(--cut-l) 4px;
+                corner-shape: bevel round bevel round;
+            }
+        }
     </style>
 </head>
 <body>
@@ -282,29 +321,23 @@
             <span class="seed-title">베리씨드</span>
         </div>
         <span style="font-size:0.75rem; color:var(--text-dim);">AI 이미지 생성 &amp; ESM 이미지 호스팅</span>
-        <div style="display:flex;gap:6px;-webkit-app-region:no-drag;">
-            <button data-theme-toggle title="밝게 / 어둡게"
-                style="width:28px;height:28px;border-radius:50%;border:none;background:var(--ovl-2);color:var(--text-dim);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;"
-                onmouseover="this.style.background='var(--ovl-3)'" onmouseout="this.style.background='var(--ovl-2)'">🌙</button>
-            <button onclick="require('electron').ipcRenderer.send('minimize-win')" title="최소화"
-                style="width:28px;height:28px;border-radius:50%;border:none;background:var(--ovl-2);color:var(--text-dim);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;"
-                onmouseover="this.style.background='var(--ovl-3)'" onmouseout="this.style.background='var(--ovl-2)'">─</button>
-            <button onclick="require('electron').ipcRenderer.send('close-win')" title="닫기"
-                style="width:28px;height:28px;border-radius:50%;border:none;background:var(--ovl-2);color:var(--text-dim);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;"
-                onmouseover="this.style.background='rgba(220,50,50,0.8)';this.style.color='#fff'" onmouseout="this.style.background='var(--ovl-2)';this.style.color='var(--text-dim)'">✕</button>
+        <div class="win-btns">
+            <button type="button" class="win-btn" data-theme-toggle title="밝게 / 어둡게"></button>
+            <button type="button" class="win-btn" onclick="require('electron').ipcRenderer.send('minimize-win')" title="최소화" aria-label="최소화">─</button>
+            <button type="button" class="win-btn win-close" onclick="require('electron').ipcRenderer.send('close-win')" title="닫기" aria-label="닫기">✕</button>
         </div>
     </div>
 
     <!-- 국가 탭 네비게이션 -->
     <div class="country-tabs">
         <button class="country-tab-btn active" onclick="switchCountry('KOREA', this)">
-            <span class="country-flag">🇰🇷</span> KOREA
+            <img class="country-flag" src="flags/korea.png" alt=""> KOREA
         </button>
         <button class="country-tab-btn" onclick="switchCountry('USA', this)">
-            <span class="country-flag">🇺🇸</span> USA
+            <img class="country-flag" src="flags/usa.png" alt=""> USA
         </button>
         <button class="country-tab-btn" onclick="switchCountry('GENERAL', this)">
-            <span class="country-flag">🌐</span> 범용
+            범용
         </button>
     </div>
 
@@ -321,7 +354,7 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                 ESM 이미지 호스팅
             </button>
-            <span class="country-badge" style="margin-left:auto;">🇰🇷 KOREA</span>
+            <span class="country-badge" style="margin-left:auto;"><img class="country-flag" src="flags/korea.png" alt=""> KOREA</span>
         </div>
         <div class="sub-pane active" id="ai_KOREA">
             <!-- AI 이미지 생성 공통 컴포넌트 -->
@@ -345,7 +378,7 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                 ESM 이미지 호스팅
             </button>
-            <span class="country-badge" style="margin-left:auto;">🇺🇸 USA</span>
+            <span class="country-badge" style="margin-left:auto;"><img class="country-flag" src="flags/usa.png" alt=""> USA</span>
         </div>
         <div class="sub-pane active" id="ai_USA">
             <div data-ai-panel="USA"></div>
@@ -368,7 +401,7 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                 ESM 이미지 호스팅
             </button>
-            <span class="country-badge" style="margin-left:auto;">🌐 범용</span>
+            <span class="country-badge" style="margin-left:auto;">범용</span>
         </div>
         <div class="sub-pane active" id="ai_GENERAL">
             <div data-ai-panel="GENERAL"></div>
@@ -511,19 +544,19 @@ function buildAiPanel(country) {
             이미지 생성하기
           </button>
 
-          <div class="loader-text" id="aiLoader_${country}">⏳ AI가 배경을 제거하고 이미지를 합성 중입니다...</div>
+          <div class="loader-text" id="aiLoader_${country}">AI가 배경을 제거하고 이미지를 합성 중입니다...</div>
 
           <div class="result-container" id="aiResult_${country}">
-            <p>✨ <b>이미지 생성 완료!</b></p>
+            <p><b>이미지 생성 완료!</b></p>
             <p class="bsa-instruction" id="bsaInstruction_${country}">
-              🖐 잠깐! 다운로드 전에 빨간색 로고를 끌어서 원하는 위치에 맞춰주세요!
+              잠깐! 다운로드 전에 빨간색 로고를 끌어서 원하는 위치에 맞춰주세요!
             </p>
             <div class="ai-image-wrapper" id="aiWrapper_${country}">
               <img id="aiResultImg_${country}" src="" alt="생성된 이미지" style="width:100%;height:auto;display:block;">
               <img id="bsaLogo_${country}" src="" alt="BSA Logo" class="draggable-bsa" style="display:none;top:60%;left:15%;width:15%;">
             </div>
             <div class="bsa-size-control" id="bsaSize_${country}">
-              <label style="font-weight:600;margin-right:8px;">🔍 로고 크기:</label>
+              <label style="font-weight:600;margin-right:8px;">로고 크기:</label>
               <input type="range" id="bsaSlider_${country}" min="5" max="40" value="15" style="width:140px;vertical-align:middle;">
               <span id="bsaSliderVal_${country}" style="margin-left:8px;font-weight:600;">15%</span>
             </div>
@@ -586,7 +619,7 @@ function buildGeneralPanel() {
             </div>
             <div style="margin-top:10px; width:50%; min-width:560px; max-width:100%; text-align:right;">
                 <button type="button" class="btn-translate" onclick="autoTranslateGeneral(this)">
-                    🌐 korea(한국어) 기준 자동번역 → 영어·일본어·아랍어
+                    korea(한국어) 기준 자동번역 → 영어·일본어·아랍어
                 </button>
             </div>
         </div>
@@ -632,19 +665,19 @@ function buildGeneralPanel() {
                 ① 대표 이미지 생성 (로고 위치 잡기)
             </button>
 
-            <div class="loader-text" id="aiLoader_GENERAL">⏳ AI가 배경을 제거하고 이미지를 합성 중입니다...</div>
+            <div class="loader-text" id="aiLoader_GENERAL">AI가 배경을 제거하고 이미지를 합성 중입니다...</div>
 
             <div class="result-container" id="aiResult_GENERAL">
-                <p>✨ <b>대표 이미지 생성 완료!</b></p>
+                <p><b>대표 이미지 생성 완료!</b></p>
                 <p class="bsa-instruction" id="bsaInstruction_GENERAL">
-                    🖐 로고를 끌어서 위치를 맞추고 슬라이더로 크기를 조절한 뒤, 아래 <b>전체 나라 이미지 생성</b>을 누르세요.
+                    로고를 끌어서 위치를 맞추고 슬라이더로 크기를 조절한 뒤, 아래 <b>전체 나라 이미지 생성</b>을 누르세요.
                 </p>
                 <div class="ai-image-wrapper" id="aiWrapper_GENERAL">
                     <img id="aiResultImg_GENERAL" src="" alt="대표 이미지" style="width:100%;height:auto;display:block;">
                     <img id="bsaLogo_GENERAL" src="" alt="BSA Logo" class="draggable-bsa" style="display:none;top:60%;left:15%;width:15%;">
                 </div>
                 <div class="bsa-size-control" id="bsaSize_GENERAL">
-                    <label style="font-weight:600;margin-right:8px;">🔍 로고 크기:</label>
+                    <label style="font-weight:600;margin-right:8px;">로고 크기:</label>
                     <input type="range" id="bsaSlider_GENERAL" min="5" max="40" value="15" style="width:140px;vertical-align:middle;">
                     <span id="bsaSliderVal_GENERAL" style="margin-left:8px;font-weight:600;">15%</span>
                 </div>
@@ -691,10 +724,10 @@ function buildEsmPanel(country) {
           </div>
         </div>
         <div style="flex:1;">
-          <div class="file-upload-box" onclick="loadAutoImg('${country}')" style="border-color:#8b5cf6;background:rgba(139,92,246,0.05);">
+          <div class="file-upload-box" onclick="loadAutoImg('${country}')" style="border-color:var(--accent);background:var(--accent-wash);color:var(--accent);">
             <div class="upload-placeholder">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12l4 4 4-4"/></svg>
-              <span style="color:#8b5cf6;font-weight:600;margin-top:4px;font-size:0.8rem;">자동 생성 이미지<br>불러오기</span>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12l4 4 4-4"/></svg>
+              <span style="color:var(--accent);font-weight:600;margin-top:4px;font-size:0.8rem;">자동 생성 이미지<br>불러오기</span>
             </div>
           </div>
         </div>
@@ -719,7 +752,7 @@ function buildEsmPanel(country) {
       <div class="form-group">
         <label class="form-label">하위 폴더 선택</label>
         <div class="folder-list-area">
-          <button class="btn btn-sm btn-outline" onclick="loadEsmFolders('${country}')">📂 폴더 조회</button>
+          <button class="btn btn-sm btn-outline" onclick="loadEsmFolders('${country}')">폴더 조회</button>
           <select id="esmFolderSelect_${country}" class="form-input" disabled>
             <option value="">-- 폴더를 조회해주세요 --</option>
           </select>
@@ -830,10 +863,10 @@ async function submitGeneral(e) {
     e.preventDefault();
     const form = e.target;
     const rowMeta = [
-        { key:'korea', label:'🇰🇷 KOREA' },
-        { key:'usa',   label:'🇺🇸 USA' },
-        { key:'japan', label:'🇯🇵 JAPAN' },
-        { key:'arab',  label:'🇸🇦 ARAB' },
+        { key:'korea', label:'KOREA' },
+        { key:'usa',   label:'USA' },
+        { key:'japan', label:'JAPAN' },
+        { key:'arab',  label:'ARAB' },
     ];
     const fields = ['brand','carClass','year','no','gen','code','remark'];
     const targets = [];
@@ -1189,7 +1222,7 @@ async function loadEsmFolders(country) {
         } else {
             result.folders.forEach(f => {
                 const opt = document.createElement('option');
-                opt.value = f.name; opt.textContent = '📁 ' + f.name;
+                opt.value = f.name; opt.textContent = f.name;
                 sel.appendChild(opt);
             });
             esmLog(country, `${result.folders.length}개 폴더 발견`, 'success');

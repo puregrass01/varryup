@@ -152,33 +152,60 @@ export class ImageLibrary {
           }
           continue;
         }
-        // 쿠팡은 이미지 주소(업체이미지경로)를 200자까지만 받는다. 한글 폴더 · 파일 이름은 %XX 로 세 배가 돼
-        // ('…/옵틱글래스 상세페이지/썸네일/이베이 썸네일/썸네일.jpg' = 241자) 넘으니, 긴 주소는 다시 쓰지 않고 짧은 이름(vu_해시)으로 올린다.
-        const short = u => u && u.length <= MAX_URL;
-        let url = short(item.url) ? item.url : '';
-        if (url && !(await this.inspect(url).catch(() => false))) url = '';
-        if (!url) {
-          for (const candidate of esmCandidates(item.path, snapshot).filter(short)) {
-            if (await this.inspect(candidate, item.hash).catch(() => false)) { url = candidate; break; }
-          }
-        }
-        if (!url) {
-          // Content-specific names prevent latest_global.jpg and common 1.jpg files
-          // from overwriting the pictures of already-published products.
-          fs.mkdirSync(this.staging, { recursive: true });
-          const uploadFile = path.join(this.staging, `vu_${item.hash}${path.extname(item.path).toLowerCase()}`);
-          fs.copyFileSync(item.path, uploadFile);
-          if (hash(fs.readFileSync(uploadFile)) !== item.hash) throw new Error('이미지가 변경됐습니다. 새로고침 후 다시 적용해주세요.');
-          url = await this.upload(uploadFile);
-          if (!(await this.inspect(url))) throw new Error(`${item.name}: 호스팅 이미지 응답을 확인하지 못했습니다.`);
-          if (!short(url)) throw new Error(`${item.name}: 호스팅 주소가 ${url.length}자라 쿠팡 한도(${MAX_URL}자)를 넘습니다 — ESM 업로드 폴더 이름을 줄여 주세요.`);
-        }
-        this.state.hosted[item.hash] = { url, checkedAt: new Date().toISOString() };
-        this.persist(); item.url = url;
+        item.url = await this.host(item, snapshot);
       }
       if (this.scan(id).signature !== snapshot.signature) throw new Error('이미지 목록이 변경됐습니다. 새로고침 후 다시 적용해주세요.');
       const urls = selected.map(i => i.url);
       return { profile: this.scan(id), bundle: { signature: snapshot.signature, mainImagePath: selected[0].path, mainImageUrl: urls[0], imageUrls: [...new Set(urls)], subImages: [...new Set(urls.slice(1))].filter(u => u !== urls[0]), detailHtml: imageHtml(urls.slice(1)) } };
+    } finally { this.busy = false; }
+  }
+  // 로컬 파일 한 장 → ESM 주소. 같은 내용(해시)은 다시 올리지 않는다: 저장된 주소 → 같은 이름·내용의 기존 파일 → 업로드 순.
+  async host(item, profile = {}) {
+    // 쿠팡은 이미지 주소(업체이미지경로)를 200자까지만 받는다. 한글 폴더 · 파일 이름은 %XX 로 세 배가 돼
+    // ('…/옵틱글래스 상세페이지/썸네일/이베이 썸네일/썸네일.jpg' = 241자) 넘으니, 긴 주소는 다시 쓰지 않고 짧은 이름(vu_해시)으로 올린다.
+    const short = u => u && u.length <= MAX_URL;
+    let url = short(item.url) ? item.url : '';
+    if (url && !(await this.inspect(url).catch(() => false))) url = '';
+    if (!url) {
+      for (const candidate of esmCandidates(item.path, profile).filter(short)) {
+        if (await this.inspect(candidate, item.hash).catch(() => false)) { url = candidate; break; }
+      }
+    }
+    if (!url) {
+      // Content-specific names prevent latest_global.jpg and common 1.jpg files
+      // from overwriting the pictures of already-published products.
+      fs.mkdirSync(this.staging, { recursive: true });
+      const uploadFile = path.join(this.staging, `vu_${item.hash}${path.extname(item.path).toLowerCase()}`);
+      fs.copyFileSync(item.path, uploadFile);
+      if (hash(fs.readFileSync(uploadFile)) !== item.hash) throw new Error('이미지가 변경됐습니다. 새로고침 후 다시 적용해주세요.');
+      url = await this.upload(uploadFile);
+      if (!(await this.inspect(url))) throw new Error(`${item.name}: 호스팅 이미지 응답을 확인하지 못했습니다.`);
+      if (!short(url)) throw new Error(`${item.name}: 호스팅 주소가 ${url.length}자라 쿠팡 한도(${MAX_URL}자)를 넘습니다 — ESM 업로드 폴더 이름을 줄여 주세요.`);
+    }
+    this.state.hosted[item.hash] = { url, checkedAt: new Date().toISOString() };
+    this.persist();
+    return url;
+  }
+  // 탐색기에서 끌어 놓은 이미지 파일들을 ESM 에 올려 주소를 돌려준다(이미지 목록·상품 이미지 칸이 쓴다).
+  async hostFiles(files, onProgress = () => {}) {
+    if (!Array.isArray(files) || !files.length) throw new Error('올릴 이미지 파일이 없습니다.');
+    if (this.busy) throw new Error('다른 이미지 호스팅 작업이 진행 중입니다.');
+    this.busy = true;
+    try {
+      // 하나라도 이미지가 아니면 아무것도 올리지 않는다 — 반만 올라간 채 멈추지 않게 먼저 다 확인한다.
+      const items = files.map(file => {
+        const name = path.basename(String(file));
+        let stat;
+        try { stat = fs.statSync(file); } catch { throw new Error(`${name}: 파일을 찾을 수 없습니다.`); }
+        if (!stat.isFile() || !IMAGE_EXT.test(name) || stat.size > 20 * 1024 * 1024) throw new Error(`${name}: 지원 형식은 JPG/PNG/GIF/WebP, 최대 20MB입니다.`);
+        return { path: file, name, hash: hash(fs.readFileSync(file)) };
+      }).filter((item, i, all) => all.findIndex(x => x.hash === item.hash) === i);   // 같은 내용은 한 번만
+      const urls = [];
+      for (const [i, item] of items.entries()) {
+        onProgress(`ESM 업로드 ${i + 1}/${items.length} · ${item.name}`);
+        urls.push(await this.host({ ...item, url: this.state.hosted[item.hash]?.url || '' }));
+      }
+      return { urls: [...new Set(urls)] };
     } finally { this.busy = false; }
   }
 }

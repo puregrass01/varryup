@@ -708,7 +708,9 @@
     } else {
       apiLoading.hidden = true;
       frame.contentDocument?.documentElement.classList.remove('api-key-view');
-      if (!viewName) {
+      // 수정 모드의 6몰 표에서 왔으면 표로 돌아간다 — 표는 탭 버튼이 없어 applyFilter 가 첫 몰 탭을 띄운다.
+      if (!viewName && lastTab === 'mallGridTab' && typeof showMallGrid === 'function') { showMallGrid(); if (typeof syncFrame === 'function') syncFrame(); }
+      else if (!viewName) {
         if (frame.contentWindow?.switchTab) frame.contentWindow.switchTab(lastTab);
         if (typeof applyFilter === 'function') applyFilter(lastTab);
         if (typeof syncFrame === 'function') syncFrame();

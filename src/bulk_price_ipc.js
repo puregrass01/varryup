@@ -355,31 +355,41 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
     }
     return outcomes;
   }
-  // 아임웹 본사몰 구역 상품명(단일 상품 수정 '아임웹 자사몰' 탭). 가격 한 줄과 같은 판단: 불러온 뒤 바뀌었으면
-  // 보내지 않고(pre-send), 이미 같으면 '변경 없음', 보낸 뒤 다시 읽어 확인한다(늦으면 1.5초 뒤 한 번 더).
+  // 상품명: 아임웹 본사몰 구역(단일 상품 수정 '아임웹 자사몰' 탭)과 아마존 미국·일본(그 마켓의 item_name 만 PATCH).
+  // 가격 한 줄과 같은 판단: 불러온 뒤 바뀌었으면 보내지 않고(pre-send), 이미 같으면 '변경 없음', 보낸 뒤 다시 읽어 확인한다(늦으면 1.5초 뒤 한 번 더).
+  const names = {
+    ...Object.fromEntries(['imweb-ko', 'imweb-en', 'imweb-jp'].map(scope => [scope, {
+      read: id => imwebBulk.readName(scope, id), send: (id, name) => imwebBulk.sendName(scope, id, name) }])),
+    ...Object.fromEntries(Object.entries(markets).map(([scope, marketplaceId]) => [scope, {
+      read: async id => (await config(amazon).loadProductForEdit(id, marketplaceId)).title,
+      send: (id, name) => config(amazon).updateExistingProduct({ sku: id, marketplaceId, title: name }) }])),
+  };
   function nameContext(input) {
     const id = identity(input), name = String(input.newName ?? '').trim();
-    if (!['imweb-ko', 'imweb-en', 'imweb-jp'].includes(input.scope)) throw new Error('상품명은 아임웹 본사몰 구역에서만 바꿀 수 있습니다.');
+    if (!names[input.scope]) throw new Error('상품명은 아임웹 본사몰 구역(한국·미국·일본)과 아마존(미국·일본)에서만 바꿀 수 있습니다.');
     if (!name) throw new Error('상품명을 입력하세요.');
     if (input.expectedName == null) throw new Error('상품을 먼저 불러오세요.');
     return { id, scope: input.scope, name, expected: String(input.expectedName) };
   }
   async function saveName(input) {
-    const { id, scope, name, expected } = nameContext(input);
+    const { id, scope, name, expected } = nameContext(input), { read, send } = names[scope];
     let now;
-    try { now = await imwebBulk.readName(scope, id); } catch (e) { throw markPreSend(e); }
+    try { now = await read(id); } catch (e) { throw markPreSend(e); }
     if (now !== expected) throw markPreSend(new Error(`불러온 뒤 상품명이 바뀌었습니다(지금 ${now}). 다시 불러오세요.`));
     if (now === name) return { status: 'UNCHANGED', name };
-    try { await imwebBulk.sendName(scope, id, name); } catch (e) { if (e && typeof e === 'object') e.sent = true; throw e; }
+    let sent;
+    try { sent = await send(id, name); } catch (e) { if (e && typeof e === 'object') e.sent = true; throw e; }
     let message = '';
     for (const wait of [0, 1500]) {
       if (wait) await sleep(wait);
       try {
-        const seen = await imwebBulk.readName(scope, id);
+        const seen = await read(id);
         if (seen === name) return { status: 'VERIFIED', name };
         message = `조회된 상품명(${seen})이 입력값과 다릅니다`;
       } catch (e) { message = `재조회에 실패했습니다(${e.message})`; }
     }
+    // 아마존은 접수 뒤 늦게 반영한다 — 판매가 한 줄과 같이 '접수'로 끝낸다(아임웹 send 는 status 가 없다).
+    if (sent?.status === 'ACCEPTED') return { status: 'ACCEPTED', name, message: '아마존 접수 완료 · 반영까지 시간이 걸릴 수 있습니다.' };
     return { status: 'CHECK', message: `요청은 보냈지만 ${message}. 잠시 뒤 다시 불러와 확인하세요.` };
   }
   // 조회 전용 채널. 저장은 bulk-save-batch 하나로만 한다(1건 저장 채널은 화면이 쓰지 않아 10-23 제거).

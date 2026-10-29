@@ -9,11 +9,13 @@ try {
   await context.route(/^https?:/, route => route.abort());
   await context.addInitScript(() => {
     window.calls = []; window.urls = ['https://images.example/a.jpg', 'https://images.example/b.jpg', 'https://images.example/c.jpg'];
-    window.require = () => ({ ipcRenderer: {
+    // 탐색기 파일은 경로가 있고, 페이지에서 끌어 온 그림(가상 파일)은 경로가 없다.
+    window.require = () => ({ webUtils: { getPathForFile: f => f.name.startsWith('virtual') ? '' : 'C:/사진/' + f.name }, ipcRenderer: {
       on() {}, send() {},
       async invoke(channel, data) {
         calls.push({ channel, data });
         if (channel === 'bulk-images-import') return { success: true, data: { images: data.input.split('|'), verified: 0 } };
+        if (channel === 'image-library-host-files') return { success: true, urls: data.files.map(f => 'https://ai.esmplus.com/uploaded/vu_' + f.split('/').pop()) };
         if (channel === 'image-library-load') return { success: true, profiles: [{ id: 'amazon', items: [
           { role: '대표', selected: true, url: '' },
           { role: '상세', source: 'esm', selected: true, url: 'https://ai.esmplus.com/yhshma/new.jpg' },
@@ -81,6 +83,19 @@ try {
   await page.waitForFunction(() => iwB2bEditState.detailImages[0] === 'https://images.example/new.jpg');
   assert.equal(await page.evaluate(() => calls.filter(c => c.channel === 'bulk-images-import').at(-1).data.scope), 'imweb-b2b');
   assert.equal(await page.evaluate(() => ssEditState.detailImages[0].url), 'https://images.example/b.jpg');
+  // 끝에 붙이기만 하면 기존 항목(네이버 블록 id · 쿠팡 원래 블록 형식·경로)은 그대로 두고 새 것만 '새 이미지'다.
+  await page.evaluate(() => {
+    ssEditState.detailImages = [{ id: 'naver-image-0', url: urls[0], isNew: false }];
+    cpEditState.detailImages = [{ url: urls[0], raw: '/vendor/a.jpg', blockType: 'IMAGE_NO_SPACE', isNew: false }];
+    renderSmartstoreImages(); renderCoupangImages();
+    for (const id of ['ssImageList', 'cpImageList']) {
+      document.querySelector('#' + id + ' textarea').value = urls[0] + '|https://ai.esmplus.com/yhshma/add.jpg';
+      document.querySelector('#' + id + ' .vu-image-import button').click();
+    }
+  });
+  await page.waitForFunction(() => ssEditState.detailImages.length === 2 && cpEditState.detailImages.length === 2);
+  assert.deepEqual(await page.evaluate(() => ssEditState.detailImages), [{ id: 'naver-image-0', url: 'https://images.example/a.jpg', isNew: false }, { url: 'https://ai.esmplus.com/yhshma/add.jpg', isNew: true }]);
+  assert.deepEqual(await page.evaluate(() => cpEditState.detailImages[0]), { url: 'https://images.example/a.jpg', raw: '/vendor/a.jpg', blockType: 'IMAGE_NO_SPACE', isNew: false });
 
   for (const marketplaceId of ['ATVPDKIKX0DER', 'A1VC38T7YXB528']) {
     await page.evaluate(async marketplaceId => {
@@ -118,6 +133,31 @@ try {
   assert.deepEqual((await page.evaluate(() => calls.filter(c => c.channel === 'amazon-update').at(-1).data)).replaceImageUrls,
     ['https://ai.esmplus.com/yhshma/new.jpg', 'https://images.example/a.jpg', 'https://images.example/b.jpg', 'https://images.example/c.jpg']);
 
+  // 탐색기 이미지 파일을 갤러리에 끌어 놓으면 ESM 에 올린 주소가 목록 끝에 붙는다(저장은 기존 저장 버튼).
+  await page.evaluate(() => loadAmazonProduct());
+  await page.waitForFunction(() => document.querySelectorAll('#amzEditImageList .vu-image-tile').length === 3);
+  const drag = (type, names) => page.evaluate(([type, names]) => {
+    const dt = new DataTransfer();
+    for (const name of names) dt.items.add(new File(['x'], name, { type: 'image/jpeg' }));
+    const event = new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true });
+    document.querySelector('#amzEditImageList .vu-image-tile img').dispatchEvent(event);
+    return event.defaultPrevented;
+  }, [type, names]);
+  assert.equal(await drag('dragover', ['a.jpg']), true, '파일 드래그는 갤러리가 받는다');
+  assert.equal(await page.locator('#amzEditImageList .vu-image-gallery.vu-image-dropping').count(), 1);
+  const hostsBefore = await page.evaluate(() => calls.filter(c => c.channel === 'image-library-host-files').length);
+  await drag('drop', ['virtual-thumb.jpg']);
+  assert.match(await page.locator('#amzEditImageList .vu-image-save-hint').textContent(), /탐색기의 이미지 파일/);
+  assert.equal(await page.evaluate(() => calls.filter(c => c.channel === 'image-library-host-files').length), hostsBefore, '경로 없는 파일은 올리지 않는다');
+  await drag('drop', ['local1.jpg', 'local2.png']);
+  await page.waitForFunction(() => document.querySelectorAll('#amzEditImageList .vu-image-tile').length === 5);
+  assert.deepEqual(await page.evaluate(() => calls.filter(c => c.channel === 'image-library-host-files').at(-1).data.files), ['C:/사진/local1.jpg', 'C:/사진/local2.png']);
+  assert.equal(await page.locator('#amzEditImageList .vu-image-dropping').count(), 0);
+  await page.evaluate(() => registerAmazon());
+  assert.deepEqual((await page.evaluate(() => calls.filter(c => c.channel === 'amazon-update').at(-1).data)).replaceImageUrls,
+    ['https://images.example/a.jpg', 'https://images.example/b.jpg', 'https://images.example/c.jpg',
+      'https://ai.esmplus.com/uploaded/vu_local1.jpg', 'https://ai.esmplus.com/uploaded/vu_local2.png']);
+
   await page.evaluate(() => {
     switchTab('ebayTab');
     document.getElementById('ebMode').value = 'edit'; document.getElementById('ebMode').dispatchEvent(new Event('change'));
@@ -146,9 +186,9 @@ try {
 
   const parent = await context.newPage();
   await parent.goto(pathToFileURL(path.resolve('src/ui/index_up.html')).href + '?mode=edit');
-  assert.equal(await parent.locator('#image-library').isVisible(), false, 'no new-listing dropdown in single-edit mode');
+  assert.equal(await parent.locator('#image-library').isVisible(), true, 'single-edit mode keeps the library visible (drag rows onto the 6-mall cards)');
   await parent.evaluate(() => setSection8Mode('new'));
   assert.equal(await parent.locator('#image-library').isVisible(), true, 'new registration retains its defaults');
   assert.deepEqual(errors, []);
-  console.log('PASS: domestic galleries on top (no single-URL rows), per-mall single-item arrays, native saves, array import isolation, Amazon US/JP replacement, empty draft, ESM detail add + move to main, eBay image save/partial failure/retry block, edit-mode dropdown removed.');
+  console.log('PASS: domestic galleries on top (no single-URL rows), per-mall single-item arrays, native saves, array import isolation, Amazon US/JP replacement, empty draft, ESM detail add + move to main, local file drop → ESM upload → append, eBay image save/partial failure/retry block, library visible in edit mode.');
 } finally { await browser.close(); }

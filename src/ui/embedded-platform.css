@@ -9,11 +9,14 @@
     height: 100vh;
     box-sizing: border-box;
 }
+/* 폼은 셸의 깎은 판(#form-frame.vu-cut) 안에 바로 놓인다 — 바탕도 판 색, 안쪽 카드는 투명(겉 · 속 두 바탕이 갈려 보이지 않게) */
+html.embedded-platform body { background-color: var(--bg-panel); }
 .embedded-platform .glass-panel {
+    background: transparent;
     border: 0;
     border-radius: 0;
     box-shadow: none;
-    padding: 14px 16px;
+    padding: 14px var(--space-md);
 }
 /* Shopping mall tabs are now rendered as a vertical sidebar in the parent shell */
 .embedded-platform .app-tabs {
@@ -62,7 +65,7 @@
 }
 .embedded-platform .app-container {
     padding: 10px 12px;
-    gap: 8px;
+    gap: var(--space-sm);
 }
 .embedded-platform .glass-panel {
     padding: 10px 12px;
@@ -121,7 +124,7 @@
 /* A labelled field and its action button on one line (eBay search / SKU load). */
 .inline-field {
     display: flex;
-    gap: 8px;
+    gap: var(--space-sm);
     align-items: flex-end;
     margin-bottom: var(--space-md);
 }
@@ -152,7 +155,7 @@
    짝 칸 한 줄을 반 폭으로 줄여 칸 하나가 폼의 25% 다. 긴 글(불릿·설명·이미지 목록
    textarea)이 든 줄은 넓게 둔다 — 25% 면 영문 불릿 한 줄이 서너 단어로 끊긴다.
    API KEY 화면(#apiKeysTab)은 몰 폼이 아니라 제외한다 — 키 칸이 반으로 잘린다.        */
-.embedded-platform .tab-pane:not(#apiKeysTab) .dual-input:not(:has(textarea, .file-upload-box)) {
+.embedded-platform .tab-pane:not(#apiKeysTab) .dual-input:not(:has(textarea, .file-upload-box), .quad-input) {
     width: 50%;
     max-width: 50%;
     align-items: flex-end;   /* 좁아져 라벨이 두 줄이 돼도(이베이 '전체 재고 / 미국 판매 수량') 입력칸 줄은 맞춘다 */
@@ -198,8 +201,8 @@
 #key-platform-tabs button {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
+    gap: var(--space-sm);
+    padding: var(--space-sm) 14px;
     font-size: 0.95rem;
     font-weight: 600;
 }
@@ -207,7 +210,7 @@
     width: 20px;
     height: 20px;
     object-fit: contain;
-    background: #ffffff;
+    background: var(--logo-tile);
     border-radius: 4px;
     padding: 1px;
     box-sizing: border-box;
@@ -217,7 +220,7 @@
     width: auto;
     max-width: 40px;
 }
-#key-platform-tabs button[aria-selected="true"] { background: #2563eb; border-color: #2563eb; color: white; }
+#key-platform-tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 
 /* API workspace owns the pane while iframe load/hash callbacks finish. */
 .api-key-view .tab-pane:not(#apiKeysTab) { display:none !important; }

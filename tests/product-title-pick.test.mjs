@@ -57,6 +57,7 @@ test('신규 등록 한 줄(DB 에 없는 차): 탭 · 두 칸 띄움 · 한 칸
   assert.deepEqual(vu.parseDbLine('No.315번 S클래스 10세대 후기형 26년 9월~ W223 F/L'),
     { no: '315', model: 'S클래스', gen: '10세대 후기형', year: '26년 9월~', code: 'W223 F/L' });
   assert.equal(vu.parseDbLine('기아 P415'), null, 'No. 로 시작하지 않으면 검색어');
+  assert.equal(vu.parseDbLine('No.K107번-2   더뉴 스포티지   3세대 전기형 (SL)   10.03-12.06   SL').no, 'K107-2', "'번' 뒤 -2 도 번호");
 });
 
 test('새 차 SKU: 제조사 2자 + 차종 2자리 + 순번 2자리 + N + 상품번호, 앞 O · 끝 1 없음, 기존 SKU 와 겹치지 않음', () => {
@@ -71,4 +72,10 @@ test('같은 차종 · 같은 상품번호 · 같은 BSA 의 리스팅이 이미
   assert.equal(vu.suggestSku('기아', 'EV3', 'K138', true), '', 'KI1501NK138(BSA) 가 있다');
   assert.equal(vu.suggestSku('혼다', '시빅', '1213', false), '', 'NH0701N1213 이 있다');
   assert.match(vu.suggestSku('기아', 'EV3', 'K138', false), /^KI15\d{2}NK138$/, 'BSA 없는 판은 아직 없다 → 새 순번');
+});
+
+test("한 칸씩 띄운 줄도 카탈로그식 연식(10.03-12.06 · 20.12-현재)으로 나눈다", () => {
+  assert.deepEqual(vu.parseDbLine('No.K107번-2 더뉴 스포티지 3세대 전기형 (SL) 10.03-12.06 SL'),
+    { no: 'K107-2', model: '더뉴 스포티지', gen: '3세대 전기형 (SL)', year: '10.03-12.06', code: 'SL' }, '여러 낱말 차종은 카탈로그 차종으로 맞춘다');
+  assert.equal(vu.parseDbLine('No.H144번 제네시스GV70 1세대 20.12-현재 JK1').year, '20.12-현재');
 });
