@@ -1690,12 +1690,50 @@ ipcMain.handle('vehicle-load-catalog', async () => {
 ipcMain.handle('vehicle-load-i18n', async () => {
     try {
         // 차량 명칭 한↔영↔일 사전. 아마존 JP 리스팅이 이 값을 쓴다.
-        // (생성: scratch/build_vehicle_i18n.mjs — CSVdatabase 는 배포본에 없으므로 이 JSON 이 정본)
-        const namesPath = path.join(__dirname, '..', 'data', 'vehicle_i18n.json');
-        const raw = fs.readFileSync(namesPath, 'utf-8');
-        return { success: true, names: JSON.parse(raw) };
+        // (생성: scratch/build_vehicle_i18n.mjs — CSVdatabase 는 배포본에 없으므로 이 JSON 이 정본) + 이 PC 에서 기억한 차종
+        return { success: true, names: loadVehicleNames() };
     } catch (error) {
         console.error(error);
+        return { success: false, error: error.message };
+    }
+});
+
+// 사전에 없는 차종(예: FJ 크루저)을 사람이 한 번 채우면 기억한다 — 다음부터 차종만 쳐도 제조사 · 영문 · 일문이 찬다.
+// 값은 vu-suggest learnable 이 고른다(이미 있는 번역은 덮지 않는다). 기억은 사용자 폴더의 따로 된 파일에 둔다:
+// 앱 폴더의 사전(git 파일)을 고치면 실행.bat 업데이트가 '고친 파일 있음' 으로 멈추고, ZIP 으로 새로 받으면 사라진다.
+const learnedNamesPath = () => path.join(app.getPath('userData'), 'vehicle_i18n_learned.json');
+const nameKey = v => String(v ?? '').trim().replace(/\s+/g, '').toLowerCase();
+function mergeLearnedNames(names, learned) {
+    for (const [b, v] of Object.entries(learned.brands || {})) {
+        const bk = Object.keys(names.brands).find(x => nameKey(x) === nameKey(b)) || b;
+        names.brands[bk] ||= v;
+        const models = names.models[bk] ||= {};
+        for (const [m, e] of Object.entries((learned.models || {})[b] || {})) {
+            const now = models[Object.keys(models).find(x => nameKey(x) === nameKey(m)) || m] ||= { ko: m, en: null, jp: null };
+            now.en ||= e.en || null; now.jp ||= e.jp || null;   // 사전 값이 이긴다
+        }
+    }
+    return names;
+}
+function loadVehicleNames() {
+    const names = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'vehicle_i18n.json'), 'utf-8'));
+    try { return mergeLearnedNames(names, JSON.parse(fs.readFileSync(learnedNamesPath(), 'utf-8'))); }
+    catch { return names; }   // 기억한 것이 아직 없다
+}
+ipcMain.handle('vehicle-learn-name', async (_, input = {}) => {
+    try {
+        const s = v => String(v ?? '').trim();
+        const brand = s(input.brand), model = s(input.model);
+        if (!brand || !model) throw new Error('제조사 · 차종이 비었습니다.');
+        let learned = { brands: {}, models: {} };
+        try { learned = JSON.parse(fs.readFileSync(learnedNamesPath(), 'utf-8')); } catch {}
+        learned.brands[brand] ||= { ko: brand, en: s(input.brandEn) || null, jp: s(input.brandJp) || null };
+        const models = learned.models[brand] ||= {};
+        const entry = models[model] ||= { ko: model, en: null, jp: null };
+        entry.en ||= s(input.en) || null; entry.jp ||= s(input.jp) || null;
+        writeJsonAtomic(learnedNamesPath(), learned);
+        return { success: true, names: loadVehicleNames() };
+    } catch (error) {
         return { success: false, error: error.message };
     }
 });

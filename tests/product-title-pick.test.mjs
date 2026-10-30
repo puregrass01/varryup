@@ -50,12 +50,12 @@ test("코드표 브랜드가 '기타' 면 상품명의 브랜드를 쓴다", () 
 });
 
 test('신규 등록 한 줄(DB 에 없는 차): 탭 · 두 칸 띄움 · 한 칸 띄움 모두 상품번호 · 차종 · 세대 · 연식 · 차량코드로 나눈다', () => {
-  const f150 = { no: '1108', model: 'F150', gen: '12세대 중기형', year: '11~14', code: 'P415' };
+  const f150 = { brand: '', no: '1108', model: 'F150', gen: '12세대 중기형', year: '11~14', code: 'P415' };
   assert.deepEqual(vu.parseDbLine('No.1108번\tF150\t12세대 중기형\t11~14\tP415'), f150);
   assert.deepEqual(vu.parseDbLine('No.1108번   F150   12세대 중기형   11~14   P415'), f150);
   assert.deepEqual(vu.parseDbLine('No.1108번 F150 12세대 중기형 11~14 P415'), f150);
   assert.deepEqual(vu.parseDbLine('No.315번 S클래스 10세대 후기형 26년 9월~ W223 F/L'),
-    { no: '315', model: 'S클래스', gen: '10세대 후기형', year: '26년 9월~', code: 'W223 F/L' });
+    { brand: '', no: '315', model: 'S클래스', gen: '10세대 후기형', year: '26년 9월~', code: 'W223 F/L' });
   assert.equal(vu.parseDbLine('기아 P415'), null, 'No. 로 시작하지 않으면 검색어');
   assert.equal(vu.parseDbLine('No.K107번-2   더뉴 스포티지   3세대 전기형 (SL)   10.03-12.06   SL').no, 'K107-2', "'번' 뒤 -2 도 번호");
 });
@@ -76,6 +76,28 @@ test('같은 차종 · 같은 상품번호 · 같은 BSA 의 리스팅이 이미
 
 test("한 칸씩 띄운 줄도 카탈로그식 연식(10.03-12.06 · 20.12-현재)으로 나눈다", () => {
   assert.deepEqual(vu.parseDbLine('No.K107번-2 더뉴 스포티지 3세대 전기형 (SL) 10.03-12.06 SL'),
-    { no: 'K107-2', model: '더뉴 스포티지', gen: '3세대 전기형 (SL)', year: '10.03-12.06', code: 'SL' }, '여러 낱말 차종은 카탈로그 차종으로 맞춘다');
+    { brand: '', no: 'K107-2', model: '더뉴 스포티지', gen: '3세대 전기형 (SL)', year: '10.03-12.06', code: 'SL' }, '여러 낱말 차종은 카탈로그 차종으로 맞춘다');
   assert.equal(vu.parseDbLine('No.H144번 제네시스GV70 1세대 20.12-현재 JK1').year, '20.12-현재');
+});
+
+test('아래 칸으로 위 칸 채우기: 한 줄의 제조사 · 차종 → 제조사 · 코드 → 차종 · 제조사, 이름이 비슷하기만 하면 비움', () => {
+  vu.setVehicleCatalog({ ...JSON.parse(read('data/vehicle_catalog.json')), japan: JSON.parse(read('data/japan_vehicle_catalog.json')) });
+  // 줄 앞 제조사는 떼어 둔다(띄움 폭이 달라도). '제네시스 2세대' 처럼 다음 낱말이 세대면 제네시스는 차종이다.
+  assert.deepEqual(vu.parseDbLine('No.510번 도요타 FJ 크루저 13세대 전기형 15~20'),
+    { brand: '도요타', no: '510', model: 'FJ 크루저', gen: '13세대 전기형', year: '15~20', code: '' });
+  assert.equal(vu.parseDbLine('No.510번 FJ 크루저 13세대 전기형 15~20').model, 'FJ 크루저', "카탈로그에 없는 차종은 'N세대' 앞까지");
+  assert.deepEqual(vu.parseDbLine('No.510번  도요타  FJ 크루저  13세대 전기형  15~20'),
+    { brand: '도요타', no: '510', model: 'FJ 크루저', gen: '13세대 전기형', year: '15~20', code: '' });
+  assert.equal(vu.parseDbLine('No.9번 제네시스 2세대 08~13').brand, '');
+  // 차종 → 제조사: 카테고리 · 일본 카탈로그 별칭(랜드크루저) · 대소문자 · 띄움 무시
+  assert.equal(vu.upperOf({ model: '캠리' })?.brand, '도요타');
+  assert.equal(vu.upperOf({ model: '랜드 크루저' })?.brand, '도요타');
+  assert.equal(vu.upperOf({ model: 'FJ 크루저' }), null, "'랜드크루저' 와 일부만 같다 — 채우지 않는다");
+  // 코드 → 차종 · 제조사(카탈로그에서 하나일 때만)
+  const w223 = vu.upperOf({ code: 'W223' });
+  assert.equal(w223?.brand, '벤츠'); assert.match(w223.model, /S클래스/);
+  // 기억할 값: 모르는 차종은 제조사째, 아는 짝 · 번역은 null
+  assert.deepEqual(vu.learnable('도요타', 'FJ 크루저', { en: 'FJ Cruiser', jp: 'FJクルーザー' }), { brand: '도요타', model: 'FJ 크루저', en: 'FJ Cruiser', jp: 'FJクルーザー' });
+  assert.equal(vu.learnable('도요타', '캠리'), null);
+  assert.equal(vu.learnable('없는회사', 'X'), null, '모르는 제조사는 영문 없이는 기억하지 않는다');
 });

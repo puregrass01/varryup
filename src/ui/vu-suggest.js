@@ -593,42 +593,79 @@
   // 끝은 '~' 또는 '-'(카탈로그 표기 10.03-12.06 · 20.12-현재), 끝 연식은 없어도 되고 '현재' 도 된다.
   const YEAR = String.raw`(?:\d{2}년\s*\d{1,2}월|\d{2}(?:\.\d{1,2})?)\s*[~-]\s*(?:\d{2}년\s*\d{1,2}월|\d{2}(?:\.\d{1,2})?|현재)?`;
   function parseDbLine(text) {
-    const raw = String(text ?? '').trim();   // nz 는 겹친 띄움을 하나로 줄여 아래 '두 칸 이상' 나누기를 못 하게 한다
+    let raw = String(text ?? '').trim();   // nz 는 겹친 띄움을 하나로 줄여 아래 '두 칸 이상' 나누기를 못 하게 한다
     if (!/^No\.?\s*[A-Za-z]?\d/i.test(raw)) return null;
+    // 번호 뒤 첫 낱말이 제조사면('No.510번 도요타 FJ 크루저 …') 떼어 둔다. 다음 낱말이 세대면('제네시스 2세대') 차종이다.
+    let brand = '';
+    const lead = raw.match(/^(No\.?\s*\S+)(\s+)(\S+)(\s+)([\s\S]*)$/i);
+    if (lead && brandName(lead[3]) && !/세대/.test(lead[5].split(/\s+/)[0])) {
+      brand = brandName(lead[3]);
+      raw = lead[1] + (lead[2].length >= lead[4].length ? lead[2] : lead[4]) + lead[5];
+    }
     let parts = raw.split(/\t+|\s{2,}/).map(nz).filter(Boolean);
     if (parts.length < 3) {
       const m = raw.replace(/\s+/g, ' ').match(new RegExp(String.raw`^(\S+)\s+(\S+)\s*(.*?)\s*(${YEAR})\s*(.*)$`));
       if (!m) return null;
       parts = m.slice(1).map(nz);
       // 차종이 여러 낱말이면('더뉴 스포티지') 카탈로그 차종과 맞는 가장 긴 앞 낱말까지를 차종으로 본다.
+      // 카탈로그에 없는 차('FJ 크루저 13세대 …')는 'N세대' 낱말 앞까지가 차종이다.
       const words = [parts[1], ...parts[2].split(' ')].filter(Boolean);
-      for (let k = words.length; k > 1; k--) {
+      const genAt = words.findIndex((w, i) => i > 0 && /세대/.test(w));
+      if (genAt > 1 && !(vehicle?.variants || []).some(v => squash(v.model) === squash(parts[1]))) {
+        parts[1] = words.slice(0, genAt).join(' '); parts[2] = words.slice(genAt).join(' ');
+      } else for (let k = words.length; k > 1; k--) {
         const cand = words.slice(0, k).join(' ');
         if ((vehicle?.variants || []).some(v => squash(v.model) === squash(cand))) { parts[1] = cand; parts[2] = words.slice(k).join(' '); break; }
       }
     }
     const [no, model, gen = '', year = '', code = ''] = parts;
-    return { no: bareNoOf(no.replace(/번/g, '')), model, gen, year, code };   // 'No.K107번-2' → K107-2
+    return { brand, no: bareNoOf(no.replace(/번/g, '')), model, gen, year, code };   // 'No.K107번-2' → K107-2
   }
-  // 차종으로 제조사를 정한다 — 좌측 목록(카테고리)이나 카탈로그에서 그 차종을 가진 제조사가 하나일 때만.
-  function brandOfModel(model) {
-    const m = squash(model);
-    const hits = new Set(brandList.filter(b => api.modelsOf(b).some(x => squash(x) === m)));
-    if (!hits.size) for (const v of vehicle?.variants || []) if (squash(v.model) === m) {
-      const b = brandList.find(x => vehicleBrandKey(x) === vehicleBrandKey(v.brand)); if (b) hits.add(b);
+  // 제조사 낱말 → 좌측 목록(카테고리)의 표기. 목록에 없으면 사전 · 일본 카탈로그의 표기. 제조사가 아니면 ''.
+  function brandName(word) {
+    const k = vehicleBrandKey(word);
+    if (!k) return '';
+    return brandList.find(b => vehicleBrandKey(b) === k)
+      || Object.keys(names?.brands || {}).find(b => vehicleBrandKey(b) === k)
+      || (vehicle?.japan?.variants || []).find(v => vehicleBrandKey(v.brand) === k)?.brand || '';
+  }
+  // 아래 칸 값으로 위 칸(제조사 · 차종)을 정한다 — 카테고리 · 차량 DB · 일본 카탈로그(별칭) · 명칭 사전에서 후보가 하나일 때만.
+  // 이름이 정확히 같을 때만(띄움 · 대소문자 무시). 'FJ 크루저' 는 '랜드크루저' 가 아니다.
+  function upperOf({ model = '', code = '' }) {
+    const m = squash(model), c = squash(code), hits = new Map();
+    if (!m && !c) return null;
+    const add = (brand, mdl) => { const b = brandName(brand) || brand; hits.set(vehicleBrandKey(b) + '|' + (m ? '' : squash(mdl)), { brand: b, model: mdl }); };
+    const rowHit = v => (m ? squash(v.model) === m || (v.aliases || []).some(a => squash(a) === m) : true) && (!c || squash(v.code) === c);
+    for (const v of [...(vehicle?.variants || []), ...(vehicle?.japan?.variants || [])]) if (rowHit(v)) add(v.brand, v.model);
+    if (m) {
+      for (const b of brandList) if (api.modelsOf(b).some(x => squash(x) === m)) add(b, model);
+      for (const [b, ms] of Object.entries(names?.models || {})) if (Object.keys(ms).some(x => squash(x) === m)) add(b, model);
     }
-    return hits.size === 1 ? [...hits][0] : '';
+    return hits.size === 1 ? [...hits.values()][0] : null;
+  }
+  const brandOfModel = model => upperOf({ model })?.brand || '';
+  // 위 칸을 못 정했으면 제조사 칸을 열어 고르게 한다(고른 짝은 셸이 사전에 기억한다 — index_up.html learnCarName).
+  function askBrand(doc) {
+    const el = doc.getElementById('inp-brand');
+    if (!el || el.value.trim()) return;
+    el.dataset.vuHint = el.placeholder;
+    el.placeholder = 'DB에 없는 차종 — 제조사를 고르세요';
+    el.addEventListener('input', () => { el.placeholder = el.dataset.vuHint; }, { once: true });
+    el.focus();
   }
   function fillDbLine(doc, row) {
-    const brand = brandOfModel(row.model);
+    const up = !row.model && row.code ? upperOf({ code: row.code }) : null;
+    const model = row.model || up?.model || '';
+    const brand = row.brand || up?.brand || brandOfModel(model);
     if (brand) setField(doc, 'inp-brand', brand);
-    setField(doc, 'inp-carmodel', row.model);
+    setField(doc, 'inp-carmodel', model);
     forgetRow(doc);
     forgetCar(doc);
     for (const [id, key] of [['inp-gen', 'gen'], ['inp-year', 'year'], ['inp-code', 'code'], ['inp-no', 'no']]) setField(doc, id, row[key]);
     applyGeneratedSku(doc);
     refreshListingLists(doc);
     refreshCoupangList(doc);
+    if (!brand) askBrand(doc);
   }
 
   // 본사몰 상품 찾기 칸: 차량 DB(카탈로그) 한 행 → 좌측 칸 전부. 브랜드·차종은 좌측 목록의 표기로 넣는다(resolveTitle 과 같다).
@@ -911,6 +948,17 @@
     brandEn(brand) { return brandField(brand, 'en'); },
     modelJa(brand, model) { return modelField(brand, model, 'jp'); },
     modelEn(brand, model) { return modelField(brand, model, 'en'); },
+    // 사전에 없는 차종을 사람이 한 번 채우면 기억할 값(main vehicle-learn-name). 이미 아는 짝 · 번역이면 null.
+    learnable(brand, model, { en, jp, brandEn, brandJp } = {}) {
+      brand = nz(brand); model = nz(model);
+      if (!names || !brand || !model || !brandName(brand) && !nz(brandEn)) return null;
+      const out = { brand: nameBrandIndex[bkey(brand)] || brand, model };
+      if (nz(en) && !modelField(brand, model, 'en')) out.en = nz(en);
+      if (nz(jp) && !modelField(brand, model, 'jp')) out.jp = nz(jp);
+      if (!brandEntry(brand)) Object.assign(out, { brandEn: nz(brandEn) || null, brandJp: nz(brandJp) || null });
+      if (!out.en && !out.jp && vehicleBrandKey(brandOfModel(model)) === vehicleBrandKey(brand)) return null;
+      return out;
+    },
     genJa(gen) { return genField(gen, 'jp'); },
     genEn(gen) { return genField(gen, 'en'); },
 
@@ -941,6 +989,7 @@
     variantsFor,
     resolveTitle,
     parseDbLine,
+    upperOf,
     suggestSku,
     // 본사몰 상품 찾기 칸(inp-db-search)의 목록 = 차량 DB 전체 행. 아직 없는 차(신규 등록)도 나오고 아임웹은 읽지 않는다.
     setDbRows(doc) {
@@ -1055,6 +1104,17 @@
         carEl.addEventListener('input', onModel);
         carEl.addEventListener('change', onModel);
       }
+      // 손으로 친 아래 칸(차종 · 차량코드)이 확정되면 빈 위 칸을 채운다(upperOf). 프로그램이 넣을 때(vuChoosing)는 넣는 쪽이 정한다.
+      const codeEl = doc.getElementById('inp-code');
+      for (const el of [carEl, codeEl]) if (el) el.addEventListener('change', () => {
+        if (el.dataset.vuChoosing === '1' || doc.getElementById('inp-brand')?.value.trim()) return;
+        const car = carEl?.value.trim() || '';
+        if (el === codeEl && car) return;   // 차종이 있으면 차종으로(아래)
+        const up = upperOf(car ? { model: car } : { code: el.value });
+        if (!up) return;
+        setField(doc, 'inp-brand', up.brand);
+        if (!car) setField(doc, 'inp-carmodel', up.model);
+      });
 
       // 본사몰 상품 찾기에 DB 에 없는 차를 한 줄로 넣고 Enter · 칸 나가기 → 칸마다 나눠 넣는다(parseDbLine).
       // 영문 · 일문 칸은 셸의 자동 번역(autoFillLang)이 채운다. 목록에서 고를 때(vuChoosing)는 pickRow 가 한다.

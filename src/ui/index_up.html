@@ -1471,6 +1471,20 @@ function bindLangAutoFill() {
   }
   // A source-row selection fills year and series after generation.
   for (const id of ['inp-year', 'inp-code']) document.getElementById(id)?.addEventListener('input', autoFillLang);
+  // 사전에 없는 차종에 제조사 · 영문 · 일문을 사람이 채우면(한 줄 입력의 제조사 포함) 사전에 기억한다.
+  // 차종 칸 타이핑으로는 기억하지 않는다 — 치다 만 이름 · 오타가 남는다.
+  for (const id of ['inp-brand', 'inp-brand-en', 'inp-brand-ja', 'inp-carmodel-en', 'inp-carmodel-ja', 'inp-db-search'])
+    document.getElementById(id)?.addEventListener('change', () => setTimeout(learnCarName));
+}
+async function learnCarName() {
+  const v = id => document.getElementById(id)?.value || '';
+  const learn = window.VUSuggest?.learnable(v('inp-brand'), v('inp-carmodel'),
+    { en: v('inp-carmodel-en'), jp: v('inp-carmodel-ja'), brandEn: v('inp-brand-en'), brandJp: v('inp-brand-ja') });
+  if (!learn) return;
+  const res = await ipc.invoke('vehicle-learn-name', learn).catch(e => ({ success: false, error: e.message }));
+  if (!res?.success) return addLog(`차종 사전에 기억하지 못했습니다: ${res?.error}`, 'warn');
+  window.VUSuggest.setNames(res.names);
+  addLog(`차종 사전에 기억: ${learn.brand} ${learn.model}${learn.en ? ` · ${learn.en}` : ''}${learn.jp ? ` · ${learn.jp}` : ''}`, 'info');
 }
 
 // 영문 세대 표기를 실제 판매 상품명 형식으로 맞춘다.

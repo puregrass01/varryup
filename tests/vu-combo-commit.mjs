@@ -46,6 +46,7 @@ async function fresh() {
       on() {}, send() {}, removeListener() {},
       invoke(ch, input) {
         if (ch === 'vehicle-load-i18n') return Promise.resolve({ success: true, names });
+        if (ch === 'vehicle-learn-name') { (window.__learn ||= []).push(input); return Promise.resolve({ success: true, names }); }
         if (ch === 'imweb-load-categories') return Promise.resolve({ success: true, categories });
         if (ch === 'vehicle-load-catalog') return Promise.resolve({ success: true, catalog: vehicleCatalog });
         if (ch === 'bulk-price-list' && input?.scope === 'imweb-ko') {
@@ -192,6 +193,37 @@ const cases = [
     const en = await p.evaluate(() => ['inp-brand-en', 'inp-carmodel-en', 'inp-gen-en'].map(id => document.getElementById(id)?.value));
     assert.ok(en.every(Boolean), '영문 칸이 비었다: ' + JSON.stringify(en));
   }, { brand: '포드', carmodel: 'F150', gen: '12세대 중기형', year: '11~14', code: 'P415', no: '1108', sku: 'FD0905N1108' }],
+  ['DB 에 없는 차종(FJ 크루저)은 제조사 칸을 비워 열고, 사람이 고르고 영문을 치면 사전에 기억한다', async p => {
+    await p.evaluate(() => {
+      const el = document.getElementById('inp-db-search');
+      el.focus(); el.value = 'No.510번  FJ 크루저  13세대 전기형  15~20';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.blur(); el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const brand = p.locator('#inp-brand');
+    assert.equal(await brand.getAttribute('placeholder'), 'DB에 없는 차종 — 제조사를 고르세요');
+    assert.equal(await p.evaluate(() => document.activeElement?.id), 'inp-brand', '제조사 칸으로 간다');
+    const type = (id, v) => p.evaluate(([id, v]) => {
+      const el = document.getElementById(id); el.value = v;
+      el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
+    }, [id, v]);
+    await type('inp-brand', '도요타');
+    await type('inp-carmodel-en', 'FJ Cruiser');
+    await p.waitForFunction(() => (window.__learn || []).some(x => x.en === 'FJ Cruiser'));
+    const learned = await p.evaluate(() => window.__learn);
+    assert.deepEqual(learned[0], { brand: '도요타', model: 'FJ 크루저' }, '제조사를 고르면 짝부터 기억');
+    assert.deepEqual(learned.at(-1), { brand: '도요타', model: 'FJ 크루저', en: 'FJ Cruiser' });
+  }, { brand: '도요타', carmodel: 'FJ 크루저', gen: '13세대 전기형', year: '15~20', no: '510' }],
+  ['한 줄 앞에 제조사를 쓰면 그 제조사, 차종 칸만 손으로 쳐도 빈 제조사가 찬다(캠리 → 도요타)', async p => {
+    await p.evaluate(() => {
+      const el = document.getElementById('inp-db-search');
+      el.value = 'No.510번 도요타 FJ 크루저 13세대 전기형 15~20';
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    assert.deepEqual(Object.values(await read(p)).slice(0, 2), ['도요타', 'FJ 크루저']);
+    await p.evaluate(() => { for (const id of ['inp-brand', 'inp-carmodel']) { const el = document.getElementById(id); el.value = ''; el.dispatchEvent(new Event('change', { bubbles: true })); } });
+    await p.locator('#inp-carmodel').fill('캠리'); await p.locator('#inp-carmodel').dispatchEvent('change');
+  }, { brand: '도요타', carmodel: '캠리' }],
   ['수정 모드에서도 한 줄을 넣으면 칸마다 나눠 넣는다(찾는 열쇠 = 상품번호)', async p => {
     await p.locator('label[for="mode-edit"]').click();
     await p.evaluate(() => {
