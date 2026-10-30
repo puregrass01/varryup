@@ -94,9 +94,10 @@
   },
   "devDependencies": {
     "electron": "^30.0.1",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^26.18.0"
   },
   "allowScripts": {
-    "electron": true
+    "electron": true,
+    "electron-winstaller": false
   }
 }
