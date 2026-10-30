@@ -16,8 +16,30 @@ if not exist "package.json" (
   pause
   exit /b 1
 )
+rem Optional update: a git clone asks before pulling new commits from GitHub. A Download ZIP folder has no .git and skips this.
+rem No credential prompt (a private repo without login would hang here) - a failed check just runs this version.
+set "NEED_CI="
+set "GIT_TERMINAL_PROMPT=0"
+if not exist ".git" goto noupdate
+git --version >nul 2>&1 || goto noupdate
+echo Checking for updates...
+git fetch -q origin >nul 2>&1 || (echo Update check skipped - no internet or no access to GitHub. & goto noupdate)
+set "BEHIND=0"
+for /f %%n in ('git rev-list --count HEAD..@{u} 2^>nul') do set "BEHIND=%%n"
+if "%BEHIND%"=="0" goto noupdate
+echo A new version is available: %BEHIND% new commit(s).
+choice /c YN /t 20 /d N /m "Update now? Y = update, N = run this version (N after 20 seconds)"
+if errorlevel 2 goto noupdate
+rem Local edits to tracked files are never overwritten - the update is skipped instead.
+for /f %%s in ('git status --porcelain -uno') do (echo [WARN] Files in this folder were edited - update skipped so the edits are not lost. Run: git status & goto noupdate)
+git pull -q --ff-only || (echo [WARN] Update failed - running the current version. & goto noupdate)
+rem New or changed packages: reinstall below.
+git diff --quiet HEAD@{1} HEAD -- package.json package-lock.json || set "NEED_CI=1"
+echo Updated to the latest version.
+:noupdate
+
 rem electron's installer writes path.txt last - without it the first install was cut off.
-if exist "node_modules\electron\path.txt" if exist "node_modules\electron\dist\electron.exe" goto run
+if not defined NEED_CI if exist "node_modules\electron\path.txt" if exist "node_modules\electron\dist\electron.exe" goto run
 echo First run: installing packages with npm ci. This can take a few minutes...
 call npm -v >nul 2>&1
 if errorlevel 1 (
