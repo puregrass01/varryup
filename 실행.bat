@@ -55,10 +55,16 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-rem npm 12 and ignore-scripts=true skip electron's postinstall, which downloads electron.exe - run it here.
-if not exist "node_modules\electron\path.txt" call node node_modules\electron\install.js
+rem package.json allowScripts lets npm 12 run electron's postinstall (downloads electron.exe). If it was still skipped
+rem (ignore-scripts=true, an older lock), run it here - keyed on electron.exe, not path.txt.
 if not exist "node_modules\electron\dist\electron.exe" (
-  echo [ERROR] electron.exe is still missing. Delete the node_modules folder and run this file again.
+  echo Downloading electron.exe ^(about 100MB^)...
+  set "ELECTRON_SKIP_BINARY_DOWNLOAD="
+  call node node_modules\electron\install.js
+)
+if not exist "node_modules\electron\dist\electron.exe" (
+  echo [ERROR] electron.exe is still missing - read the error above. Usual causes: no internet, a proxy, or antivirus deleting the file.
+  echo         Then delete the node_modules folder and run this file again.
   pause
   exit /b 1
 )
