@@ -35,17 +35,15 @@
       <div class="step-indicator"><div class="step-number">1</div><span>생성될 상품명 (한국 · 미국 · 일본 구역)</span></div>
       ${['Ko:한국', 'En:미국', 'Jp:일본'].map(x => x.split(':')).map(([k, c]) => `<div class="form-group"><label class="form-label" for="ihName${k}">${c}</label><input type="text" id="ihName${k}" class="form-input" readonly></div>`).join('')}
       <p class="help-text" id="ihNameWarn" style="color:var(--accent-warn)"></p>
-      <div class="step-indicator"><div class="step-number">2</div><span>판매가</span></div>
+      <div class="step-indicator" id="ihPriceStep"><div class="step-number">2</div><span>판매가</span></div>
       <div class="form-group row dual-input ih-row"><div class="input-col"><label class="form-label" for="ihKrwSet">한국 1set (원)</label><input type="number" min="0" id="ihKrwSet" class="form-input"></div><div class="input-col"><label class="form-label" for="ihKrwLeft">운전석 (원)</label><input type="number" min="0" id="ihKrwLeft" class="form-input"></div><div class="input-col"><label class="form-label" for="ihKrwRight">조수석 (원)</label><input type="number" min="0" id="ihKrwRight" class="form-input"></div></div>
       <div class="form-group row dual-input"><div class="input-col"><label class="form-label" for="ihUsd">미국 1set (USD)</label><input id="ihUsd" class="form-input" inputmode="decimal" autocomplete="off"></div><div class="input-col"><label class="form-label" for="ihJpy">일본 1set (JPY)</label><input id="ihJpy" class="form-input" inputmode="numeric" autocomplete="off"></div></div>
       <p class="help-text" id="ihPricePlan"></p>
-      <p class="help-text">재고 수량: 아임웹 API는 옵션 상품 재고를 받지 않습니다.</p>
       <div class="step-indicator"><div class="step-number">3</div><span>상세설명</span></div>
       <div class="form-group"><label class="form-label" for="ihIntro">본문 맨 위에 덧붙일 글 (세 구역 공통 · 비우면 템플릿 본문 그대로)</label><textarea id="ihIntro" class="form-input" rows="3"></textarea></div>
       <div class="step-indicator"><div class="step-number">4</div><span>조견표</span></div>
       <div id="ihSpecPlan"></div>
-      <p class="help-text">본문은 템플릿 상품 본문에서 조견표와 상세 이미지(이미지 목록)만 바꿉니다. 숨김으로 만들고 세 구역을 다시 읽어 모두 맞을 때만 판매중으로 바꿉니다 — 어긋나면 숨김으로 두고 상품번호를 알립니다(Open API 로는 지울 수 없습니다).</p>
-      <div class="submit-section"><button type="button" class="btn btn-gradient w-full vu-key vu-key-accent" id="ihRegisterBtn">아임웹 자사몰 상품 등록 (한국 · 미국 · 일본)</button></div>
+      <div class="submit-section"><button type="button" class="btn btn-gradient w-full vu-key vu-key-accent" id="ihRegisterBtn" title="본문은 템플릿 상품 본문에서 조견표와 상세 이미지(이미지 목록)만 바꿉니다. 숨김으로 만들고 세 구역을 다시 읽어 모두 맞을 때만 판매중으로 바꿉니다. 어긋나면 숨김으로 두고 상품번호를 알립니다(Open API 로는 지울 수 없습니다).">아임웹 자사몰 상품 등록 (한국 · 미국 · 일본)</button></div>
     </div>
     <div class="ih-edit">
       <p class="help-text" id="ihUnit"></p>
@@ -252,28 +250,31 @@
       const [country, field, mirror] = UNIT_NAME[lang];
       const name = ['Optic-glass', b, m, mirror, `[No.${d.code}]`].join(' ').replace(/\s*\([^)]*[가-힣][^)]*\)/g, '');
       if (b && m && !/[가-힣]/.test(name)) return name;
-      warns.push(`${country} 구역 상품명: ${field} 제조사 · 차종이 없어 한국 이름으로 올라갑니다 — 좌측 ${field} 칸을 채우거나, 등록 뒤 환율 탭 '이름 번역'으로 고치세요.`);
+      warns.push([country, `${country} 구역 상품명: ${field} 제조사 · 차종이 없어 한국 이름으로 올라갑니다 — 좌측 ${field} 칸을 채우거나, 등록 뒤 환율 탭 '이름 번역'으로 고치세요.`]);
       return kr;
     };
     const names = [['한국', kr], ['미국', unit('en', d.titleBrandEn, d.titleModelEn)], ['일본', unit('jp', d.titleBrandJp, d.titleModelJp)]];
     names.forEach(([c, n], i) => { $('ihName' + ['Ko', 'En', 'Jp'][i]).value = n; });
-    $('ihNameWarn').textContent = warns.map(w => '⚠ ' + w).join(' ');
+    // 짧게 보이고 자세한 안내는 마우스를 올리면.
+    $('ihNameWarn').textContent = warns.length ? `⚠ ${warns.map(w => w[0]).join(' · ')} 상품명이 한국 이름으로 올라갑니다` : '';
+    $('ihNameWarn').title = warns.map(w => w[1]).join('\n');
     const [no, tpl] = TEMPLATE[d.bsaO ? 'O' : 'X'];
     KRW_IDS.forEach((id, i) => autoFill(id, tpl[i]));
     const krw = KRW_IDS.map(id => Number($(id).value) || 0);
     d.krwPrices = KRW_IDS.map(id => $(id).value.trim());
     const head = `처음 값: 템플릿 ${no} (BSA ${d.bsaO ? 'O' : 'X'}) 가격. 미국 1set = 좌측 판매가(USD), 일본 1set = 그 환율 환산. 미국 · 일본 운전석 · 조수석은 한국가를 환율 환산합니다.`;
-    $('ihPricePlan').textContent = head;
+    $('ihPriceStep').title = `${head}\n재고 수량: 아임웹 API는 옵션 상품 재고를 받지 않습니다.`;
+    $('ihPricePlan').textContent = '';
     // 일본 1set 처음 값 · 미국이 비었을 때의 환산값은 main 이 등록과 같은 계산(planUnitPrices)으로 낸다. 늦게 온 옛 답은 버린다.
     const ask = ++priceAsk;
     if (krw.every(v => v > 0)) ipc.invoke('imweb-head-price-preview', { krw: { base: krw[0], combos: krw }, usd: d.usdPrice }).then(r => {
       if (ask !== priceAsk) return;
-      if (!r?.success) { $('ihPricePlan').textContent = `${head} 미국 · 일본 가격을 계산하지 못했습니다: ${r?.error || '알 수 없는 오류'}`; return; }
+      if (!r?.success) { $('ihPricePlan').textContent = `미국 · 일본 가격을 계산하지 못했습니다: ${r?.error || '알 수 없는 오류'}`; return; }
       autoFill('ihJpy', r.plan.JPY.combos[0]);
       $('ihUsd').placeholder = `비우면 ${r.plan.USD.combos[0]} (한국가 환산)`;
     }, () => {});
-    $('ihSpecPlan').replaceChildren(...[['국내용(한국)', d.specImageUrl || '없음 — 등록할 수 없습니다'], ['해외용(미국 · 일본)', d.specImageUrlEn || '없음 — 국내용을 씁니다']]
-      .map(([k, u]) => Object.assign(document.createElement('p'), { className: 'help-text', textContent: `조견표 ${k}: ${u}` })));
+    $('ihSpecPlan').replaceChildren(...[['국내용(한국)', d.specImageUrl, '등록할 수 없습니다'], ['해외용(미국 · 일본)', d.specImageUrlEn, '국내용을 씁니다']]
+      .map(([k, u, why]) => Object.assign(document.createElement('p'), { className: 'help-text', textContent: `조견표 ${k}: ${u || '없음'}`, title: u ? '' : why })));
     return { d, kr };
   }
   // 셸 일괄 등록과 버튼이 같은 길. 던지지 않고 { ok, error? } (셸과의 약속) — 거절 이유 · 결과는 셸 로그로.

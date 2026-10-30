@@ -185,20 +185,21 @@ try {
     'Optic-glass ヒュンダイ サンタフェ 広角ドアミラー [No.H152]',   // 한글 괄호는 뺀다(imweb_unit_names 와 같음)
   ]);
   assert.equal(await np.locator('#ihNameKo').getAttribute('readonly'), '', '상품명은 읽기 전용');
-  assert.match(await np.locator('#ihNameWarn').textContent(), /⚠ 미국 구역 상품명: 영문 제조사 · 차종이 없어 한국 이름으로 올라갑니다/);
+  assert.equal(await np.locator('#ihNameWarn').textContent(), '⚠ 미국 상품명이 한국 이름으로 올라갑니다');
+  assert.match(await np.locator('#ihNameWarn').getAttribute('title'), /미국 구역 상품명: 영문 제조사 · 차종이 없어 한국 이름으로 올라갑니다/);
   assert.doesNotMatch(await np.locator('#ihNameWarn').textContent(), /일본 구역/);
   // 판매가 칸: 한국은 템플릿 가격, 미국은 좌측 판매가(USD), 일본은 그 환율 환산(main planUnitPrices — 여기선 stub)
   await np.waitForFunction(() => document.getElementById('ihJpy').value === '14000');
   assert.deepEqual(await vals(['ihKrwSet', 'ihKrwLeft', 'ihKrwRight', 'ihUsd', 'ihJpy']), ['220000', '115000', '105000', '90', '14000']);
-  assert.match(await np.locator('#ihPricePlan').textContent(), /^처음 값: 템플릿 2116 \(BSA O\) 가격/);
+  assert.match(await np.locator('#ihPriceStep').getAttribute('title'), /^처음 값: 템플릿 2116 \(BSA O\) 가격/);
   assert.deepEqual(await np.evaluate(() => calls.filter(c => c.channel === 'imweb-head-price-preview').at(-1).data),
     { krw: { base: 220000, combos: [220000, 115000, 105000] }, usd: '90' });
-  assert.deepEqual(await np.locator('#ihSpecPlan p').allTextContents(), ['조견표 국내용(한국): https://img/chart-kr.jpg', '조견표 해외용(미국 · 일본): 없음 — 국내용을 씁니다']);
+  assert.deepEqual(await np.locator('#ihSpecPlan p').allTextContents(), ['조견표 국내용(한국): https://img/chart-kr.jpg', '조견표 해외용(미국 · 일본): 없음']);
   // 사람이 고친 운전석 가격은 BSA 를 바꿔도 지킨다 — 손대지 않은 칸만 새 템플릿 가격으로
   await np.evaluate(() => { const l = document.getElementById('ihKrwLeft'); l.value = '99000'; l.dispatchEvent(new Event('input', { bubbles: true }));
     const b = document.getElementById('ihBsa'); b.checked = false; b.dispatchEvent(new Event('change', { bubbles: true })); });
   assert.deepEqual(await vals(['ihKrwSet', 'ihKrwLeft', 'ihKrwRight']), ['150000', '99000', '70000']);
-  assert.match(await np.locator('#ihPricePlan').textContent(), /^처음 값: 템플릿 2153 \(BSA X\) 가격/);
+  assert.match(await np.locator('#ihPriceStep').getAttribute('title'), /^처음 값: 템플릿 2153 \(BSA X\) 가격/);
   await np.evaluate(() => { const i = document.getElementById('ihIntro'); i.value = '정품 보증 6개월'; i.dispatchEvent(new Event('input', { bubbles: true })); });
 
   const headCalls = () => np.evaluate(() => calls.filter(c => c.channel === 'imweb-head-register').map(c => c.data));

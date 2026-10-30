@@ -96,7 +96,8 @@ try {
   assert.deepEqual(await card('own').locator('.mg-field span').allTextContents(),
     ['한국 상품명', '한국 1set (KRW)', '미국 상품명', '미국 1set (USD)', '일본 상품명', '일본 1set (JPY)']);
   assert.equal(await card('own').locator('input[data-key="imweb-ko:set"]').inputValue(), '150000', '1set 은 조합 줄 가격이다');
-  assert.match(await card('amazon').innerText(), /SKU OBM0501N612 — 아마존 리스팅의 열쇠라 바꿀 수 없음/);
+  assert.doesNotMatch(await card('amazon').innerText(), /리스팅의 열쇠/, '이유는 툴팁으로');
+  assert.equal(await card('amazon').locator('.mg-tip', { hasText: 'SKU OBM0501N612' }).getAttribute('title'), '아마존 리스팅의 열쇠라 바꿀 수 없음');
   assert.match(await card('amazon').innerText(), /상품 이미지 \(첫 장 = 대표\) · 미국 · 일본 같은 목록/);
   assert.match(await card('naver').innerText(), /상세 이미지/);
   assert.equal(await card('naver').locator('.mg-opt-table tr').count(), 3, '옵션 표: 머리 + 옵션 2줄');
@@ -116,7 +117,7 @@ try {
 
   // 좌측 SKU 없이 차량 행만 골라도 아마존 · 이베이는 상품번호로 몰 목록을 찾아 불러온다(N6120 미끼는 버린다)
   await child().evaluate(() => VUMallGrid.load({ no: '612', brand: '기아', model: 'K5', cpid: '9876' }));
-  assert.match(await card('amazon').innerText(), /SKU OBM0501N612 — /);
+  assert.match(await card('amazon').innerText(), /SKU OBM0501N612/);
   assert.equal(await card('ebay').locator('input[data-key="title"]').inputValue(), 'Optic-glass Mirror for KIA K5');
   assert.equal((await callsOf('ebay-load-product')).at(-1), 'OBM0501N612');
 

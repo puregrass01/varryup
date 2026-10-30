@@ -22,6 +22,8 @@
   let gen = 0, busy = false, lastKeys = {}, prices = {}, priceOpts = {};
 
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  // 안내 줄은 ' — ' 앞만 보이고 이유는 마우스를 올리면 보인다(카드를 짧게).
+  const tip = (cls, line) => { const [text, ...why] = String(line).split(' — '), n = el('p', cls, text); if (why.length) { n.title = why.join(' — '); n.classList.add('mg-tip'); } return n; };
   const same = (a, b) => {
     a = String(a ?? '').trim(); b = String(b ?? '').trim();
     return a === b || (a !== '' && b !== '' && !isNaN(a) && !isNaN(b) && Number(a) === Number(b));
@@ -474,13 +476,13 @@
     if (card.status === 'idle') parts.push(el('p', 'mg-note', card.note || '상품을 고르면 불러옵니다.'));
     else if (card.status === 'loading') parts.push(el('p', 'mg-note', '불러오는 중…'));
     else if (card.status === 'missing') parts.push(el('p', 'mg-missing', '이 몰에 없음'), el('p', 'mg-note', card.note));
-    else if (card.status === 'error') parts.push(el('p', 'mg-error', `❌ 불러오지 못함 — ${card.note}`));
+    else if (card.status === 'error') parts.push(tip('mg-error', `❌ 불러오지 못함 — ${card.note}`));
     else if (card.status === 'pick') {
       const box = el('div');
       parts.push(el('p', 'mg-note', `${card.rows.length}개가 찾아졌습니다 — 고칠 상품을 고르세요.`), box);
       VUProductTable.render(box, card.rows, { caption: `${mall.name} 검색 결과`, onSelect: item => loadCard(id, null, gen, item) });
     } else {
-      for (const line of a.info?.(card) || []) parts.push(el('p', 'mg-ro', line));
+      for (const line of a.info?.(card) || []) parts.push(tip('mg-ro', line));
       for (const f of a.fields(card)) {
         const label = el('label', 'mg-field'), input = el('input', 'form-input');
         input.type = f.type || 'text'; if (f.step) input.step = f.step;
@@ -509,7 +511,7 @@
   function gallery(id, img) {
     const wrap = el('div', 'mg-images'), list = el('div');
     wrap.append(el('div', 'mg-label', img.label));
-    if (img.note) wrap.append(el('p', 'mg-ro', img.note));
+    if (img.note) wrap.append(tip('mg-ro', img.note));
     const set = urls => { img.set(urls); renderCard(id); };
     VUImageGallery.render(list, img.get(), {
       scope: img.scope, isBusy: () => busy, onReplace: set,
