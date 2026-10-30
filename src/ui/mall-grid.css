@@ -41,3 +41,4 @@
 /* 이미지 목록이 옆에 서면 폼이 600px 남짓이다. 두 줄은 지키고, 옵션 표가 든 카드(네이버)만 한 줄을 다 쓴다 */
 @media (max-width: 720px) { .mg-card:has(.mg-opt-table) { grid-column: 1 / -1; } }
 @media (max-width: 520px) { .mg-grid { grid-template-columns: minmax(0, 1fr); } }
+.mg-tip { cursor: help; text-decoration: underline dotted var(--text-muted); text-underline-offset: 3px; }

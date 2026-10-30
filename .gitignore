@@ -64,3 +64,6 @@ data/verimap/*
 !data/verimap/part_aliases.json
 !data/verimap/verimap_links.json
 !data/verimap/manual_links.json
+
+# 아키텍처 분석 도구(archify) 결과물
+.archify/
