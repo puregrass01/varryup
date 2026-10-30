@@ -57,9 +57,19 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+rem Some PCs end npm ci without the electron package at all (an npm config such as omit=dev or production=true).
+rem Install exactly the locked version by itself.
+rem (Outside a ( ) block: %EV% inside a block would expand before the for sets it.)
+if exist "node_modules\electron\package.json" goto haveelectron
+echo The electron package was not installed - installing it directly...
+set "EV="
+for /f %%v in ('node -p "require('./package-lock.json').packages['node_modules/electron'].version"') do set "EV=%%v"
+if not defined EV set "EV=30.5.1"
+call npm install --no-save --include=dev --no-audit --no-fund --loglevel=error electron@%EV%
+:haveelectron
 rem package.json allowScripts lets npm 12 run electron's postinstall (downloads electron.exe). If it was still skipped
 rem (ignore-scripts=true, an older lock), run it here - keyed on electron.exe, not path.txt.
-if not exist "node_modules\electron\dist\electron.exe" (
+if not exist "node_modules\electron\dist\electron.exe" if exist "node_modules\electron\install.js" (
   echo Downloading electron.exe ^(about 100MB^)...
   set "ELECTRON_SKIP_BINARY_DOWNLOAD="
   call node node_modules\electron\install.js
@@ -67,6 +77,12 @@ if not exist "node_modules\electron\dist\electron.exe" (
 if not exist "node_modules\electron\dist\electron.exe" (
   echo [ERROR] electron.exe is still missing - read the error above. Usual causes: no internet, a proxy, or antivirus deleting the file.
   echo         Then delete the node_modules folder and run this file again.
+  echo --- details for support ---
+  call node -v
+  call npm -v
+  call npm config get omit
+  call npm config get ignore-scripts
+  if exist "node_modules\electron" (dir /b "node_modules\electron") else (echo node_modules\electron does not exist)
   pause
   exit /b 1
 )
