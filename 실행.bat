@@ -74,6 +74,21 @@ if not exist "node_modules\electron\dist\electron.exe" if exist "node_modules\el
   set "ELECTRON_SKIP_BINARY_DOWNLOAD="
   call node node_modules\electron\install.js
 )
+rem On Node.js v26 install.js unzips only locales\lt.pak and exits 0 - the zip itself is downloaded fine.
+rem Unpack the cached zip with Windows' own tar (not Git's GNU tar on PATH - it cannot read zip).
+rem path.txt gets no newline: electron's index.js joins it into the exe path untrimmed.
+if exist "node_modules\electron\dist\electron.exe" goto haveexe
+if not exist "%SystemRoot%\System32\tar.exe" goto haveexe
+set "EZIP="
+set "EZIPPATH="
+for /f "delims=" %%z in ('node -p "'electron-v'+require('./node_modules/electron/package.json').version+'-win32-'+process.arch+'.zip'" 2^>nul') do set "EZIP=%%z"
+if not defined EZIP goto haveexe
+for /r "%LOCALAPPDATA%\electron\Cache" %%f in (%EZIP%) do if exist "%%f" set "EZIPPATH=%%f"
+if not defined EZIPPATH goto haveexe
+echo Unpacking electron.exe from the download cache...
+"%SystemRoot%\System32\tar.exe" -xf "%EZIPPATH%" -C "node_modules\electron\dist"
+if exist "node_modules\electron\dist\electron.exe" call node -e "require('fs').writeFileSync('node_modules/electron/path.txt','electron.exe')"
+:haveexe
 if not exist "node_modules\electron\dist\electron.exe" (
   echo [ERROR] electron.exe is still missing - read the error above. Usual causes: no internet, a proxy, or antivirus deleting the file.
   echo         Then delete the node_modules folder and run this file again.
