@@ -29,6 +29,13 @@ echo    14. B2B 옵션 조회 - 확인필요 상품만
 echo    15. 본사몰 옵션 조회 - 확인필요 상품만
 echo    17. 본사몰 쇼핑 카테고리 목록
 echo.
+echo  [ 해외몰 - 미국 / 일본 ]
+echo    19. 게시판 구조 확인 - 게시판 3개만
+echo    18. 게시판 등록현황 수집
+echo    20. 게시물 본문 구조 확인 - 3건만
+echo    22. 게시물 본문 읽기 - 확인필요분만
+echo    23. 게시물 본문 읽기 - 전량 (링크용 idx 포함)
+echo.
 echo  [ 대조 ]
 echo    21. 코드표 X 전 채널 대조 실행
 echo.
@@ -52,6 +59,11 @@ if "%SEL%"=="14" goto S14
 if "%SEL%"=="15" goto S15
 if "%SEL%"=="16" goto S16
 if "%SEL%"=="17" goto S17
+if "%SEL%"=="18" goto S18
+if "%SEL%"=="19" goto S19
+if "%SEL%"=="20" goto S20
+if "%SEL%"=="22" goto S22
+if "%SEL%"=="23" goto S23
 if "%SEL%"=="21" goto S21
 if /i "%SEL%"=="Q" goto QUIT
 echo 메뉴에 있는 번호를 입력해주세요.
@@ -118,6 +130,26 @@ goto PAUSE_MENU
 
 :S17
 node scripts\verimap_collect_imweb.mjs --no-server --cats
+goto PAUSE_MENU
+
+:S18
+node scripts\verimap_collect_imweb_boards.mjs
+goto PAUSE_MENU
+
+:S19
+node scripts\verimap_collect_imweb_boards.mjs --boards-limit=3
+goto PAUSE_MENU
+
+:S20
+node scripts\verimap_collect_imweb_boards.mjs --detail --detail-limit=3
+goto PAUSE_MENU
+
+:S22
+node scripts\verimap_collect_imweb_boards.mjs --detail
+goto PAUSE_MENU
+
+:S23
+node scripts\verimap_collect_imweb_boards.mjs --detail-all
 goto PAUSE_MENU
 
 :S21

@@ -254,7 +254,7 @@ function rowAltNames(e) {
 }
 
 // 현황 칸에 적을 내용 — 채널마다 '무엇이 등록됐는지' 가 어디 적혀 있는지가 다르다.
-//   쿠팡 · 본사몰          : 상품명에 차종이 들어 있다.
+//   쿠팡 · 본사몰 · 해외몰 : 상품명(해외몰은 게시물 제목)에 차종이 들어 있다.
 //   B2B · 스마트스토어     : 한 상품에 차종이 여러 개라 옵션 내용이라야 어느 차종인지 알 수 있다.
 function cellText(rec) {
   const opt = String(rec.optionText || '').trim();
@@ -374,7 +374,7 @@ const IMWEB_UNITS = {
  * 미국몰·일본몰은 상품 페이지가 아니라 '게시물' 로 운영된다(제목 + 본문 이미지가 옵션 역할).
  * 아임웹은 같은 상품을 모든 구역에 복제해 들고 있어서 /products 로는 세 구역이 전부 같은
  * 숫자로 나온다 — 그걸 '등록됨' 으로 세면 실제 게시물 노출과 무관한 가짜 숫자가 된다.
- * 게시물은 아임웹 Open API 에 없어 대조하지 않는다.
+ * 게시물은 별도 수집이 필요하다.
  */
 const IMWEB_SKIP_UNITS = new Set(['u2026022769a0fa6e4f7f8', 'u2026040869d592902883d']);
 
@@ -486,9 +486,82 @@ function imwebRecords() {
   return recs;
 }
 
+// 해외몰(미국 · 일본)은 상품 페이지가 아니라 게시물이다 — 제목이 곧 적합표 한 장이다.
+// 제목 형식은 베리업이 등록할 때 쓰는 것과 같다: `브랜드 모델명 [코드]` (코드 여러 개면 쉼표).
+// 번호 앞 글자는 제조사 표시다(H 현대 · K 기아 · R 르노 · S 쉐보레 · Y) — 전부 광각미러 번호다.
+// B 는 오토바이라 자동차 코드표에 없다(야마하 · 스즈키 게시판) — 코드표에 없는 번호는 미해결로 남는다.
+// 해외몰 공개 게시판 주소: https://<몰 도메인>/{게시판번호}/?idx={게시물 idx}&bmode=view
+//   게시판번호(board_no) 는 게시판 목록(18번)에서, idx 는 게시물 본문(22·23번)에서 온다.
+//   idx 가 없으면 공개 주소를 만들 수 없어 관리자 상세 주소로 대신한다.
+const BOARD_DOMAIN = { en: 'https://optic-glass-us.imweb.me', jp: 'https://optic-glass-jp.imweb.me' };
+const ADMIN_DOMAIN = { en: 'https://optic-glass-us.imweb.me', jp: 'https://optic-glass.imweb.me' };
+const BOARD_IDX = (() => {
+  const m = new Map();
+  const f = path.join(DIR, 'imweb_board_details.csv');
+  if (!fs.existsSync(f)) return m;
+  for (const r of readCsv(f)) if (r['idx']) m.set(String(r['게시물코드']), String(r['idx']));
+  return m;
+})();
+function boardUrl(r) {
+  const lang = r['언어'];
+  const code = String(r['게시물코드'] || '');
+  const idx = BOARD_IDX.get(code) || '';
+  const no = String(r['게시판번호'] || '').trim();
+  if (idx && no && BOARD_DOMAIN[lang]) return `${BOARD_DOMAIN[lang]}/${no}/?idx=${idx}&bmode=view`;
+  if (code && ADMIN_DOMAIN[lang]) return `${ADMIN_DOMAIN[lang]}/admin/contents/post/view?code=${code}`;
+  return '';
+}
+
+function imwebBoardRecords() {
+  const file = path.join(DIR, 'imweb_board_posts.csv');
+  if (!fs.existsSync(file)) return [];
+  const recs = [];
+  for (const r of readCsv(file)) {
+    const channel = `해외몰(${r['몰'] || r['언어']})`;
+    const name = r['제목'] || '';
+    const codes = extractParts(name);
+    const base = { channel, productId: String(r['게시물코드'] || ''), optionIds: [], productName: name,
+                   // 게시물에는 품절 개념이 없다. 대조는 '판매중' 이 아닌 건 대상에서 빼므로 그대로 쓴다.
+                   optionText: '', model: cleanModel(name), state: '판매중',
+                   form: sellForm(name), via: '', url: boardUrl(r) };
+    if (!codes.length) { recs.push({ ...base, forcedPart: null, multi: 0 }); continue; }
+    for (const code of codes) recs.push({ ...base, forcedPart: code, multi: codes.length });
+  }
+  return recs;
+}
+
+// 게시물 본문에는 세대가 들어 있다 — `3th gen late model [No.706]` 꼴로, 이미지마다 한 쌍씩.
+// 수집기가 그 세대를 국문(`3세대 후기`)으로 바꿔 두므로, 세대 칸에 그대로 얹으면
+// 번호 하나가 코드표 여러 행에 걸리던 글이 가려진다. 모델명도 본문 배너 쪽이 더 구체적이다.
+function imwebBoardDetailRecords() {
+  const file = path.join(DIR, 'imweb_board_details.csv');
+  if (!fs.existsSync(file)) return [];
+  // 게시판번호는 본문 CSV 에 없다 — 목록 CSV 에서 게시물코드로 찾아 붙인다.
+  const byPost = new Map();
+  const lf = path.join(DIR, 'imweb_board_posts.csv');
+  if (fs.existsSync(lf)) for (const r of readCsv(lf)) byPost.set(String(r['게시물코드']), r);
+  // 몰 구분은 목록 CSV 쪽을 따른다 — 분류 규칙이 바뀌어도 본문을 다시 받지 않아도 되게.
+  return readCsv(file).map(r => {
+    const src = byPost.get(String(r['게시물코드']));
+    return {
+    channel: `해외몰(${(src && (src['몰'] || src['언어'])) || r['몰'] || r['언어']})`,
+    productId: String(r['게시물코드'] || ''),
+    optionIds: [],
+    productName: r['제목'] || '',
+    optionText: r['세대'] || '',                       // parseGen 이 읽는 칸
+    model: cleanModel(r['본문모델명'] || r['제목'] || ''),
+    state: '판매중',
+    form: sellForm(r['제목'] || ''),
+    forcedPart: String(r['부품번호'] || '').toUpperCase(),
+    multi: 1,
+    via: '본문에서 세대 확인',
+    url: boardUrl(src || r),
+  }; }).filter(r => r.forcedPart);
+}
+
 /** 채널별 '링크에 쓸 번호'. 못 찾으면 빈 문자열 — 그 칸은 링크 없이 글자만 남는다. */
 function linkId(rec) {
-  // 쿠팡처럼 주소를 미리 만들어 둔 채널은 그 주소를 그대로 쓴다(설정의 틀은 {id}).
+  // 해외몰처럼 주소를 미리 만들어 둔 채널은 그 주소를 그대로 쓴다(설정의 틀은 {id}).
   if (rec.url) return rec.url;
   // 쿠팡은 등록상품번호(sellerProductId)를 그대로 쓴다 — 판매자 화면 주소가 이 번호를 받는다.
   return String(rec.productId || '');
@@ -526,6 +599,12 @@ const records = [
   ...naverRecords(),
   ...imwebRecords().filter(r => !byOption.has(`${r.channel}|${r.productId}`)),
   ...optRecs,
+  // 본문을 읽은 게시물은 제목 기반 추정을 버린다 — 같은 게시물을 두 번 세지 않게.
+  ...(() => {
+    const detail = imwebBoardDetailRecords();
+    const done = new Set(detail.map(r => `${r.channel}|${r.productId}`));
+    return [...imwebBoardRecords().filter(r => !done.has(`${r.channel}|${r.productId}`)), ...detail];
+  })(),
 ];
 const channels = [...new Set(records.map(r => r.channel))];
 console.log(`채널: ${channels.join(', ')}  — 적합 단위 ${records.length}건\n`);
@@ -744,10 +823,18 @@ for (const ch of channels) {
   const n = carRows.filter(e => matched.get(`자동차:${e.row}`)?.has(ch)).length;
   console.log(`  ${ch}: ${n}  (미등록 ${carRows.length - n})`);
 }
-const both = carRows.filter(e => channels.every(ch => matched.get(`자동차:${e.row}`)?.has(ch))).length;
+// '전 채널' 은 국내 4개 채널 기준이다. 해외몰은 게시물 수가 훨씬 적어서 같이 넣으면
+// 그 숫자가 해외몰 숫자로 눌려 버린다 — 따로 센다.
+const homeChannels = channels.filter(ch => !ch.startsWith('해외몰'));
+const awayChannels = channels.filter(ch => ch.startsWith('해외몰'));
+const both = carRows.filter(e => homeChannels.every(ch => matched.get(`자동차:${e.row}`)?.has(ch))).length;
 const none = carRows.filter(e => !matched.has(`자동차:${e.row}`)).length;
-console.log(`  전 채널 등록: ${both}  (${channels.join(', ')})`);
+console.log(`  국내 전 채널 등록: ${both}  (${homeChannels.join(', ')})`);
 console.log(`  어느 채널에도 없음: ${none}`);
+for (const ch of awayChannels) {
+  const n = carRows.filter(e => matched.get(`자동차:${e.row}`)?.has(ch)).length;
+  console.log(`  ${ch}: ${n}행 등록`);
+}
 
 writeCsv(path.join(DIR, 'match_명단.csv'),
   ['채널', '상품ID', '옵션ID', '상품명', '옵션', '판매구성', '판매상태', '추출_부품번호', '추출방식', '추출_세대', '연식시작', '연식종료',

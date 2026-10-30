@@ -37,6 +37,7 @@
         .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; }
         .card { background:var(--bg-panel); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
         .card h3 { margin:0 0 4px; font-size:.92rem; font-weight:700; }
+        .card .hint { margin:0 0 12px; font-size:.76rem; color:var(--text-muted); line-height:1.6; }
         .runs { display:flex; flex-direction:column; gap:7px; }
         .run { display:flex; align-items:center; gap:9px; width:100%; text-align:left; cursor:pointer;
             background:var(--bg-card); border:1px solid var(--border); color:var(--text-main);
@@ -214,6 +215,13 @@ const TASKS = [
     ['12', 'B2B몰', 'node', ['scripts/verimap_collect_imweb.mjs', '--site=b2b', '--no-server'], '1분'],
     ['14', 'B2B 옵션 - 확인필요분', 'node', ['scripts/verimap_collect_imweb.mjs', '--site=b2b', '--no-server', '--options'], '약 6분'],
   ]],
+  ['해외몰(미국 · 일본)', [
+    ['19', '게시판 구조 확인 - 게시판 3개만', 'node', ['scripts/verimap_collect_imweb_boards.mjs', '--boards-limit=3'], '1분'],
+    ['18', '게시판 등록현황 수집', 'node', ['scripts/verimap_collect_imweb_boards.mjs'], '몇 분'],
+    ['20', '게시물 본문 구조 확인 - 3건만', 'node', ['scripts/verimap_collect_imweb_boards.mjs', '--detail', '--detail-limit=3'], '즉시'],
+    ['22', '게시물 본문 읽기 - 확인필요분만', 'node', ['scripts/verimap_collect_imweb_boards.mjs', '--detail'], '약 5분'],
+    ['23', '게시물 본문 읽기 - 전량 (링크용 idx 포함)', 'node', ['scripts/verimap_collect_imweb_boards.mjs', '--detail-all'], '약 15분'],
+  ]],
   ['대조', [
     ['21', '코드표 X 전 채널 대조', 'node', ['scripts/verimap_match.mjs'], '몇 초'],
   ]],
@@ -232,10 +240,17 @@ let busy = false;
 function renderCards() {
     const host = document.getElementById('cards');
     host.innerHTML = '';
+    const NOTE = {
+      '해외몰(미국 · 일본)':
+        '미국몰·일본몰은 상품 페이지가 아니라 게시물로 운영됩니다. 아임웹 Open API 에는 게시판이 ' +
+        '없어서, 베리업이 글을 올릴 때 쓰는 관리자 세션으로 게시판·게시물 목록을 읽어 옵니다. ' +
+        '엣지 창이 열리고 아임웹 관리자에 로그인합니다.',
+    };
     for (const [title, rows] of TASKS) {
         const c = document.createElement('div');
         c.className = 'card';
         c.innerHTML = `<h3>${title}</h3>`
+          + (NOTE[title] ? `<p class="hint">${NOTE[title]}</p>` : '')
           + `<div class="runs"></div>`;
         const box = c.querySelector('.runs');
         for (const [n, label, kind, args, when] of rows) {
