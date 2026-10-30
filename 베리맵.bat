@@ -98,8 +98,6 @@ node scripts\verimap_collect_imweb.mjs --diag
 goto PAUSE_MENU
 
 :S8
-node scripts\verimap_collect_imweb.mjs --reset-keys
-echo.
 echo 입력한 키를 저장합니다. 다음부터는 묻지 않습니다.
 node scripts\verimap_collect_imweb.mjs --probe --ask --no-server --save-keys
 goto PAUSE_MENU
