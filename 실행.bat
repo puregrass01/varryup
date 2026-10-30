@@ -49,7 +49,9 @@ if errorlevel 1 (
 )
 rem electron is a devDependency - NODE_ENV=production or omit=dev would skip it.
 set "NODE_ENV="
-call npm ci --include=dev --no-audit --no-fund
+rem loglevel=error: the "npm warn deprecated" lines (glob, tar, inflight, boolean, lodash.isequal) come from inside
+rem electron / electron-builder / electron-updater and are harmless - they made users think the install failed.
+call npm ci --include=dev --no-audit --no-fund --loglevel=error
 if errorlevel 1 (
   echo [ERROR] npm ci failed - read the npm error above. Usual causes: no internet or a proxy, or an old Node.js - install the current LTS.
   pause
