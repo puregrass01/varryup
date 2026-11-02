@@ -1,7 +1,7 @@
 (async () => {
   const { imagePolicy, parseImageUrls, sameImages, previewImageUrls } = await import('../utils/bulk_images.js');
   const { productIdentity, identityText } = await import('../utils/product_identity.js');
-  const { COUNTRIES, referencePrices, countryPrice, productPageUrl } = await import('../utils/country_sync.js');
+  const { COUNTRIES, referencePrices, referenceRole, countryPrice, productPageUrl } = await import('../utils/country_sync.js');
   const ipc = require('electron').ipcRenderer, root = document.getElementById('bulk-edit-workspace');
   const scopes = [
     ['naver', '네이버', 'KRW', 'logos/naver.png'], ['coupang', '쿠팡', 'KRW', 'logos/coupang.png'], ['imweb-b2b', '아임웹 B2B', 'KRW', 'logos/b2b.png'],
@@ -9,14 +9,19 @@
     ['amazon-us', '아마존 미국', 'USD', 'logos/amazon.png'], ['amazon-jp', '아마존 일본', 'JPY', 'logos/amazon.png'], ['ebay', 'eBay', 'USD', 'logos/ebay.png']
   ];
   const states = new Map();
-  let scope = 'naver', busy = false, cancel = false, page = 0, query = '', lastTab = 'naverTab';
+  // country: 나라 화면(kr · us · jp)일 때. 그동안 scope 는 그 나라 기준 몰(본사몰 구역)이다 — 필터 · 검색 · 단위가 기준 몰 것.
+  let scope = 'naver', country = null, busy = false, cancel = false, page = 0, query = '', lastTab = 'naverTab';
   const size = 25, filters = new Map();
   const $ = id => document.getElementById(id);
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   const key = r => r.id + ':' + (r.optionId || '');
   // tried: 이 목록에서 현재가·이미지를 한 번 읽으려 한 상품 ID(자동 불러오기가 같은 상품을 되풀이해 두드리지 않게).
-  const state = () => { if (!states.has(scope)) states.set(scope, { rows: [], note: '', filters: {}, query: '', imageInput: '', tried: new Set() }); return states.get(scope); };
-  const rows = () => state().rows;
+  // absent: 나라 화면이 자리를 만들었다가 그 몰에서 못 읽은 상품 ID(다시 자리를 만들지 않게).
+  const state = (sc = scope) => { if (!states.has(sc)) states.set(sc, { rows: [], note: '', filters: {}, query: '', imageInput: '', tried: new Set(), absent: new Set() }); return states.get(sc); };
+  const rows = (sc = scope) => state(sc).rows;
+  const unitOf = sc => scopes.find(s => s[0] === sc)[2];
+  // 나라 화면에서 보기만 하는 몰(B2B)의 줄은 고르거나 고칠 수 없다.
+  const locked = r => r.readonly || (!!country && COUNTRIES[country].view.includes(r.scope));
   const priceDirty = r => !r.priceReadonly && r.ready && r.newPrice !== '' && Number(r.newPrice) !== Number(r.price === '' ? NaN : r.price);
   const imageDirty = r => r.imagesReady && Array.isArray(r.newImages) && !sameImages(r.newImages, r.images);
   const dirty = r => priceDirty(r) || imageDirty(r);
@@ -25,21 +30,27 @@
     return value == null || String(value).trim() === '' || !Number.isFinite(Number(value)) ? 'unknown' : String(Number(value));
   }
   const filterValue = (r, key) => key === 'price' ? priceKey(r) : r.tax[key];
-  const view = () => rows().filter(r => [...filters].every(([k, select]) => !select.value || filterValue(r, k) === select.value) &&
-    query.toLowerCase().split(/\s+/).filter(Boolean).every(w => [r.name, r.id, r.variant, identOf(r).search, ...Object.values(r.tax)].join(' ').toLowerCase().includes(w)));
-  const selected = () => view().filter(r => r.selected && !r.readonly);
-  const pageRows = () => view().slice(page * size, (page + 1) * size);
+  const match = r => [...filters].every(([k, select]) => !select.value || filterValue(r, k) === select.value) &&
+    query.toLowerCase().split(/\s+/).filter(Boolean).every(w => [r.name, r.id, r.variant, identOf(r).search, ...Object.values(r.tax)].join(' ').toLowerCase().includes(w));
+  // 나라 화면은 본사몰 상품 묶음 단위로 거르고 넘긴다(묶음의 본사 줄로 거른다). 줄은 묶음 순서대로 편다.
+  const shownGroups = () => groups().filter(g => g.own.some(match));
+  // 짝 줄 하나를 여러 본사 상품이 함께 가리키면(네이버 615개 중 393개) 묶음마다 보이지만, 선택 · 저장 · 개수는 한 번만 센다.
+  const view = () => country ? [...new Set(shownGroups().flatMap(g => [...g.own, ...g.members]))] : rows().filter(match);
+  const selected = () => view().filter(r => r.selected && !locked(r));
+  const pageGroups = () => shownGroups().slice(page * size, (page + 1) * size);
+  const pageRows = () => country ? pageGroups().flatMap(g => [...g.own, ...g.members]) : view().slice(page * size, (page + 1) * size);
+  const pages = () => Math.max(1, Math.ceil((country ? shownGroups() : view()).length / size));
   const tell = text => { $('be-status').textContent = text; };
   // 선택·저장은 필터 전체 기준이라, 지금 페이지 밖에 선택된 행이 있으면 개수에 따로 드러낸다.
   function showCount() {
     const picked = selected(), visible = new Set(pageRows());
     const off = picked.filter(r => !visible.has(r)).length;
-    $('be-count').textContent = view().length + '행 / 전체 ' + rows().length + '행 · 선택 ' + picked.length + '행' +
+    $('be-count').textContent = (country ? shownGroups().length + '개 상품(' + view().length + '행) / 전체 ' + groups().length + '개' : view().length + '행 / 전체 ' + rows().length + '행') + ' · 선택 ' + picked.length + '행' +
       (off ? ' (다른 페이지 ' + off + '행 포함)' : '') + ' · 저장할 변경 ' + picked.filter(dirty).length + '행';
   }
   // 머리글 체크박스는 모든 페이지의 필터 결과를 대상으로 한다.
   function syncHeader() {
-    const active = view().filter(r => !r.readonly), on = active.filter(r => r.selected).length;
+    const active = view().filter(r => !locked(r)), on = active.filter(r => r.selected).length;
     const box = $('be-th-select-all');
     box.checked = active.length > 0 && on === active.length;
     box.indeterminate = on > 0 && on < active.length;
@@ -69,11 +80,12 @@
   const linkOf = r => ({ scope: r.scope || scope, id: r.id, optionId: r.optionId, name: r.name, ...Object.fromEntries(LINK_KEYS.map(k => [k, r[k]])) });
   const platformId = r => {
     if (/^(?:amazon-|ebay$)/.test(r.scope || scope)) return '';   // 아마존·eBay 는 ID 가 곧 SKU
-    return scopes.find(s => s[0] === scope)[1] + ' ID ' + r.id + (r.optionId ? ' · 옵션 ' + r.optionId : '');
+    return titleOf(r.scope || scope) + ' ID ' + r.id + (r.optionId ? ' · 옵션 ' + r.optionId : '');
   };
   root.innerHTML = '<div class="be-head"><h2>상품 일괄 수정</h2><span>플랫폼별 판매가 · 이미지 관리</span></div>' +
-    '<div class="be-platform-row"><div id="be-platforms" class="be-platforms" role="tablist" aria-label="쇼핑몰 플랫폼"></div>' +
-    '<div id="be-countries" class="be-countries" role="group" aria-label="나라별 가격 통일"><span>가격 통일</span></div></div>' +
+    // 맨 앞은 나라 탭(한국 · 미국 · 일본) — 그 나라 몰들을 본사몰 상품 묶음으로 한 표에 모아 본다. 그 뒤가 몰 탭.
+    '<div class="be-platform-row"><div id="be-countries" class="be-countries" role="tablist" aria-label="나라별 가격 통일"></div>' +
+    '<div id="be-platforms" class="be-platforms" role="tablist" aria-label="쇼핑몰 플랫폼"></div></div>' +
     // 서버 검색칸은 아마존·eBay 에서만 보인다. 나머지 몰은 전체를 받은 뒤 같은 단어로 걸러 표 안 검색과 같다(draw).
     '<div class="be-tools"><input id="be-api-query" placeholder="상품명·SKU 검색 · 빈칸이면 전체 목록" aria-label="목록 검색어">' +
     '<button id="be-list" type="button">상품 목록 조회</button><button id="be-sync" type="button" hidden>전체 목록 동기화</button></div>' +
@@ -81,7 +93,8 @@
     '<div class="be-actions">' +
     // 선택·해제는 표 머리의 전체선택 체크 하나로 한다. 판매가·이미지 입력은 표 머리 아래 줄, 그 열 바로 밑에 있다.
     // 현재가·이미지는 보이는 쪽을 자동으로 읽는다(autoLoad) — 예전 '선택 상품 현재가·이미지 불러오기' 버튼은 없앴다.
-    '<div class="be-group be-group-end"><button id="be-stop" type="button" hidden>중단</button><button id="be-export" type="button">결과 CSV</button><button id="be-save" type="button" class="be-primary">선택 변경 저장</button></div></div>' +
+    '<div class="be-group be-group-end"><button id="be-country-apply" type="button" hidden>본사 값으로 맞추기</button>' +
+    '<button id="be-country-images" type="button" hidden>본사 상세 이미지 → 네이버 · 쿠팡</button><button id="be-stop" type="button" hidden>중단</button><button id="be-export" type="button">결과 CSV</button><button id="be-save" type="button" class="be-primary">선택 변경 저장</button></div></div>' +
     '<div class="be-state"><div id="be-status" role="status" aria-live="polite"></div><p class="be-help" id="be-count"></p></div>' +
     // 필터는 표 왼쪽 레일에 세로로 쌓는다(표 안 검색이 맨 위). 표는 나머지 폭을 쓴다.
     '<div class="be-body"><div class="be-filters" id="be-filters" role="group" aria-label="표 필터"></div>' +
@@ -129,16 +142,18 @@
     $('be-image-value').value = state().imageInput;
     rebuildFilters(); draw(); tell(state().note);
   }
-  for (const [id, title, , logo] of scopes) {
+  const logoOf = id => { const [, , , logo] = scopes.find(s => s[0] === id), img = el('img', 'be-platform-logo' + (id === 'ebay' ? ' be-platform-logo-wide' : ''));
+    img.src = logo; img.alt = ''; img.width = img.height = 18; return img; };
+  for (const [id, title] of scopes) {
     const b = el('button', 'be-platform-btn'); b.type = 'button'; b.dataset.scope = id; b.setAttribute('role', 'tab');
-    b.innerHTML = `<img src="${logo}" class="be-platform-logo${id === 'ebay' ? ' be-platform-logo-wide' : ''}" alt="" width="18" height="18"><span>${title}</span>`;
-    b.addEventListener('click', () => { if (!busy) switchScope(id); });
+    b.append(logoOf(id), el('span', '', title));
+    b.addEventListener('click', () => { if (!busy) { country = null; switchScope(id); } });
     $('be-platforms').append(b);
   }
   for (const [code, c] of Object.entries(COUNTRIES)) {
-    const b = el('button', '', c.label); b.type = 'button'; b.dataset.country = code;
-    b.title = `${titleOf(c.ref)} 탭에서 고른 상품의 1set 가격${c.images ? '과 상세 이미지' : ''}를 ${c.targets.map(titleOf).join(' · ')} 표에 채웁니다 · 저장은 각 몰 탭에서`;
-    b.addEventListener('click', () => run(() => syncCountry(code)));
+    const b = el('button', '', c.label); b.type = 'button'; b.dataset.country = code; b.setAttribute('role', 'tab');
+    b.title = `${[c.ref, ...c.targets, ...c.view].map(titleOf).join(' · ')} 상품을 본사몰 상품 묶음으로 한 표에 모아 봅니다` + (c.view.length ? ` (${c.view.map(titleOf).join(' · ')}는 보기만)` : '');
+    b.addEventListener('click', () => run(() => openCountry(code)));
     $('be-countries').append(b);
   }
   const searchLabel = el('label', '', '표 안에서 검색'), search = el('input');
@@ -179,11 +194,14 @@
     else input.removeAttribute('title');
   }
   function draw() {
-    const filtered = view(), unit = scopes.find(s => s[0] === scope)[2];
+    const filtered = view(), unit = unitOf(scope);
     const policy = imagePolicy(scope);
     // 아임웹 네 범위도 Open API 로 읽고 쓴다(2026-10-05) — 예전의 '카탈로그 참조 · API 연동 전' 잠금은 없앴다.
     $('be-price-label').textContent = '기존 판매가';
-    for (const id of ['be-price-source', 'be-apply', 'be-save', 'be-image-value', 'be-image-op', 'be-image-apply', 'be-th-select-all']) $(id).disabled = busy;
+    for (const id of ['be-price-source', 'be-apply', 'be-save', 'be-image-value', 'be-image-op', 'be-image-apply', 'be-th-select-all', 'be-country-apply', 'be-country-images']) $(id).disabled = busy;
+    // 나라 화면은 가격 전용이다 — 표 머리의 이미지 · 가격 입력 줄 대신 [본사 값으로 맞추기] · [본사 상세 이미지 →] 를 쓴다.
+    root.querySelector('.be-th-tools').hidden = !!country;
+    $('be-country-apply').hidden = !country; $('be-country-images').hidden = !country || !COUNTRIES[country].images;
     // 서버 검색칸·전체 목록 동기화·환율가는 아마존·eBay 만. 환율가는 행마다 계산하므로 고르면 판매가 칸을 잠근다.
     const amazonEbay = /^(?:amazon-|ebay$)/.test(scope), source = $('be-price-source');
     $('be-api-query').hidden = $('be-sync').hidden = !amazonEbay;
@@ -191,24 +209,47 @@
     source.hidden = source.options[1].hidden = source.options[1].disabled = !amazonEbay;
     if (!amazonEbay) source.value = 'direct';
     $('be-value').disabled = busy || source.value === 'fx';
-    root.querySelector('.be-help').textContent = defaultHelp;
-    $('be-photo-label').textContent = '사진 · ' + policy.label;
-    $('be-image-hint').textContent = policy.display === 'images' ? 'HTML 이미지 지원 · 순서대로 미리보기' : '이미지 미리보기 · 저장은 URL 배열';
-    page = Math.max(0, Math.min(page, Math.max(0, Math.ceil(filtered.length / size) - 1)));
+    root.querySelector('.be-help').textContent = country ? COUNTRY_HELP : defaultHelp;
+    $('be-photo-label').textContent = country ? '쇼핑몰' : '사진 · ' + policy.label;
+    $('be-image-hint').textContent = country ? '' : policy.display === 'images' ? 'HTML 이미지 지원 · 순서대로 미리보기' : '이미지 미리보기 · 저장은 URL 배열';
+    page = Math.max(0, Math.min(page, pages() - 1));
     $('be-currency').textContent = unit;
     $('be-value').step = unit === 'USD' ? '.01' : '1';
     showCount();
-    $('be-page').textContent = (page + 1) + ' / ' + Math.max(1, Math.ceil(filtered.length / size));
-    $('be-prev').disabled = busy || page === 0; $('be-next').disabled = busy || (page + 1) * size >= filtered.length;
-    document.querySelectorAll('#be-platforms button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.scope === scope)));
+    $('be-page').textContent = (page + 1) + ' / ' + pages();
+    $('be-prev').disabled = busy || page === 0; $('be-next').disabled = busy || page + 1 >= pages();
+    document.querySelectorAll('#be-platforms button').forEach(b => b.setAttribute('aria-selected', String(!country && b.dataset.scope === scope)));
+    document.querySelectorAll('#be-countries button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.country === country)));
     syncHeader();
     const body = $('be-body'); body.replaceChildren();
-    for (const r of pageRows()) {
+    if (country) for (const g of pageGroups()) {
+      // 묶음 머리: 본사몰 상품명 · 번호, 시트로 찾은 짝이면 표시, 인덱스에 없으면 그 이유.
+      const head = el('tr', 'be-country-head'), td = el('td', '', g.own[0].name);
+      td.colSpan = 8;
+      td.append(el('small', '', titleOf(scope) + ' 상품 ' + g.id + (g.t.missing ? ' · ' + g.t.missing : g.t.via === 'sheet' ? ' · Vehicles 시트로 찾은 짝' : '') +
+        (g.t.missing ? '' : ' · 짝 ' + g.members.length + '줄')));
+      head.append(td); body.append(head);
+      for (const r of [...g.own, ...g.members]) body.append(rowEl(r));
+    }
+    else for (const r of pageRows()) body.append(rowEl(r));
+    if (!filtered.length) {
+      const td = el('td', '', rows().length ? '필터에 맞는 상품이 없습니다.' : '플랫폼을 선택하고 상품 목록을 조회하세요.');
+      td.colSpan = 8; const tr = el('tr'); tr.append(td); body.append(tr);
+    }
+    autoLoad();
+  }
+  // 표 한 줄. 나라 화면에서는 사진 칸 대신 몰 로고 · 이름을 보이고, 단위는 그 줄의 몰 것이다.
+  function rowEl(r) {
+      const sc = r.scope || scope, unit = unitOf(sc);
       const tr = el('tr'); tr.classList.toggle('be-dirty', dirty(r));
       const selectCell = el('td', 'be-check-column'), check = el('input'); check.type = 'checkbox'; check.checked = !!r.selected;
-      check.setAttribute('aria-label', '선택: ' + r.name); check.disabled = busy || r.readonly;
+      check.setAttribute('aria-label', '선택: ' + r.name); check.disabled = busy || locked(r);
       check.addEventListener('change', () => { r.selected = check.checked; draw(); }); selectCell.append(check); tr.append(selectCell);
       const photo = el('td', 'be-photo-column');
+      if (country) {
+        const mall = el('span', 'be-mall'); mall.append(logoOf(sc), el('span', '', titleOf(sc) + (locked(r) && !r.readonly ? ' (보기만)' : '')));
+        photo.append(mall);
+      } else {
       const images = previewImageUrls(r.newImages || r.images || r.image || r.mainImageUrl || r.imageUrl || []);
       {
         const gallery = el('div', 'be-photo-gallery');
@@ -259,13 +300,14 @@
           photo.append(load);
         }
       }
+      }
       if (imageDirty(r)) photo.append(el('small', 'be-image-pending', '이미지 변경 대기'));
       tr.append(photo);
       const title = el('td', 'be-title', r.name); if (r.variant) title.append(el('small', '', r.variant));
       // 판매 페이지 링크. 주소는 메인이 행의 번호로 다시 만들어 기본 브라우저로 연다(open-product-page).
       const pageUrl = productPageUrl(linkOf(r));
       if (pageUrl) {
-        const a = el('a', 'be-page-link', titleOf(scope) + '에서 보기'); a.href = pageUrl; a.title = pageUrl;
+        const a = el('a', 'be-page-link', titleOf(sc) + '에서 보기'); a.href = pageUrl; a.title = pageUrl;
         a.onclick = e => { e.preventDefault(); ipc.invoke('open-product-page', linkOf(r)).then(res => { if (!res?.ok) tell(res?.error || '판매 페이지를 열지 못했습니다.'); }, err => tell(err.message)); };
         title.append(a);
       }
@@ -279,27 +321,23 @@
       tr.append(id);
       const taxonomy = el('td', '', r.tax.brand); taxonomy.append(el('small', '', r.tax.vehicle + ' / ' + r.tax.model)); tr.append(taxonomy);
       const current = el('td', 'be-price', r.ready ? (r.price === '' ? '미등록' : Number(r.price).toLocaleString('ko-KR') + ' ' + unit) : (r.price !== '' ? (Number.isFinite(Number(r.price)) ? Number(r.price).toLocaleString('ko-KR') + ' ' + unit : r.price) + ' (목록)' : '조회 필요'));
-      const fx = state().fx, tier = fx?.links?.[r.id];
+      const fx = state(sc).fx, tier = fx?.links?.[r.id];
       if (tier) current.append(el('small', '', (fx.on ? '환율 자동 · ' : '환율 등급 · ') + tier));
       tr.append(current);
       const priceCell = el('td'), input = el('input'); input.type = 'number'; input.step = unit === 'USD' ? '.01' : '1'; input.min = unit === 'USD' ? '.01' : '1';
-      input.value = r.newPrice; input.disabled = busy || !r.ready || r.readonly || r.priceReadonly;
+      input.value = r.newPrice; input.disabled = busy || !r.ready || locked(r) || r.priceReadonly;
       input.setAttribute('aria-label', '판매가: ' + r.name + (r.variant ? ' / ' + r.variant : ''));
       input.addEventListener('input', () => {
-        r.newPrice = input.value; r.selected = true; check.checked = true; tr.classList.toggle('be-dirty', dirty(r));
+        r.newPrice = input.value; r.selected = true; r.followed = false; check.checked = true; tr.classList.toggle('be-dirty', dirty(r));
         tooltip(input, input.value, unit);
         showCount(); syncHeader();
       });
+      // 나라 화면의 본사 줄을 고치면(칸을 떠날 때) 묶음의 다른 몰 줄이 그 값을 따라간다.
+      if (country && sc === scope) input.addEventListener('change', () => { follow(groups().filter(g => g.id === r.id), true); draw(); });
       input.addEventListener('mouseover', () => tooltip(input, input.value, unit)); priceCell.append(input); tr.append(priceCell);
       const resultCell = el('td', 'be-result', r.result || (r.priceReadonly ? '이미지만 수정 가능' : r.readonly ? '판매가 없음' : r.ready ? '가격 입력 가능' : '현재가 조회 전'));
       if (r.imageResult) resultCell.append(el('small', '', r.imageResult)); tr.append(resultCell);
-      body.append(tr);
-    }
-    if (!filtered.length) {
-      const td = el('td', '', rows().length ? '필터에 맞는 상품이 없습니다.' : '플랫폼을 선택하고 상품 목록을 조회하세요.');
-      td.colSpan = 8; const tr = el('tr'); tr.append(td); body.append(tr);
-    }
-    autoLoad();
+      return tr;
   }
   // 작업 중에도 왼쪽 레일(표 안 검색·필터)은 잠그지 않는다 — 자동 불러오기가 도는 동안에도 계속 찾고 거를 수 있게.
   function lock(value) {
@@ -323,9 +361,10 @@
     tell(head + '상품 목록을 불러오는 중…');
     // 숨은 검색칸(아마존·eBay 밖)에 남은 글자로 거르지 않는다.
     const result = await call('bulk-price-list', { scope, query: $('be-api-query').hidden ? '' : $('be-api-query').value.trim() });
-    state().rows = result.items.map(augment); state().note = result.note || ''; state().tried = new Set();
+    state().rows = result.items.map(augment); state().note = result.note || ''; state().tried = new Set(); state().targets = null; state().listed = true;
     // 아마존·eBay 행의 환율 등급 꼬리표. 못 읽어도 목록은 그대로 쓴다.
     state().fx = /^(?:amazon-|ebay$)/.test(scope) ? await call('fx-auto-price-links', { scope }).catch(() => null) : null;
+    if (country) await loadTargets();
     state().filters = {}; query = ''; search.value = ''; page = 0;
     rebuildFilters(); draw();
     const listed = head + (result.note || result.items.length + '개 상품을 불러왔습니다.');
@@ -343,7 +382,7 @@
   }));
   // 머리글 전체선택: 체크하면 필터 결과의 모든 페이지를 고르고, 풀면 (예전 '선택 해제' 버튼처럼) 선택을 모두 지운다.
   const toggleAllSelection = checked => {
-    const targets = checked ? view().filter(r => !r.readonly) : rows();
+    const targets = checked ? view().filter(r => !locked(r)) : country ? countryScopes().flatMap(sc => rows(sc)) : rows();
     targets.forEach(r => { r.selected = checked; });
     const visible = new Set(pageRows());
     const off = targets.filter(r => !visible.has(r)).length;
@@ -360,20 +399,20 @@
   // 네이버도 이미지까지 읽느라 메인이 상품마다 원상품을 읽는다(목록 조회 결과에는 상세 이미지가 없다) — 같은 이유로 작게.
   const LOAD_CHUNK = { naver: 10, 'amazon-us': 40, 'amazon-jp': 40, ebay: 8, coupang: 4 };
   // 행의 상품마다 현재가·이미지를 읽어 행을 바꿔 끼운다. 자동 불러오기(보이는 쪽)와 '가격 적용'(안 읽은 선택 행)이 같이 쓴다.
-  async function loadPrices(work) {
+  async function loadPrices(work, sc = scope) {
     const products = [...new Map(work.map(r => [r.id, r])).values()];
     let ok = 0, failed = 0, firstError = '', blocked = '', noImages = 0;
     const fail = (r, e) => {
       failed++; firstError = firstError || e.message;
-      rows().filter(x => x.id === r.id).forEach(x => { x.result = e.message; x.ready = false; });
+      rows(sc).filter(x => x.id === r.id).forEach(x => { x.result = e.message; x.ready = false; });
     };
-    const chunk = LOAD_CHUNK[scope] || 1;
+    const chunk = LOAD_CHUNK[sc] || 1;
     for (let i = 0; i < products.length && !cancel && !blocked; i += chunk) {
       const part = products.slice(i, i + chunk);
       tell('현재가 조회 ' + (i + part.length) + '/' + products.length);
       let got;
       try {
-        got = await call('bulk-price-load-many', { scope, ids: part.map(r => r.id), includeImages: true,
+        got = await call('bulk-price-load-many', { scope: sc, ids: part.map(r => r.id), includeImages: true,
           images: Object.fromEntries(part.map(r => [r.id, r.image])) });
       } catch (e) {
         if (/No handler registered/i.test(e.message || '')) throw new Error('새 현재가 조회 기능을 사용하려면 앱을 완전히 종료한 뒤 다시 실행하세요.');
@@ -388,12 +427,12 @@
         const r = byId.get(item.id);
         if (!r) continue;
         if (!item.rows) { fail(r, new Error(item.error || '현재가를 불러오지 못했습니다.')); continue; }
-        const at = rows().findIndex(x => x.id === r.id);
-        const other = rows().filter(x => x.id !== r.id);
+        const at = rows(sc).findIndex(x => x.id === r.id);
+        const other = rows(sc).filter(x => x.id !== r.id);
         // 옵션 줄이 이미 있었으면 그 선택을 이어 쓴다. 상품 한 줄을 처음 펼칠 때는 그 줄이 선택돼 있었을 때만 전부 고른다 —
         // 예전에는 옵션 하나만 골라도 불러온 뒤 모든 옵션이 선택돼 '가격 적용' 이 옵션가를 한 값으로 납작하게 했고,
         // 자동 불러오기는 고르지 않은 행까지 읽으므로 선택을 새로 만들면 안 된다.
-        const before = rows().filter(x => x.id === r.id);
+        const before = rows(sc).filter(x => x.id === r.id);
         const picked = before.some(x => x.optionId) ? new Map(before.map(x => [x.optionId || '', x.selected])) : null;
         const wasSelected = before.some(x => x.selected);
         // 이미지 변경안(이미지 적용·✖)이 걸린 상품은 변경안과 그때 읽은 revision 을 새 행에 옮긴다. 가격 적용이 안 읽은 행을
@@ -405,7 +444,7 @@
         other.splice(at, 0, ...item.rows.map(x => ({ ...augment({ ...links, ...x }), ...(typed.has(x.optionId || '') && { newPrice: typed.get(x.optionId || '') }),
           ...(draft && { images: draft.images, imageRevision: draft.imageRevision, imagesReady: true, newImages: [...draft.newImages], imageResult: draft.imageResult }),
           selected: !x.readonly && (picked ? !!picked.get(x.optionId || '') : wasSelected) })));
-        state().rows = other;
+        state(sc).rows = other;
         if (!draft && !item.rows[0]?.imagesReady) noImages++;
         ok++;
       }
@@ -418,12 +457,21 @@
   // 보이는 쪽(25행)의 현재가·이미지는 언제나 읽는다. 목록 전체를 읽으면 네이버·쿠팡은 상품마다 호출이라 수천 번(수십 분)이
   // 되므로 지금 쪽만 — 쪽을 넘기거나 거르면 그 쪽을 읽는다. 한 번 읽으려 한 상품은 이 목록에서 다시 두드리지 않는다
   // (실패·인증 오류를 되풀이하지 않게). 다시 읽으려면 상품 목록을 조회한다. 읽은 결과를 알리는 글을 돌려준다(없으면 '').
-  const unread = () => pageRows().filter(r => !r.readonly && (!r.ready || !r.imagesReady) && !state().tried.has(r.id));
+  // 나라 화면은 그 쪽 묶음의 짝 상품 자리를 먼저 만든다(그 몰 목록을 안 불러왔어도 읽을 수 있게).
+  const unread = () => { if (country) place(pageGroups()); return pageRows().filter(r => !r.readonly && (!r.ready || !r.imagesReady) && !state(r.scope || scope).tried.has(r.id)); };
   async function loadVisible() {
     const work = unread();
     if (!work.length) return '';
-    work.forEach(r => state().tried.add(r.id));
-    const { total, ok, failed, firstError, blocked, noImages } = await loadPrices(work);
+    work.forEach(r => state(r.scope || scope).tried.add(r.id));
+    const sum = { total: 0, ok: 0, failed: 0, firstError: '', blocked: '', noImages: 0 };
+    for (const sc of new Set(work.map(r => r.scope || scope))) {
+      if (cancel || sum.blocked) break;
+      const got = await loadPrices(work.filter(r => (r.scope || scope) === sc), sc);
+      for (const k of ['total', 'ok', 'failed', 'noImages']) sum[k] += got[k];
+      sum.firstError ||= got.firstError; sum.blocked ||= got.blocked;
+    }
+    if (country) { settle(work, !sum.blocked && !cancel); follow(pageGroups(), false); }
+    const { total, ok, failed, firstError, blocked, noImages } = sum;
     const counts = '성공 ' + ok + ' · 실패 ' + failed + (ok + failed < total ? ' · 남음 ' + (total - ok - failed) : '');
     // 이미지는 현재가와 함께 언제나 읽는다(메인 loadMany). 그래도 목록이 없는 상품은 행의 '이미지 목록 조회'로 다시 읽는다.
     const imageNote = noImages ? ' 이미지 목록이 오지 않은 상품 ' + noImages + '개 — 행의 이미지 목록 조회로 다시 읽으세요.' : '';
@@ -563,153 +611,204 @@
       (failed.size ? ' 기존 이미지 확인 실패 ' + failed.size + '개(변경 안 함, 처리 결과 칸 확인).' : '') +
       (skipped ? ' 중단으로 ' + skipped + '개 건너뜀.' : '') + ' 선택 변경 저장을 누르면 반영됩니다.');
   }));
-  // 나라별 가격 통일([한국] [미국] [일본]): 기준 탭(그 나라 본사몰 구역)에서 고른 상품의 1set 조합가를 같은 나라 다른 몰 표의
-  // 판매가 칸에 넣는다(한국은 상세 이미지도). 짝은 로컬 인덱스(country-sync-targets — 몰 API 안 부름)로 찾고, 찾은 상품만 그 몰에서
-  // 현재가를 읽는다. 보내기는 몰 탭의 '선택 변경 저장'으로만 — 몰마다 보고 저장한다. 못 넣은 행은 처리 결과 칸에 이유를 적는다.
-  async function syncCountry(code) {
-    const c = COUNTRIES[code], ref = c.ref, tag = c.label + ' 통일';
-    if (scope !== ref) { tell(`${tag}: ${titleOf(ref)} 탭에서 기준 상품을 선택한 뒤 누르세요.`); return; }
-    const ids = [...new Set(selected().map(r => r.id))];
-    if (!ids.length) { tell(`${tag}: 기준으로 쓸 ${titleOf(ref)} 상품을 선택하세요.`); return; }
-    // 1. 기준 상품의 줄(기본가 + 조합). 안 읽은 상품은 읽는다(한국은 상세 이미지까지).
-    const pending = rows().filter(r => ids.includes(r.id) && (!r.ready || (c.images && !r.imagesReady)));
-    if (pending.length) await loadPrices(pending);
-    if (cancel) { tell(`${tag}을 중단했습니다. 다른 몰 표는 바꾸지 않았습니다.`); return; }
-    const found = await call('country-sync-targets', { ids });
-    const refs = new Map(), lost = [];
-    for (const id of ids) {
-      const mine = rows().filter(r => r.id === id), name = mine[0]?.name || id;
-      if (!mine.length || mine.some(r => !r.ready)) { lost.push(name + '(기준가 못 읽음)'); continue; }
-      if (found[id]?.missing) { lost.push(name + '(' + found[id].missing + ')'); continue; }
-      const nos = mine[0].identity?.nos || [];
-      refs.set(id, { name, no: nos.length === 1 ? nos[0] : found[id].no, ...referencePrices(mine),
-        images: c.images && mine.every(r => r.imagesReady) ? mine[0].images : null });
+  // ── 나라 화면([한국] [미국] [일본]) ── 본사몰 구역 상품 하나 = 한 묶음, 묶음 안에 같은 나라 몰마다 짝인 줄.
+  // 줄은 몰마다의 행 객체 그대로다(몰 탭과 같은 초안 · 선택). 짝은 로컬 인덱스(country-sync-targets — 몰 API 안 부름).
+  const COUNTRY_HELP = '본사몰 상품마다 같은 나라 몰의 짝이 한 묶음으로 보입니다. 보이는 쪽은 현재가를 자동으로 읽고 본사와 다른 값을 처리 결과 칸에 알립니다. ' +
+    '상품을 선택하고 [본사 값으로 맞추기]를 누르거나 본사 줄의 판매가를 고치면 짝이 따라갑니다(네이버는 운전석가, 나머지는 1set 가). 선택 변경 저장은 그 나라 몰 전부에 차례로 보냅니다.';
+  const countryScopes = () => { const c = COUNTRIES[country]; return [c.ref, ...c.targets, ...c.view]; };
+  // 인덱스 짝 → 그 몰의 [상품 ID, 옵션 ID?]. 쿠팡은 옵션 단위(한 상품에 여러 차의 옵션이 있다).
+  const partners = (sc, t) => sc === 'naver' ? (t.naver || []).map(([origin, channel]) => [origin, null, { channelProductNo: channel }])
+    : sc === 'coupang' ? (t.coupang || []).map(([id, option]) => [id, option]) : sc === 'imweb-b2b' ? (t.b2b || []).map(([id]) => [id])
+      : (t.skus || []).map(([sku]) => [sku]);
+  function groups() {
+    const c = COUNTRIES[country], found = state().targets || {}, byId = {};
+    for (const sc of [scope, ...c.targets, ...c.view]) {
+      const m = byId[sc] = new Map();
+      for (const r of rows(sc)) m.set(r.id, [...(m.get(r.id) || []), r]);
     }
-    const report = [];
-    try {
-      // 2. 대상 몰마다: 짝 상품을 표에 두고(없으면 자리만 만들어) 현재가를 읽은 뒤 칸을 채운다.
-      for (const target of c.targets) {
-        if (cancel) break;
-        switchScope(target);
-        // 대상 상품 ID → { refs, options(쿠팡 옵션ID → { bsa, refs }), bsa(SKU 판), shared, extra }. 쿠팡 상품 하나에 여러 차의 옵션이
-        // 있으므로 옵션마다 그 옵션을 가진 기준 상품만 기억한다 — 상품 단위로 모으면 다른 차 기준가가 '번호가 다름' 으로 막는다.
-        const want = new Map();
-        for (const id of refs.keys()) {
-          const t = found[id], add = (pid, extra = {}) => {
-            const w = want.get(pid) || { refs: new Set(), options: null, bsa: null, shared: false, extra };
-            w.refs.add(id); w.shared ||= (t.shared?.[target] || []).includes(pid); want.set(pid, w); return w;
-          };
-          if (target === 'naver') t.naver.forEach(([origin, channel]) => add(origin, { channelProductNo: channel }));
-          else if (target === 'coupang') t.coupang.forEach(([pid, optionId, bsa]) => {
-            const options = add(pid).options ||= new Map(), o = options.get(optionId) || { bsa, refs: new Set() };
-            o.refs.add(id); options.set(optionId, o);
-          });
-          else t.skus.forEach(([sku, bsa]) => { add(sku).bsa = bsa; });
+    const out = [];
+    for (const [id, all] of byId[scope]) {
+      // 본사 줄: 조합이 있으면 1set · 운전석 조합만(짝이 따라가는 값), 없으면 기본가 줄.
+      const own = all.some(r => r.optionId) ? all.filter(r => referenceRole(r)) : all, t = found[id] || {}, members = new Set();
+      for (const sc of [...c.targets, ...c.view]) for (const [pid, option] of partners(sc, t))
+        for (const r of byId[sc].get(pid) || []) {
+          if (c.view.includes(sc) ? r.optionId : option && String(r.optionId) !== option && (r.ready || r.optionId)) continue;   // B2B 는 기본가 줄만
+          members.add(r);
         }
-        // 목록을 안 불러온 몰이면 짝 상품 자리를 만든다. 하나도 못 읽은 자리(그 몰에 없는 SKU 등)는 다시 뺀다
-        // (쿠팡 승인 전 옵션처럼 읽기 전용으로 온 줄은 읽은 것이다).
-        const placed = new Set();
-        for (const [pid, w] of want) if (!rows().some(r => r.id === pid)) {
-          state().rows.push(augment({ id: pid, scope: target, name: '', price: '', ready: false, ...w.extra })); placed.add(pid);
-        }
-        const load = rows().filter(r => want.has(r.id) && !r.readonly && (!r.ready || (c.images && !r.imagesReady)));
-        load.forEach(r => state().tried.add(r.id));
-        const loaded = load.length ? await loadPrices(load) : null;
-        const absent = new Set([...placed].filter(pid => rows().filter(r => r.id === pid).every(r => !r.ready && !r.readonly)));
-        state().rows = rows().filter(r => !absent.has(r.id));
-        // 환율 자동 연결은 누를 때마다 다시 읽는다(목록 뒤 환율 탭에서 바꿨을 수 있다). 못 읽으면 넣지 않는다.
-        const fx = /^(?:amazon-|ebay$)/.test(target) ? await call('fx-auto-price-links', { scope: target }).catch(() => false) : null;
-        if (fx) state().fx = fx;
-        const inView = new Set(view());
-        let filled = 0, same = 0, skipped = 0, images = 0, hidden = 0;
-        for (const r of rows().filter(r => want.has(r.id))) {
-          const w = want.get(r.id), option = w.options?.get(String(r.optionId));
-          if (w.options && !option) continue;   // 같은 쿠팡 상품의 다른 차 옵션
-          const skip = why => { r.result = tag + ' 건너뜀: ' + why; skipped++; };
-          if (!r.ready) { skipped++; continue; }   // 처리 결과 칸에 읽기 실패 이유가 있다
-          if (r.readonly || r.priceReadonly) { skip('판매가를 바꿀 수 없는 행'); continue; }
-          if (fx === false) { skip('환율 자동 연결을 확인하지 못함'); continue; }
-          if (fx?.on && fx.links?.[r.id]) { skip('환율 자동 연결 상품 — 환율 탭에서 연결을 끈 뒤 다시'); continue; }
-          const owners = [...(option ? option.refs : w.refs)].map(id => refs.get(id));
-          const picks = owners.map(x => x.error ? { skip: x.error } : countryPrice(target, r, x, { bsa: option ? option.bsa : w.bsa }));
-          const values = [...new Set(picks.filter(p => p.price != null).map(p => Number(p.price)))];
-          if (picks.some(p => p.skip)) { skip(picks.find(p => p.skip).skip); continue; }
-          if (values.length !== 1) { skip('짝인 기준 상품 여럿의 값이 다름'); continue; }
-          const from = owners.map(x => x.name).join(', ') + ' ' + picks[0].basis;
-          if (Number(r.price) === values[0]) { r.newPrice = String(r.price); r.result = `${tag}: 이미 같음 (${from})`; same++; continue; }
-          r.newPrice = String(values[0]); r.selected = true; filled++; if (!inView.has(r)) hidden++;
-          r.result = `${tag}: ${from} ${values[0].toLocaleString('ko-KR')} → 저장 대기`;
-        }
-        // 한국: 본사 상세 이미지를 상품째 넣는다(쿠팡은 상품의 모든 옵션 공통). 다른 본사 상품(다른 차)도 가리키는 상품은
-        // 한 차의 이미지로 덮으면 나머지 차가 틀리므로 넣지 않는다. 짝인 기준 상품끼리 이미지가 달라도 넣지 않는다.
-        if (c.images) for (const [pid, w] of want) {
-          const mine = rows().filter(r => r.id === pid), lists = [...w.refs].map(id => refs.get(id).images);
-          if (!mine.length || !mine.every(r => r.imagesReady) || lists.some(l => !l?.length || !sameImages(l, lists[0]))) continue;
-          if (sameImages(lists[0], Array.isArray(mine[0].newImages) ? mine[0].newImages : mine[0].images)) continue;
-          if (w.shared) { mine.forEach(r => { r.imageResult = tag + ' 이미지 건너뜀: 여러 차가 묶인 상품 — 상세 이미지는 직접'; }); continue; }
-          mine.forEach(r => {
-            r.newImages = [...lists[0]]; r.imageResult = '이미지 변경 대기 (' + tag + ')';
-            if (!r.readonly && (!w.options || w.options.has(String(r.optionId)))) r.selected = true;
-          });
-          images++;
-        }
-        draw();
-        report.push(titleOf(target) + ' 넣음 ' + filled + (hidden ? '(필터에 가려진 ' + hidden + '행 — 필터를 풀어야 보이고 저장됩니다)' : '') +
-          (images ? ' · 이미지 ' + images + '개 상품' : '') + (same ? ' · 이미 같음 ' + same : '') +
-          (skipped ? ' · 건너뜀 ' + skipped : '') + (absent.size ? ' · 이 몰에서 못 읽음 ' + absent.size + '개' + (loaded?.firstError ? '(' + loaded.firstError + ')' : '') : '') +
-          (loaded?.blocked ? ' · 읽기 멈춤: ' + loaded.blocked : ''));
-      }
-    } finally { switchScope(ref); }
-    const sheet = [...refs.keys()].filter(id => found[id]?.via === 'sheet').length;
-    tell(`${tag}${cancel ? '(중단)' : ''} · 기준 ${refs.size}개 상품${sheet ? '(그중 Vehicles 시트로 찾은 ' + sheet + '개)' : ''} — ` + (report.join(' / ') || '대상 없음') +
-      (lost.length ? `. 건너뛴 기준 상품 ${lost.length}개: ${lost.slice(0, 5).join(', ')}${lost.length > 5 ? ' 외' : ''}` : '') +
-      '. 각 몰 탭에서 처리 결과를 확인하고 선택 변경 저장을 누르세요.');
+      out.push({ id, own: own.length ? own : all, members: [...members], t });
+    }
+    return out;
   }
+  // 그 쪽 묶음의 짝 상품이 그 몰 표에 없으면 자리를 만든다. 한 번 못 읽은 상품(absent)은 다시 만들지 않는다.
+  // 목록을 안 불러온 몰에 자리를 만들면, 그 몰 탭에 짝 상품만 보인다 — 그 탭 안내에 적어 둔다.
+  function place(list) {
+    const c = COUNTRIES[country];
+    for (const g of list) for (const sc of [...c.targets, ...c.view]) for (const [pid, , extra] of partners(sc, g.t))
+      if (!state(sc).absent.has(pid) && !rows(sc).some(r => r.id === pid)) {
+        rows(sc).push(augment({ id: pid, scope: sc, name: '', price: '', ready: false, placeholder: true, ...extra }));
+        if (!state(sc).listed) state(sc).note = '나라 화면에서 불러온 짝 상품만 있습니다 — 전체는 상품 목록 조회를 누르세요.';
+      }
+  }
+  // 읽은 뒤: 그 몰이 '없다' 고 답한 자리(그 몰에 없는 SKU 등)는 빼고 다시 만들지 않는다. 막힘(인증 · 429)이나 중단으로
+  // 끝났으면 빼지 않는다 — 몰 탓이 아니다. 요청하지 못한 자리는 다음에 다시 읽게 tried 에서 뺀다.
+  // 쿠팡 승인 전 옵션처럼 읽기 전용으로 온 줄은 읽은 것이다.
+  function settle(work, finished) {
+    for (const r of work) if (r.placeholder && !r.ready && !r.result) state(r.scope).tried.delete(r.id);
+    if (!finished) return;
+    for (const sc of countryScopes()) {
+      const gone = new Set(rows(sc).filter(r => r.placeholder && !r.ready && !r.readonly && r.result).map(r => r.id));
+      gone.forEach(id => state(sc).absent.add(id));
+      if (gone.size) state(sc).rows = rows(sc).filter(r => !gone.has(r.id));
+    }
+  }
+  // 짝 인덱스와 환율 자동 연결(아마존 · eBay — 연결 상품은 따라가지 않는다)을 읽는다. 연결을 못 읽으면 그 몰은 따라가지 않는다(false).
+  // 목록을 다시 받으면 예전에 못 읽은 짝도 다시 읽어 본다.
+  async function loadTargets() {
+    const c = COUNTRIES[country];
+    state().targets = await call('country-sync-targets', { ids: [...new Set(rows().map(r => r.id))] });
+    for (const sc of [...c.targets, ...c.view]) {
+      state(sc).absent = new Set(); state(sc).tried = new Set();
+      if (/^(?:amazon-|ebay$)/.test(sc)) state(sc).fx = await call('fx-auto-price-links', { scope: sc }).catch(() => false);
+    }
+  }
+  async function openCountry(code) {
+    country = code; switchScope(COUNTRIES[code].ref);
+    if (!rows().length) await listProducts();
+    else {
+      if (!state().targets) await loadTargets();
+      draw();
+      const loaded = await loadVisible();
+      if (loaded) tell(loaded);
+    }
+  }
+  // 기준(본사) 줄의 값 — 고쳐 둔 칸이 있으면 그 값 — 으로 묶음의 다른 몰 줄을 맞춘다. apply 가 아니면 처리 결과 칸에 차이만 적는다.
+  const fmt = (v, sc) => Number(v).toLocaleString('ko-KR', { maximumFractionDigits: 2 }) + ' ' + unitOf(sc);
+  // 짝 줄 하나를 여러 본사 상품이 가리키면 그 모두(다른 쪽 묶음 포함)의 값을 모아, 하나로 같을 때만 넣는다 — 마지막 묶음이
+  // 조용히 이기지 않게. 넣을 때(apply)는 안 읽은 본사 상품이 하나라도 있으면 넣지 않는다(pickedGroups 가 먼저 읽는다).
+  // 건너뛴 줄에 앞서 따라 넣은 값(followed)이 남아 있으면 지운다 — 손으로 넣은 값은 그대로 둔다.
+  function follow(list, apply) {
+    const c = COUNTRIES[country], n = { filled: 0, same: 0, skipped: 0 }, wanted = new Set(list.flatMap(g => g.members)), picks = new Map();
+    for (const g of groups()) {
+      const members = g.members.filter(r => wanted.has(r) && c.targets.includes(r.scope) && r.ready && !r.readonly && !r.priceReadonly);
+      if (!members.length) continue;
+      const mine = rows().filter(r => r.id === g.id), loaded = mine.length > 0 && mine.every(r => r.ready);
+      const nos = mine[0]?.identity?.nos || [];
+      const ref = loaded && { no: nos.length === 1 ? nos[0] : g.t.no, ...referencePrices(mine.map(r => ({ ...r, price: priceDirty(r) ? r.newPrice : r.price }))) };
+      for (const r of members) {
+        const fx = state(r.scope).fx;
+        const hint = r.scope === 'coupang' ? (g.t.coupang || []).find(([id, option]) => id === r.id && option === String(r.optionId))?.[2]
+          : (g.t.skus || []).find(([sku]) => sku === r.id)?.[1];
+        const got = !loaded ? { unread: true } : ref.error ? { skip: ref.error }
+          : /^(?:amazon-|ebay$)/.test(r.scope) && !fx ? { skip: '환율 자동 연결을 확인하지 못함' }
+            : fx?.on && fx.links?.[r.id] ? { skip: '환율 자동 연결 상품 — 환율 탭에서 연결을 끈 뒤 다시' } : countryPrice(r.scope, r, ref, { bsa: hint });
+        picks.set(r, [...(picks.get(r) || []), got]);
+      }
+    }
+    for (const [r, all] of picks) {
+      const known = all.filter(x => !x.unread);
+      if (!known.length) continue;
+      const skip = known.find(x => x.skip)?.skip || (new Set(known.map(x => Number(x.price))).size > 1 ? '짝인 본사 상품 여럿의 값이 다름'
+        : apply && known.length < all.length ? '짝인 다른 본사 상품을 아직 읽지 않음' : '');
+      if (skip) {
+        if (apply && r.followed) { r.newPrice = String(r.price); r.selected = false; r.followed = false; }
+        r.result = '본사와 맞출 수 없음: ' + skip; n.skipped++; continue;
+      }
+      const { price, basis } = known[0], same = Number(r.price) === Number(price), to = fmt(price, r.scope) + ' (' + basis + ')';
+      if (apply) {
+        r.newPrice = same ? String(r.price) : String(Number(price));
+        if (!same) { r.selected = true; r.followed = true; n.filled++; }
+      }
+      if (same) n.same++;
+      r.result = same ? '본사와 같음 · ' + to : apply ? '본사 값 ' + to + ' → 저장 대기' : '본사와 다름 → ' + to;
+    }
+    return n;
+  }
+  // 고른 묶음(어느 줄이든 선택된 묶음)의 짝을 다 읽은 뒤 맞춘다. 다른 쪽의 묶음도 고를 수 있다(전체선택 = 필터 결과 전부, 오래 걸리고 중단 가능).
+  // 짝을 함께 가리키는 다른 본사 상품(다른 쪽 묶음)의 본사 줄도 읽는다 — follow 가 그 값과 같은지 본다.
+  async function pickedGroups(what) {
+    const ids = new Set(shownGroups().filter(g => [...g.own, ...g.members].some(r => r.selected && !locked(r))).map(g => g.id));
+    if (!ids.size) { tell(what + ': 묶음의 줄을 하나 이상 선택하세요.'); return null; }
+    const read = async rowsToRead => {
+      for (const sc of new Set(rowsToRead.map(r => r.scope || scope))) {
+        if (cancel) break;
+        const part = rowsToRead.filter(r => (r.scope || scope) === sc);
+        part.forEach(r => state(sc).tried.add(r.id));
+        await loadPrices(part, sc);
+      }
+    };
+    place(groups().filter(g => ids.has(g.id)));
+    const work = groups().filter(g => ids.has(g.id)).flatMap(g => [...g.own, ...g.members]).filter(r => !r.readonly && (!r.ready || !r.imagesReady));
+    await read(work);
+    settle(work, !cancel);
+    const partnersOf = new Set(groups().filter(g => ids.has(g.id)).flatMap(g => g.members));
+    await read(groups().filter(g => !ids.has(g.id) && g.members.some(r => partnersOf.has(r))).flatMap(g => g.own).filter(r => !r.ready));
+    return cancel ? null : groups().filter(g => ids.has(g.id));
+  }
+  $('be-country-apply').addEventListener('click', () => run(async () => {
+    const list = await pickedGroups('본사 값으로 맞추기');
+    if (!list) return;
+    for (const sc of COUNTRIES[country].targets) if (/^(?:amazon-|ebay$)/.test(sc)) state(sc).fx = await call('fx-auto-price-links', { scope: sc }).catch(() => false);
+    const n = follow(list, true);
+    draw();
+    tell(`본사 값으로 맞추기 · ${list.length}개 상품 — 넣음 ${n.filled}행 · 이미 같음 ${n.same}행` + (n.skipped ? ` · 맞출 수 없음 ${n.skipped}행(처리 결과 칸)` : '') +
+      '. 선택 변경 저장을 누르면 그 나라 몰에 차례로 보냅니다.');
+  }));
+  // 한국: 본사 상세 이미지를 네이버 · 쿠팡 상품에 넣는다(쿠팡은 상품의 모든 옵션 공통). 다른 본사 상품(다른 차)도 가리키는
+  // 상품은 한 차의 이미지로 덮으면 나머지 차가 틀리므로 넣지 않는다.
+  $('be-country-images').addEventListener('click', () => run(async () => {
+    const list = await pickedGroups('본사 상세 이미지');
+    if (!list) return;
+    let staged = 0, shared = 0;
+    for (const g of list) {
+      const mine = rows().filter(r => r.id === g.id), images = mine.every(r => r.imagesReady) ? mine[0].images : null;
+      if (!images?.length) continue;
+      for (const sc of COUNTRIES[country].targets) for (const pid of new Set(g.members.filter(r => r.scope === sc).map(r => r.id))) {
+        const all = rows(sc).filter(r => r.id === pid);
+        if (!all.length || !all.every(r => r.imagesReady) || sameImages(images, Array.isArray(all[0].newImages) ? all[0].newImages : all[0].images)) continue;
+        if ((g.t.shared?.[sc] || []).includes(pid)) { all.forEach(r => { r.imageResult = '이미지 건너뜀: 여러 차가 묶인 상품 — 상세 이미지는 직접'; }); shared++; continue; }
+        all.forEach(r => { r.newImages = [...images]; r.imageResult = '이미지 변경 대기 (본사 상세)'; });
+        const pick = g.members.find(r => r.id === pid && !r.readonly); if (pick) pick.selected = true;
+        staged++;
+      }
+    }
+    draw();
+    tell(`본사 상세 이미지 · ${staged}개 상품에 변경 대기` + (shared ? ` · 여러 차가 묶여 건너뛴 상품 ${shared}개` : '') + '. 선택 변경 저장을 누르면 반영됩니다.');
+  }));
   // 보이지 않는 행이 섞였거나 기존가 대비 크게 바뀌는 행(오타 의심)이 있으면 보내기 전에 한 번 묻는다.
   const BIG_CHANGE = 0.3;
-  function confirmSave(work) {
-    if (!work.length) return true;
-    const visible = new Set(pageRows()), unit = scopes.find(s => s[0] === scope)[2];
+  // jobs: 판매가 · 이미지 작업 전부. 몰 탭은 예전처럼 판매가만 보고(페이지 밖 · 큰 변화가 있을 때만) 묻고,
+  // 나라 화면은 여러 몰로 보내므로 언제나 몰별 건수를 보여 주고 묻는다(이미지만 있어도).
+  function confirmSave(jobs) {
+    const work = jobs.filter(x => x.type === 'price');
+    if (!country && !work.length) return true;
+    const visible = new Set(pageRows());
     const off = work.filter(x => !visible.has(x.r)).length;
     // 기존가가 0 인 행(아임웹 추가금 방식 옵션 등)은 몇 %인지 셀 수 없어 큰 변화로 본다 — 예전엔 0% 로 세어 묻지 않았다.
     const changes = work.map(x => ({ x, rate: Number(x.expectedPrice) > 0 ? Number(x.newPrice) / Number(x.expectedPrice) - 1 : Infinity }));
     const big = changes.filter(c => Math.abs(c.rate) >= BIG_CHANGE);
-    if (!off && !big.length) return true;
+    const malls = [...new Set(jobs.map(x => x.r.scope || scope))];
+    if (!country && !off && !big.length) return true;
     const pct = rate => Number.isFinite(rate) ? (rate > 0 ? '+' : '') + Math.round(rate * 100) + '%' : '기존 0에서';
-    const money = v => Number(v).toLocaleString('ko-KR') + ' ' + unit;
+    const money = (v, r) => Number(v).toLocaleString('ko-KR') + ' ' + unitOf(r.scope || scope);
     const rates = changes.map(c => c.rate).filter(Number.isFinite), worst = big.sort((a, b) => Math.abs(b.rate) - Math.abs(a.rate))[0];
-    const lines = ['선택 변경 ' + work.length + '행을 저장합니다.'];
+    const lines = ['선택 변경 ' + (country ? jobs.length + '건' : work.length + '행') + '을 저장합니다.'];
+    const per = (sc, type) => jobs.filter(x => (x.r.scope || scope) === sc && x.type === type).length;
+    if (country) lines.push('· ' + malls.map(sc => titleOf(sc) + ' ' + [per(sc, 'price') && '판매가 ' + per(sc, 'price') + '행', per(sc, 'images') && '이미지 ' + per(sc, 'images') + '개 상품'].filter(Boolean).join(' + ')).join(' · ') + ' (몰마다 차례로 보냅니다)');
     if (off) lines.push('· 지금 보이는 페이지 밖의 행: ' + off + '행');
-    if (big.length) lines.push('· 기존가 대비 ' + Math.round(BIG_CHANGE * 100) + '% 이상 바뀌는 행: ' + big.length + '행 (가장 큰 변화: ' +
-      worst.x.r.name + (worst.x.r.variant ? ' / ' + worst.x.r.variant : '') + ' ' + money(worst.x.expectedPrice) + ' → ' + money(worst.x.newPrice) + ', ' + pct(worst.rate) + ')');
+    if (big.length) lines.push('· 기존가 대비 ' + Math.round(BIG_CHANGE * 100) + '% 이상 바뀌는 행: ' + big.length + '행 (가장 큰 변화: ' + titleOf(worst.x.r.scope || scope) + ' ' +
+      worst.x.r.name + (worst.x.r.variant ? ' / ' + worst.x.r.variant : '') + ' ' + money(worst.x.expectedPrice, worst.x.r) + ' → ' + money(worst.x.newPrice, worst.x.r) + ', ' + pct(worst.rate) + ')');
     if (rates.length) lines.push('· 변화 범위: ' + pct(Math.min(...rates)) + ' ~ ' + pct(Math.max(...rates)));
     lines.push('', '계속할까요?');
     return window.confirm(lines.join('\n'));
   }
-  $('be-save').addEventListener('click', () => run(async () => {
-    const priceWork = selected().filter(priceDirty).map(r => ({ r, type: 'price', newPrice: r.newPrice, expectedPrice: r.price }));
-    const imageWork = [...new Map(selected().filter(imageDirty).map(r => [r.id, { r, type: 'images', urls: [...r.newImages], expectedRevision: r.imageRevision }])).values()];
-    const work = [...imageWork, ...priceWork];
-    if (!work.length) { tell('선택 행에 변경된 판매가 또는 이미지가 없습니다.'); return; }
-    const unit = scopes.find(s => s[0] === scope)[2], format = unit === 'USD' ? /^\d+(\.\d{1,2})?$/ : /^\d+$/;
-    const invalid = priceWork.find(x => !format.test(x.newPrice) || Number(x.newPrice) <= 0 || Number(x.newPrice) > Number.MAX_SAFE_INTEGER);
-    if (invalid) throw new Error(unit + ' 판매가 형식을 확인하세요 (' + invalid.r.name + ': ' + invalid.newPrice + '). 요청을 전송하지 않았습니다.');
-    const notTen = scope === 'coupang' && priceWork.find(x => Number(x.newPrice) % 10 !== 0);
-    if (notTen) throw new Error('쿠팡 판매가는 10원 단위로만 바꿀 수 있습니다 (' + notTen.r.name + ': ' + notTen.newPrice + '). 요청을 전송하지 않았습니다.');
-    // 이미지 목록도 묻기 전에 검사한다. 막히면 어느 상품인지 이름을 댄다.
-    for (const job of imageWork) {
-      if (!job.urls.length) throw new Error(job.r.name + ': 이미지가 하나도 남지 않았습니다(빈 항목은 저장할 수 없습니다). 한 장 이상 남기거나 이미지 목록 조회로 되돌리세요. 요청을 전송하지 않았습니다.');
-      try { parseImageUrls(job.urls, scope); }
-      catch (e) { throw new Error(job.r.name + ': ' + e.message + ' 요청을 전송하지 않았습니다.'); }
-    }
-    if (!confirmSave(priceWork)) { tell('저장을 취소했습니다. 요청을 전송하지 않았습니다.'); return; }
-    const count = { verified: 0, unchanged: 0, accepted: 0, check: 0, notSent: 0, rejected: 0, unknown: 0 };
+  // 몰 하나로 bulk-save-batch 한 번. 결과는 행마다 처리 결과 칸에 적고 count 에 더한다. 나라 화면은 몰마다 차례로 부른다.
+  async function sendBatch(sc, work, count) {
     const received = new Set();
     const apply = item => {
       if (received.has(item.index) || !work[item.index]) return;
       received.add(item.index);
       const job = work[item.index], r = job.r, imageJob = job.type === 'images';
-      const targets = imageJob ? rows().filter(x => x.id === r.id) : [r];
+      const targets = imageJob ? rows(sc).filter(x => x.id === r.id) : [r];
       const report = text => targets.forEach(x => { x[imageJob ? 'imageResult' : 'result'] = text; });
       if (item.success) {
         const result = item.data;
@@ -731,28 +830,71 @@
     };
     batchJobId = crypto.randomUUID();
     let queued = false;
+    const head = country ? titleOf(sc) + ' ' : '';
     batchProgress = payload => {
       if (payload.result) apply(payload.result);
-      tell(payload.preparing ? '변경 목록 검사 ' + payload.index + '/' + work.length : '일괄 저장 ' + received.size + '/' + work.length);
+      tell(head + (payload.preparing ? '변경 목록 검사 ' + payload.index + '/' + work.length : '일괄 저장 ' + received.size + '/' + work.length));
       if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; draw(); }); }
     };
     try {
-      const outcome = await call('bulk-save-batch', { jobId: batchJobId, scope, jobs: work.map(job => ({
+      const outcome = await call('bulk-save-batch', { jobId: batchJobId, scope: sc, jobs: work.map(job => ({
         type: job.type, id: job.r.id, optionId: job.r.optionId,
         ...(job.type === 'images' ? { urls: job.urls, expectedRevision: job.expectedRevision }
           : { newPrice: job.newPrice, expectedPrice: job.expectedPrice }),
       })) });
       outcome.results.forEach(apply);
-      const parts = [['저장 확인', count.verified], ['변경 없음', count.unchanged], ['접수', count.accepted], ['확인 필요', count.check],
-        ['전송 안 됨', count.notSent], ['거부', count.rejected], ['결과 불명', count.unknown]].filter(([, n]) => n).map(([l, n]) => l + ' ' + n);
-      tell((outcome.stopped ? '저장을 멈췄습니다 · ' : outcome.cancelled ? '중단 · ' : '완료 · ') + (parts.join(' · ') || '처리 없음') +
-        (received.size < work.length ? ' · 남음 ' + (work.length - received.size) : '') + '. ' +
-        (outcome.stopped || (count.check + count.unknown + count.accepted ? '접수·결과 불명 행은 다시 보내기 전에 현재가·이미지를 확인하세요.' : '')));
+      return { ...outcome, left: work.length - received.size };
     } catch (error) {
       if (error.stage !== 'pre-send') for (const [index] of work.entries())
         if (!received.has(index)) apply({ index, success: false, stage: 'unknown', error: error.message });
       throw error;
     } finally { batchProgress = null; batchJobId = ''; }
+  }
+  $('be-save').addEventListener('click', () => run(async () => {
+    // 몰마다 보낼 줄(이미지 먼저, 그다음 판매가). 몰 탭에서는 그 몰 하나, 나라 화면에서는 그 나라 몰 전부다.
+    const plan = new Map();
+    for (const r of selected()) {
+      const sc = r.scope || scope;
+      if (!plan.has(sc)) plan.set(sc, { price: [], images: new Map() });
+      if (priceDirty(r)) plan.get(sc).price.push({ r, type: 'price', newPrice: r.newPrice, expectedPrice: r.price });
+      if (imageDirty(r) && !plan.get(sc).images.has(r.id)) plan.get(sc).images.set(r.id, { r, type: 'images', urls: [...r.newImages], expectedRevision: r.imageRevision });
+    }
+    const batches = [...plan].map(([sc, p]) => [sc, [...p.images.values(), ...p.price]]).filter(([, work]) => work.length);
+    if (!batches.length) { tell('선택 행에 변경된 판매가 또는 이미지가 없습니다.'); return; }
+    for (const [sc, work] of batches) {
+      const unit = unitOf(sc), format = unit === 'USD' ? /^\d+(\.\d{1,2})?$/ : /^\d+$/, priceWork = work.filter(x => x.type === 'price');
+      const invalid = priceWork.find(x => !format.test(x.newPrice) || Number(x.newPrice) <= 0 || Number(x.newPrice) > Number.MAX_SAFE_INTEGER);
+      if (invalid) throw new Error(titleOf(sc) + ' ' + unit + ' 판매가 형식을 확인하세요 (' + invalid.r.name + ': ' + invalid.newPrice + '). 요청을 전송하지 않았습니다.');
+      const notTen = sc === 'coupang' && priceWork.find(x => Number(x.newPrice) % 10 !== 0);
+      if (notTen) throw new Error('쿠팡 판매가는 10원 단위로만 바꿀 수 있습니다 (' + notTen.r.name + ': ' + notTen.newPrice + '). 요청을 전송하지 않았습니다.');
+      // 이미지 목록도 묻기 전에 검사한다. 막히면 어느 상품인지 이름을 댄다.
+      for (const job of work.filter(x => x.type === 'images')) {
+        if (!job.urls.length) throw new Error(job.r.name + ': 이미지가 하나도 남지 않았습니다(빈 항목은 저장할 수 없습니다). 한 장 이상 남기거나 이미지 목록 조회로 되돌리세요. 요청을 전송하지 않았습니다.');
+        try { parseImageUrls(job.urls, sc); }
+        catch (e) { throw new Error(job.r.name + ': ' + e.message + ' 요청을 전송하지 않았습니다.'); }
+      }
+    }
+    if (!confirmSave(batches.flatMap(([, work]) => work))) { tell('저장을 취소했습니다. 요청을 전송하지 않았습니다.'); return; }
+    const count = { verified: 0, unchanged: 0, accepted: 0, check: 0, notSent: 0, rejected: 0, unknown: 0 };
+    const notes = [];
+    let left = 0, stopped = '', cancelled = false;
+    for (const [i, [sc, work]] of batches.entries()) {
+      // 앞 몰을 중단했으면 뒤 몰은 보내지 않는다. 앞 몰이 막혀도(인증 · 결과 불명) 다른 몰은 따로라 이어 보낸다.
+      if (cancel) { left += batches.slice(i).reduce((n, [, w]) => n + w.length, 0); cancelled = true; break; }
+      try {
+        const outcome = await sendBatch(sc, work, count);
+        left += outcome.left; cancelled ||= outcome.cancelled;
+        if (outcome.stopped) { stopped ||= outcome.stopped; if (country) notes.push(titleOf(sc) + ' 저장 멈춤: ' + outcome.stopped); }
+      } catch (error) {
+        if (!country) throw error;
+        notes.push(titleOf(sc) + ': ' + error.message);
+      }
+    }
+    const parts = [['저장 확인', count.verified], ['변경 없음', count.unchanged], ['접수', count.accepted], ['확인 필요', count.check],
+      ['전송 안 됨', count.notSent], ['거부', count.rejected], ['결과 불명', count.unknown]].filter(([, n]) => n).map(([l, n]) => l + ' ' + n);
+    tell((stopped ? '저장을 멈췄습니다 · ' : cancelled ? '중단 · ' : '완료 · ') + (parts.join(' · ') || '처리 없음') +
+      (left ? ' · 남음 ' + left : '') + '. ' + (notes.length ? notes.join(' / ') + '. ' : '') +
+      ((!country && stopped) || (count.check + count.unknown + count.accepted ? '접수·결과 불명 행은 다시 보내기 전에 현재가·이미지를 확인하세요.' : '')));
   }));
   $('be-stop').addEventListener('click', () => {
     cancel = true; tell('현재 요청 완료 후 다음 상품부터 중단합니다.');
@@ -764,10 +906,10 @@
     const cell = x => '"' + String(x ?? '').replace(/^[=+@\t\r-]/, "'$&").replaceAll('"', '""') + '"';
     // '상품번호'는 표와 같이 표준 번호(No.101 BSA)다. 몰이 주는 ID 는 '몰 상품ID' 로 따로 둔다.
     const csv = [['플랫폼', '몰 상품ID', '옵션ID', '상품명', '옵션', '현재가', '입력가', '통화', '결과', '현재 이미지', '적용 이미지', '이미지 결과', 'SKU', '상품번호'],
-      ...rows().map(r => [scope, r.id, r.optionId, r.name, r.variant, r.price, r.newPrice, r.currency, r.result, (r.images || []).join('|'), (r.newImages || []).join('|'), r.imageResult, identOf(r).skus || r.sku, identOf(r).all])]
+      ...(country ? view() : rows()).map(r => [r.scope || scope, r.id, r.optionId, r.name, r.variant, r.price, r.newPrice, r.currency, r.result, (r.images || []).join('|'), (r.newImages || []).join('|'), r.imageResult, identOf(r).skus || r.sku, identOf(r).all])]
       .map(line => line.map(cell).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }));
-    const a = el('a'); a.href = url; a.download = 'bulk-price-' + scope + '-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
+    const a = el('a'); a.href = url; a.download = 'bulk-price-' + (country || scope) + '-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   ipc.on('amazon-cache-progress', (_, progress) => {

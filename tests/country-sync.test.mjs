@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { referencePrices, pickPrice, countryPrice, countryTargets, productPageUrl, editionOf } from '../src/utils/country_sync.js';
+import { referencePrices, referenceRole, pickPrice, countryPrice, countryTargets, productPageUrl, editionOf } from '../src/utils/country_sync.js';
 import { productIdentity } from '../src/utils/product_identity.js';
 import { registerBulkPriceIPC } from '../src/bulk_price_ipc.js';
 
@@ -28,6 +28,8 @@ test('기준가: 1set · 운전석 조합가를 판별로 읽고, 조수석과 �
   assert.deepEqual([...referencePrices([{ id: '1', optionId: '', price: 99000 }]).set], [[null, '99000']]);
   assert.equal(referencePrices(imwebRows([['조수석', 70000]])).error, '1set · 운전석 조합가 없음');
   assert.match(referencePrices(imwebRows([['1set', 1], ['1세트(운전석+조수석)', 2]])).error, /둘 이상/);
+  // 나라 화면의 본사 줄: 1set · 운전석 조합만(조수석 · 기본가는 짝이 따라가는 값이 아니다).
+  assert.deepEqual(imwebRows([['BSA 없음 / 1set', 1], ['BSA 없음 / 운전석', 2], ['BSA 없음 / 조수석', 3], ['あり / 運転席', 4]]).map(referenceRole), [null, 'set', 'left', null, 'left']);
 });
 
 test('판에 맞는 값: 판을 모르면 기준가가 하나일 때만, BSA판은 BSA 기준가가 있어야 한다', () => {
@@ -59,11 +61,11 @@ test('대상 행: 네이버는 운전석가를 번호 · 판이 하나일 때만
 
 test('인덱스: 기준 상품번호의 코드표 행들을 모아 중복을 빼고, 다른 본사 상품과 함께 쓰는 대상 상품을 알린다', () => {
   const index = { products: { 2097: { via: 'index', no: '101', rows: ['2', '3'] }, 2154: { via: 'sheet', no: '1505', rows: ['562'] } },
-    rows: { 2: { naver: [['10', '20']], coupang: [['30', '40', false]], skus: [['S1', null]] },
-      3: { naver: [['10', '20']], coupang: [['30', '41', true]], skus: [['S2', true]] }, 562: { naver: [], coupang: [['30', '42', false]], skus: [] } } };
+    rows: { 2: { naver: [['10', '20']], coupang: [['30', '40', false]], skus: [['S1', null]], b2b: [['3246'], ['3155']] },
+      3: { naver: [['10', '20']], coupang: [['30', '41', true]], skus: [['S2', true]], b2b: [['3155']] }, 562: { naver: [], coupang: [['30', '42', false]], skus: [] } } };
   const out = countryTargets(index, ['2097', 2154, '9']);
   assert.deepEqual(out['2097'], { via: 'index', no: '101', naver: [['10', '20']], coupang: [['30', '40', false], ['30', '41', true]], skus: [['S1', null], ['S2', true]],
-    shared: { naver: [], coupang: ['30'] } });   // 쿠팡 30 은 2154(다른 차)도 가리킨다, 네이버 10 은 2097 의 두 행뿐
+    b2b: [['3246'], ['3155']], shared: { naver: [], coupang: ['30'] } });   // 쿠팡 30 은 2154(다른 차)도 가리킨다, 네이버 10 은 2097 의 두 행뿐
   assert.equal(out['2154'].via, 'sheet');
   assert.match(out['9'].missing, /없음/);
 });

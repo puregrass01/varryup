@@ -6,6 +6,7 @@
  *                                  대조표에 이미 있는 상품은 시트를 보지 않는다(중복).
  *   코드표 행 → 네이버 · 쿠팡      : 같은 match_명단.csv 의 '확정' 행(네이버는 naver_list.csv 로 원상품번호를 붙인다).
  *   코드표 행 → 아마존 · eBay SKU  : 카탈로그(vehicle_catalog.json) variants 를 제조사 · 모델 · 연식 · 번호로 잇고, 판은 listings 의 bsa.
+ *   코드표 행 → B2B 상품          : 같은 match_명단.csv 의 '확정' 행(나라 화면에서 보기만 한다).
  *
  * 실행   node scripts/build_country_index.mjs ["CSVdatabase/Vehicles - Grid view - 날짜.csv"]
  *        경로를 안 주면 CSVdatabase 의 가장 새 Vehicles 시트(V2 아님). 베리맵을 다시 돌린 뒤에도 다시 실행한다.
@@ -31,7 +32,7 @@ const codetable = JSON.parse(fs.readFileSync(path.join(VERIMAP, 'codetable.json'
 const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'vehicle_catalog.json'), 'utf8'));
 
 const rows = {}, products = {}, stats = { noOrigin: 0, sheetDuplicate: 0, sheetAdded: 0, sheetMissing: [], skuRows: 0 };
-const rowOf = n => (rows[n] ||= { naver: [], coupang: [], skus: [] });
+const rowOf = n => (rows[n] ||= { naver: [], coupang: [], skus: [], b2b: [] });
 const addProduct = (id, via, no, row) => {
   const p = products[id] ||= { via, no, rows: [] };
   if (!p.rows.includes(row)) p.rows.push(row);
@@ -45,6 +46,8 @@ for (const r of match) {
     if (!origin) { stats.noOrigin++; continue; }
     rowOf(row).naver.push([origin, id]);
   } else if (r['채널'] === '쿠팡' && option) rowOf(row).coupang.push([id, option, hasBsa(r['옵션'])]);
+  // B2B 는 나라 화면에서 보기만 한다(값은 바꾸지 않음, 11-02). 세트 · 개별 두 상품이 한 차에 붙는다. 옵션 행마다 같은 상품이 되풀이된다.
+  else if (r['채널'] === 'B2B' && !rowOf(row).b2b.some(x => x[0] === id)) rowOf(row).b2b.push([id]);
 }
 
 // 코드표 행 → 카탈로그 차종(SKU). 판은 listings 에서 그 SKU 의 판이 한 가지일 때만 정한다(SKU 하나가 두 판에 쓰이기도 한다).
@@ -95,7 +98,7 @@ const out = {
 fs.writeFileSync(OUT, JSON.stringify(out) + '\n');
 const count = via => Object.values(products).filter(p => p.via === via).length;
 console.log(`본사몰 상품 ${Object.keys(products).length}개 (대조표 ${count('index')} · 시트 ${count('sheet')}) · 코드표 행 ${Object.keys(kept).length}개`);
-console.log(`네이버 ${Object.values(kept).reduce((n, r) => n + r.naver.length, 0)} · 쿠팡 옵션 ${Object.values(kept).reduce((n, r) => n + r.coupang.length, 0)} · SKU ${Object.values(kept).reduce((n, r) => n + r.skus.length, 0)} (SKU 있는 코드표 행 ${stats.skuRows}/${entries.length})`);
+console.log(`B2B ${Object.values(kept).reduce((n, r) => n + r.b2b.length, 0)} · 네이버 ${Object.values(kept).reduce((n, r) => n + r.naver.length, 0)} · 쿠팡 옵션 ${Object.values(kept).reduce((n, r) => n + r.coupang.length, 0)} · SKU ${Object.values(kept).reduce((n, r) => n + r.skus.length, 0)} (SKU 있는 코드표 행 ${stats.skuRows}/${entries.length})`);
 console.log(`시트: 중복이라 건너뜀 ${stats.sheetDuplicate} · 새로 이음 ${stats.sheetAdded} · 코드표에 없음 ${stats.sheetMissing.length} · 네이버 원상품번호 없음 ${stats.noOrigin}`);
 if (stats.sheetMissing.length) console.log('  코드표에 없는 시트 행(앞 10개): ' + stats.sheetMissing.slice(0, 10).join(' / '));
 console.log('→ ' + path.relative(ROOT, OUT));

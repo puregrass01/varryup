@@ -36,11 +36,14 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 .be-help { font-size:12px; color:var(--text-secondary); margin:2px 0 var(--space-xs); line-height:1.45; }
 .be-platforms,.be-tools,.be-pager { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:var(--space-xs) 0; }
 .be-platforms { gap:5px; margin-bottom:var(--space-sm); }
-/* 몰 버튼 줄 오른쪽 끝에 나라별 가격 통일 버튼(한국 · 미국 · 일본) */
-.be-platform-row { display:flex; flex-wrap:wrap; align-items:center; column-gap:16px; flex-shrink:0; }
-.be-countries { display:flex; align-items:center; gap:5px; margin:var(--space-xs) 0 var(--space-sm); padding-left:16px; border-left:1px solid var(--border); }
-.be-countries > span { font-size:12px; color:var(--text-secondary); }
-#bulk-edit-workspace .be-countries button { height:34px; padding:0 12px; font-weight:600; }
+/* 몰 버튼 줄 맨 앞의 나라 탭(한국 · 미국 · 일본) — 그 나라 몰을 본사몰 상품 묶음으로 한 표에 */
+.be-platform-row { display:flex; flex-wrap:wrap; align-items:center; column-gap:12px; flex-shrink:0; }
+.be-countries { display:flex; align-items:center; gap:5px; margin:var(--space-xs) 0 var(--space-sm); padding-right:12px; border-right:1px solid var(--border); }
+#bulk-edit-workspace .be-countries button { height:34px; padding:0 14px; font-weight:600; }
+/* 나라 화면: 묶음 머리 줄과 몰 로고 칸 */
+.be-table tr.be-country-head td { background:var(--paper-2); font-weight:600; padding-top:8px; padding-bottom:8px; }
+.be-table tr.be-country-head small { display:inline; margin:0 0 0 10px; font-weight:400; }
+.be-table .be-mall { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; font-weight:600; }
 .be-table a.be-page-link { display:inline-block; margin-top:var(--space-xs); font-size:12px; color:var(--accent); }
 
 /* 입력칸·셀렉트·버튼을 같은 높이(32px)와 테마 색으로 맞춘다. 환율 탭(#fx-workspace)도 같은 모양을 쓴다. */

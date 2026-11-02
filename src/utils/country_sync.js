@@ -11,10 +11,11 @@
  */
 import { hasBsa } from './duplicate_guard.js';
 
+// targets: 기준 값을 따라가는 몰, view: 나라 화면에 보기만 하는 몰(B2B — 값은 바꾸지 않는다, 11-02).
 export const COUNTRIES = {
-  kr: { label: '한국', ref: 'imweb-ko', targets: ['naver', 'coupang'], images: true },
-  us: { label: '미국', ref: 'imweb-en', targets: ['ebay', 'amazon-us'], images: false },
-  jp: { label: '일본', ref: 'imweb-jp', targets: ['amazon-jp'], images: false },
+  kr: { label: '한국', ref: 'imweb-ko', targets: ['naver', 'coupang'], view: ['imweb-b2b'], images: true },
+  us: { label: '미국', ref: 'imweb-en', targets: ['ebay', 'amazon-us'], view: [], images: false },
+  jp: { label: '일본', ref: 'imweb-jp', targets: ['amazon-jp'], view: [], images: false },
 };
 
 const SET = /1\s*(?:set|세트|セット)/i, LEFT = /운전석|\bLeft\b|運転席/i;
@@ -55,6 +56,9 @@ export function referencePrices(rows) {
   return set.size || left.size ? { set, left } : { error: '1set · 운전석 조합가 없음' };
 }
 
+/** 기준 상품 조합 줄의 쓰임: 'set'(1set) · 'left'(운전석) · null(조수석 · 기본가 등). 나라 화면이 본사 줄을 고를 때 쓴다. */
+export const referenceRole = r => !r.optionId ? null : SET.test(r.variant || '') ? 'set' : LEFT.test(r.variant || '') ? 'left' : null;
+
 /** 판(bsa)에 맞는 기준가. 판을 모르면 기준가가 하나뿐일 때만. what: 기준 칸 이름(1set · 운전석). */
 export function pickPrice(table, bsa, what = '1set') {
   if (!table?.size) return { skip: `기준 상품에 ${what} 조합가가 없음` };
@@ -87,7 +91,7 @@ export function countryPrice(scope, row, ref, hint = {}) {
 }
 
 const collect = (index, p) => {
-  const t = { naver: [], coupang: [], skus: [] };
+  const t = { naver: [], coupang: [], skus: [], b2b: [] };
   for (const row of p.rows || []) for (const k of Object.keys(t)) t[k].push(...(index.rows?.[row]?.[k] || []));
   for (const k of Object.keys(t)) t[k] = [...new Map(t[k].map(x => [x.slice(0, 2).join(':'), x])).values()];
   return t;
@@ -108,7 +112,7 @@ function ownersOf(index) {
 }
 
 /**
- * 기준 상품번호마다 인덱스의 짝. { [prodNo]: { via, no, naver: [[원상품, 채널상품]], coupang: [[등록상품, 옵션, bsa]], skus: [[sku, bsa]],
+ * 기준 상품번호마다 인덱스의 짝. { [prodNo]: { via, no, naver: [[원상품, 채널상품]], coupang: [[등록상품, 옵션, bsa]], skus: [[sku, bsa]], b2b: [[상품번호]],
  * shared: { naver: [원상품], coupang: [등록상품] } } | { missing } }. shared 는 다른 본사몰 상품도 가리키는 대상 상품이다.
  */
 export function countryTargets(index, ids) {
