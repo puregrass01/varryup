@@ -16,6 +16,7 @@ import { registerEbayIPC } from './ebay_ipc.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { localPathKey } from './utils/file_url.js';
+import { productPageUrl } from './utils/country_sync.js';
 import fs from 'fs';
 import { NaverProducts } from './platforms/naver_products.js';
 import { ImwebEdit } from './platforms/imweb_edit.js';
@@ -689,6 +690,18 @@ ipcMain.handle('server-mode', () => ({
 ipcMain.handle('open-admin-server', async () => {
     if (!ADMIN_SERVER_URL) return { ok: false, error: '관리자 서버 주소가 설정되어 있지 않습니다.' };
     const url = `${ADMIN_SERVER_URL}/login`;
+    try {
+        await shell.openExternal(url);
+        return { ok: true, url };
+    } catch (error) {
+        return { ok: false, error: `브라우저를 열지 못했습니다: ${error.message}` };
+    }
+});
+
+// 일괄 수정 표의 상품명 아래 판매 페이지 링크. 같은 이유로 URL 은 받지 않고 행의 번호(채널상품번호 · ASIN 등)로 여기서 만든다.
+ipcMain.handle('open-product-page', async (_, row) => {
+    const url = productPageUrl(row);
+    if (!url) return { ok: false, error: '이 상품은 판매 페이지 주소를 만들 수 없습니다.' };
     try {
         await shell.openExternal(url);
         return { ok: true, url };

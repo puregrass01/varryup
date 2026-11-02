@@ -5,6 +5,8 @@ import { createBulkBatch } from './bulk_batch.js';
 import { readVehicleCatalog } from './utils/imweb_catalog.js';
 import { isImwebBulkScope } from './imweb_bulk.js';
 import { createIdentityIndex, productIdentity } from './utils/product_identity.js';
+import { countryTargets } from './utils/country_sync.js';
+import fs from 'node:fs';
 
 const NAVER_SEARCH_SIZE = 100;   // 네이버 목록 조회 한 번에 읽는 상품 수
 const NAVER_VERIFY_GROUP = 10;   // 네이버 저장 뒤 확인을 묶는 상품 수(결과가 화면에 너무 늦게 뜨지 않을 만큼)
@@ -13,7 +15,7 @@ const LOAD_MANY_MAX = 200;
 
 // imwebBulk: 아임웹 네 범위(B2B · 본사 한국/미국/일본)의 Open API 어댑터(imweb_bulk.js).
 export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang, amazon, ebay, imwebBulk, rates,
-  log = console, sleep = ms => new Promise(r => setTimeout(r, ms)), inspectImages, readCatalog, directory }) {
+  log = console, sleep = ms => new Promise(r => setTimeout(r, ms)), inspectImages, readCatalog, readCountryIndex, directory }) {
   // 표의 '상품번호 / SKU' 칸은 몰과 상관없이 같은 표기(No.101 BSA · SKU)로 보인다. 카탈로그는 앱에 묶여 있어
   // 한 번 읽어 둔다. 못 읽어도 목록은 그대로 돌려준다 — 표기는 보여 주기용이라 몰 ID·저장에는 쓰지 않는다.
   let identityIndex = null;
@@ -88,8 +90,9 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
       .map(p => ({ ...p, id: String(p.id ?? p.sku), name: p.name || p.title || p.subject || '', scope,
         price: priceOf(p.price), currency: currency(scope), ready: false })), note, truncated };
   }
+  // asin · listingId · displayProductId 는 표의 판매 페이지 링크용이다(country_sync.js productPageUrl).
   const amazonRow = (input, p) => row(input, p.price, { ...(input.includeImages ? productImageState(input.scope, p) : {}),
-    name: p.title, image: p.mainImageUrl });
+    name: p.title, image: p.mainImageUrl, ...(p.asin && { asin: p.asin }) });
   async function load(input) {
     const id = identity(input), { scope } = input;
     const imageState = p => input.includeImages ? productImageState(scope, p) : {};
@@ -107,7 +110,8 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
       const state = p.statusName && p.statusName !== '승인완료' ? ' · ' + p.statusName : '';
       const rows = [];
       for (const o of p.options) {
-        const base = { ...imageState(p), name: p.title, variant: (o.itemName || '') + state, image: o.imageUrl };
+        const base = { ...imageState(p), name: p.title, variant: (o.itemName || '') + state, image: o.imageUrl,
+          ...(p.displayProductId && { displayProductId: p.displayProductId }) };
         if (!o.vendorItemId) {
           rows.push(row(input, o.salePrice, { ...base, optionId: 'item-' + (o.sellerProductItemId ?? o.index),
             ready: false, readonly: true, result: '승인완료 전 옵션이라 판매가를 바꿀 수 없습니다(쿠팡 승인 후 가능).' }));
@@ -124,7 +128,7 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
       if (p.offer?.pricingSummary?.price?.currency !== 'USD') throw new Error('USD 상품만 가격 수정이 가능합니다.');
       if (p.offer.status !== 'PUBLISHED') throw new Error('게시된 상품만 수정 가능합니다.');
       return [row(input, p.offer.pricingSummary.price.value, { ...imageState(p), name: p.inventory.product?.title,
-        image: p.inventory.product?.imageUrls?.[0] })];
+        image: p.inventory.product?.imageUrls?.[0], ...(p.offer.listing?.listingId && { listingId: String(p.offer.listing.listingId) }) })];
     }
     if (isImwebBulkScope(scope)) {
       // 기본 판매가 한 줄 + 조합마다 한 줄. 조합 가격은 그 조합의 최종가다(추가금이 아니다).
@@ -442,6 +446,16 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
     } catch (e) { return { success: false, ...describeError(e, { sent: !!e?.sent }) }; }
   }));
   ipcMain.handle('bulk-save-cancel', (_, { jobId } = {}) => ({ success: true, data: batch.cancel(jobId) }));
+  // 나라별 가격 통일의 짝(로컬 인덱스만 읽는다 — 몰 API 를 부르지 않는다). 파일은 처음 한 번 읽어 둔다.
+  let countryIndex = null;
+  ipcMain.handle('country-sync-targets', (_, { ids } = {}) => {
+    try {
+      countryIndex ||= (readCountryIndex || (() => JSON.parse(fs.readFileSync(new URL('../data/country_index.json', import.meta.url), 'utf8'))))();
+      return { success: true, data: countryTargets(countryIndex, Array.isArray(ids) ? ids : []) };
+    } catch (e) {
+      return { success: false, error: '나라별 통일 인덱스(data/country_index.json)를 읽지 못했습니다 — node scripts/build_country_index.mjs 로 만드세요. ' + e.message };
+    }
+  });
   // 환율 자동 변경이 화면과 같은 조회·저장 경로를 쓰도록 넘긴다. 아임웹 미국·일본은 별도(imweb_unit_prices.js)로 한다.
   return { list, load, loadMany, save, exclusive, uiWrite };
 }

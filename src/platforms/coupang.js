@@ -193,7 +193,8 @@ export class Coupang {
         throw new Error(`쿠팡 상품 목록 응답이 예상과 다릅니다 (code=${r?.code ?? '없음'}). 목록을 캐시하지 않았습니다.`);
       }
       for (const d of r.data) {
-        all.push({ id: String(d.sellerProductId), name: String(d.sellerProductName || '') });
+        // productId(노출상품ID)는 일괄 수정 표의 판매 페이지 링크용이다. 승인 전 상품은 없다.
+        all.push({ id: String(d.sellerProductId), name: String(d.sellerProductName || ''), ...(d.productId && { displayProductId: String(d.productId) }) });
       }
       nextToken = r.nextToken;
       pages++;
@@ -494,6 +495,7 @@ export class Coupang {
 
     return {
       productId: existing.sellerProductId,
+      displayProductId: existing.productId ? String(existing.productId) : '',   // 노출상품ID(판매 페이지 링크). productId 는 등록상품ID 다
       title: existing.sellerProductName || '',
       statusName: existing.statusName || '',
       options,
