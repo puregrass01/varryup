@@ -250,6 +250,11 @@ const cases = [
     assert.equal((await shownRows(p)).length, 1, '한 행으로 좁혀져야 한다');
     await p.keyboard.press('Enter');
   }, { brand: '현대', no: 'H144', code: 'JK1', sku: 'GN0901NH144' }],   // 수정 모드 SKU = 그 차의 실제 리스팅(찾는 열쇠)
+  ['본사몰 상품 찾기에서 고른 행 이름이 칸에 남아 change 가 다시 떠도 칸을 덮지 않는다(차종 · 세대에 한글 조각)', async p => {
+    await openDb(p);
+    await pick(p, 'inp-db-search', 'No.H119번 · 현대 (Hyundai) · 넥쏘');
+    await p.evaluate(() => document.getElementById('inp-db-search').dispatchEvent(new Event('change', { bubbles: true })));
+  }, NEXO],
   ['수정 모드에서도 넥쏘를 고르면 찾는 열쇠(번호·SKU)가 채워진다', async p => {
     await p.locator('label[for="mode-edit"]').click();
     await openDb(p);

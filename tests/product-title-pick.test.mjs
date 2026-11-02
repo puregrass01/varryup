@@ -89,6 +89,7 @@ test('아래 칸으로 위 칸 채우기: 한 줄의 제조사 · 차종 → 제
   assert.deepEqual(vu.parseDbLine('No.510번  도요타  FJ 크루저  13세대 전기형  15~20'),
     { brand: '도요타', no: '510', model: 'FJ 크루저', gen: '13세대 전기형', year: '15~20', code: '' });
   assert.equal(vu.parseDbLine('No.9번 제네시스 2세대 08~13').brand, '');
+  assert.equal(vu.parseDbLine('No.314번 · 벤츠 (BENZ) · S클래스 · 10세대 · 21.06~ · W223'), null, '목록에서 고른 행 이름은 한 줄 입력이 아니다');
   // 제조사 낱말로 시작하는 차종은 떼지 않는다
   assert.deepEqual(['brand', 'model'].map(k => vu.parseDbLine('No.123번\tMINI 쿠퍼 해치백\t3세대\t14~\tF56')[k]), ['', 'MINI 쿠퍼 해치백']);
   assert.deepEqual(['brand', 'model'].map(k => vu.parseDbLine('No.9번 제네시스 쿠페 1세대 08~13')[k]), ['', '제네시스 쿠페']);
