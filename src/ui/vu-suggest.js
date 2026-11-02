@@ -596,9 +596,17 @@
     let raw = String(text ?? '').trim();   // nz 는 겹친 띄움을 하나로 줄여 아래 '두 칸 이상' 나누기를 못 하게 한다
     if (!/^No\.?\s*[A-Za-z]?\d/i.test(raw)) return null;
     // 번호 뒤 첫 낱말이 제조사면('No.510번 도요타 FJ 크루저 …') 떼어 둔다. 다음 낱말이 세대면('제네시스 2세대') 차종이다.
+    // 제조사 낱말로 시작하는 차종('MINI 쿠퍼 해치백' · '제네시스 쿠페')도 차종이다 — 떼면 'MINI' / '쿠퍼 해치백' 으로 갈린다.
+    // 다만 제조사가 제 칸에 있거나(탭 · 두 칸 띄움) 뒤가 그 제조사의 차종으로 시작하면('기아 포르테' 의 포르테) 뗀다.
     let brand = '';
     const lead = raw.match(/^(No\.?\s*\S+)(\s+)(\S+)(\s+)([\s\S]*)$/i);
-    if (lead && brandName(lead[3]) && !/세대/.test(lead[5].split(/\s+/)[0])) {
+    const brandIsModel = () => {
+      if (/\t|\s{2,}/.test(lead[4])) return false;
+      const w = squash(lead[3]), after = squash(lead[5]), sq = ms => ms.map(squash).filter(Boolean);
+      return !sq(allModels(lead[3])).some(k => after.startsWith(k))
+        && sq(allModels()).some(k => k.length > w.length && k.startsWith(w) && (w + after).startsWith(k));
+    };
+    if (lead && brandName(lead[3]) && !/세대/.test(lead[5].split(/\s+/)[0]) && !brandIsModel()) {
       brand = brandName(lead[3]);
       raw = lead[1] + (lead[2].length >= lead[4].length ? lead[2] : lead[4]) + lead[5];
     }
@@ -629,11 +637,25 @@
       || Object.keys(names?.brands || {}).find(b => vehicleBrandKey(b) === k)
       || (vehicle?.japan?.variants || []).find(v => vehicleBrandKey(v.brand) === k)?.brand || '';
   }
+  // 차종 이름 전부 — 차량 DB · 일본 카탈로그(별칭) · 좌측 목록 · 명칭 사전.
+  // brand 를 주면 차량 DB · 좌측 목록에서 그 제조사의 차종만 — 명칭 사전은 번역용이라 짝이 실제와 다를 수 있다(사전 '제네시스 / 쿠페' = DB '현대 / 제네시스 쿠페').
+  function allModels(brand) {
+    const out = [], k = brand && vehicleBrandKey(brand), mine = b => !k || vehicleBrandKey(b) === k;
+    for (const v of [...(vehicle?.variants || []), ...(vehicle?.japan?.variants || [])]) if (mine(v.brand)) out.push(v.model, ...(v.aliases || []));
+    for (const b of brandList) if (mine(b)) out.push(...api.modelsOf(b));
+    if (!k) for (const ms of Object.values(names?.models || {})) out.push(...Object.keys(ms));
+    return out;
+  }
   // 아래 칸 값으로 위 칸(제조사 · 차종)을 정한다 — 카테고리 · 차량 DB · 일본 카탈로그(별칭) · 명칭 사전에서 후보가 하나일 때만.
   // 이름이 정확히 같을 때만(띄움 · 대소문자 무시). 'FJ 크루저' 는 '랜드크루저' 가 아니다.
-  function upperOf({ model = '', code = '' }) {
+  function upperOf(q) {
+    const hits = upperHits(q);
+    return hits.size === 1 ? [...hits.values()][0] : null;
+  }
+  // 후보 전부(제조사별 하나). 차종이 여럿에 걸리면(ID.4 = 폭스바겐 · 아우디) 여럿이다.
+  function upperHits({ model = '', code = '' }) {
     const m = squash(model), c = squash(code), hits = new Map();
-    if (!m && !c) return null;
+    if (!m && !c) return hits;
     const add = (brand, mdl) => { const b = brandName(brand) || brand; hits.set(vehicleBrandKey(b) + '|' + (m ? '' : squash(mdl)), { brand: b, model: mdl }); };
     const rowHit = v => (m ? squash(v.model) === m || (v.aliases || []).some(a => squash(a) === m) : true) && (!c || squash(v.code) === c);
     for (const v of [...(vehicle?.variants || []), ...(vehicle?.japan?.variants || [])]) if (rowHit(v)) add(v.brand, v.model);
@@ -641,14 +663,14 @@
       for (const b of brandList) if (api.modelsOf(b).some(x => squash(x) === m)) add(b, model);
       for (const [b, ms] of Object.entries(names?.models || {})) if (Object.keys(ms).some(x => squash(x) === m)) add(b, model);
     }
-    return hits.size === 1 ? [...hits.values()][0] : null;
+    return hits;
   }
   const brandOfModel = model => upperOf({ model })?.brand || '';
   // 위 칸을 못 정했으면 제조사 칸을 열어 고르게 한다(고른 짝은 셸이 사전에 기억한다 — index_up.html learnCarName).
   function askBrand(doc) {
     const el = doc.getElementById('inp-brand');
     if (!el || el.value.trim()) return;
-    el.dataset.vuHint = el.placeholder;
+    el.dataset.vuHint ??= el.placeholder;   // 두 번 불려도 처음 안내문을 지킨다
     el.placeholder = 'DB에 없는 차종 — 제조사를 고르세요';
     el.addEventListener('input', () => { el.placeholder = el.dataset.vuHint; }, { once: true });
     el.focus();
@@ -952,11 +974,17 @@
     learnable(brand, model, { en, jp, brandEn, brandJp } = {}) {
       brand = nz(brand); model = nz(model);
       if (!names || !brand || !model || !brandName(brand) && !nz(brandEn)) return null;
+      // DB 에 있는 차종은 DB 의 제조사 아래에서만 기억한다. 다른 제조사로 바꾼 짝('현대 캠리') · 앞 차의 제조사가 남은 짝을
+      // 기억하면 그 차종이 두 제조사에 걸려 다시는 위 칸이 차지 않는다(upperOf 는 후보가 하나일 때만 채운다).
+      // '기타' 아래 든 차종('GMC 시에라' · '마쯔다 CX-9')은 실제 제조사로 고쳐 기억할 수 있다.
+      const known = [...upperHits({ model }).values()];
+      const real = known.filter(h => vehicleBrandKey(h.brand) !== vehicleBrandKey('기타'));
+      if (real.length && !real.some(h => vehicleBrandKey(h.brand) === vehicleBrandKey(brand))) return null;
       const out = { brand: nameBrandIndex[bkey(brand)] || brand, model };
       if (nz(en) && !modelField(brand, model, 'en')) out.en = nz(en);
       if (nz(jp) && !modelField(brand, model, 'jp')) out.jp = nz(jp);
       if (!brandEntry(brand)) Object.assign(out, { brandEn: nz(brandEn) || null, brandJp: nz(brandJp) || null });
-      if (!out.en && !out.jp && vehicleBrandKey(brandOfModel(model)) === vehicleBrandKey(brand)) return null;
+      if (!out.en && !out.jp && known.length) return null;
       return out;
     },
     genJa(gen) { return genField(gen, 'jp'); },
@@ -1105,14 +1133,21 @@
         carEl.addEventListener('change', onModel);
       }
       // 손으로 친 아래 칸(차종 · 차량코드)이 확정되면 빈 위 칸을 채운다(upperOf). 프로그램이 넣을 때(vuChoosing)는 넣는 쪽이 정한다.
+      // 여기서 채운 제조사(vuUpper)는 차종이 바뀌면 다시 정한다 — 남기면 '도요타 아반떼' 처럼 앞 차의 제조사로 올라간다.
+      // 사람이 고치거나 한 줄 · 목록이 넣은 제조사는 그대로 둔다 — 제조사 칸에 무엇이 들어오든(input) 표시를 지우고, 여기서 넣을 때만 다시 붙인다.
+      const brandInp = doc.getElementById('inp-brand');
+      if (brandInp) brandInp.addEventListener('input', () => { delete brandInp.dataset.vuUpper; });
       const codeEl = doc.getElementById('inp-code');
       for (const el of [carEl, codeEl]) if (el) el.addEventListener('change', () => {
-        if (el.dataset.vuChoosing === '1' || doc.getElementById('inp-brand')?.value.trim()) return;
+        const brandEl = doc.getElementById('inp-brand');
+        const ours = !!brandEl?.value.trim() && brandEl.dataset.vuUpper === '1';
+        if (el.dataset.vuChoosing === '1' || (brandEl?.value.trim() && !ours)) return;
         const car = carEl?.value.trim() || '';
         if (el === codeEl && car) return;   // 차종이 있으면 차종으로(아래)
         const up = upperOf(car ? { model: car } : { code: el.value });
-        if (!up) return;
+        if (!up) { if (ours) setField(doc, 'inp-brand', ''); return; }
         setField(doc, 'inp-brand', up.brand);
+        if (brandEl) brandEl.dataset.vuUpper = '1';
         if (!car) setField(doc, 'inp-carmodel', up.model);
       });
 

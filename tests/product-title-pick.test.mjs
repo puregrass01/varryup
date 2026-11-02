@@ -89,6 +89,9 @@ test('아래 칸으로 위 칸 채우기: 한 줄의 제조사 · 차종 → 제
   assert.deepEqual(vu.parseDbLine('No.510번  도요타  FJ 크루저  13세대 전기형  15~20'),
     { brand: '도요타', no: '510', model: 'FJ 크루저', gen: '13세대 전기형', year: '15~20', code: '' });
   assert.equal(vu.parseDbLine('No.9번 제네시스 2세대 08~13').brand, '');
+  // 제조사 낱말로 시작하는 차종은 떼지 않는다
+  assert.deepEqual(['brand', 'model'].map(k => vu.parseDbLine('No.123번\tMINI 쿠퍼 해치백\t3세대\t14~\tF56')[k]), ['', 'MINI 쿠퍼 해치백']);
+  assert.deepEqual(['brand', 'model'].map(k => vu.parseDbLine('No.9번 제네시스 쿠페 1세대 08~13')[k]), ['', '제네시스 쿠페']);
   // 차종 → 제조사: 카테고리 · 일본 카탈로그 별칭(랜드크루저) · 대소문자 · 띄움 무시
   assert.equal(vu.upperOf({ model: '캠리' })?.brand, '도요타');
   assert.equal(vu.upperOf({ model: '랜드 크루저' })?.brand, '도요타');
@@ -99,5 +102,8 @@ test('아래 칸으로 위 칸 채우기: 한 줄의 제조사 · 차종 → 제
   // 기억할 값: 모르는 차종은 제조사째, 아는 짝 · 번역은 null
   assert.deepEqual(vu.learnable('도요타', 'FJ 크루저', { en: 'FJ Cruiser', jp: 'FJクルーザー' }), { brand: '도요타', model: 'FJ 크루저', en: 'FJ Cruiser', jp: 'FJクルーザー' });
   assert.equal(vu.learnable('도요타', '캠리'), null);
+  assert.equal(vu.learnable('현대', '캠리'), null, 'DB 차종을 다른 제조사로 바꾼 짝은 기억하지 않는다(캠리가 두 제조사에 걸린다)');
+  assert.equal(vu.learnable('도요타', '아반떼', { en: 'Avante' }), null, '앞 차의 제조사가 남은 짝도');
+  assert.equal(vu.learnable('GMC', 'GMC 시에라', { en: 'Sierra' })?.brand, 'GMC', "DB 가 '기타' 아래 둔 차종은 실제 제조사로 기억할 수 있다");
   assert.equal(vu.learnable('없는회사', 'X'), null, '모르는 제조사는 영문 없이는 기억하지 않는다');
 });

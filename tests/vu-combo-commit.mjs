@@ -224,6 +224,17 @@ const cases = [
     await p.evaluate(() => { for (const id of ['inp-brand', 'inp-carmodel']) { const el = document.getElementById(id); el.value = ''; el.dispatchEvent(new Event('change', { bubbles: true })); } });
     await p.locator('#inp-carmodel').fill('캠리'); await p.locator('#inp-carmodel').dispatchEvent('change');
   }, { brand: '도요타', carmodel: '캠리' }],
+  ['차종으로 채운 제조사는 차종을 바꾸면 다시 정한다(캠리 → 아반떼 = 현대), 손으로 친 제조사는 그대로', async p => {
+    const car = async v => { await p.locator('#inp-carmodel').fill(v); await p.locator('#inp-carmodel').dispatchEvent('change'); };
+    await car('캠리');
+    assert.equal((await read(p)).brand, '도요타');
+    await car('아반떼');
+    assert.equal((await read(p)).brand, '현대', '앞 차의 제조사(도요타)가 남으면 안 된다');
+    await car('FJ 크루저');
+    assert.equal((await read(p)).brand, '', 'DB 에 없는 차종이면 채웠던 제조사를 비운다');
+    await p.locator('#inp-brand').fill('렉서스'); await p.locator('#inp-brand').dispatchEvent('change');
+    await car('캠리');
+  }, { brand: '렉서스', carmodel: '캠리' }],
   ['수정 모드에서도 한 줄을 넣으면 칸마다 나눠 넣는다(찾는 열쇠 = 상품번호)', async p => {
     await p.locator('label[for="mode-edit"]').click();
     await p.evaluate(() => {

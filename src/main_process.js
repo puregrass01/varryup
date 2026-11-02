@@ -1703,12 +1703,33 @@ ipcMain.handle('vehicle-load-i18n', async () => {
 // 앱 폴더의 사전(git 파일)을 고치면 실행.bat 업데이트가 '고친 파일 있음' 으로 멈추고, ZIP 으로 새로 받으면 사라진다.
 const learnedNamesPath = () => path.join(app.getPath('userData'), 'vehicle_i18n_learned.json');
 const nameKey = v => String(v ?? '').trim().replace(/\s+/g, '').toLowerCase();
+const reservedKey = k => ['__proto__', 'constructor', 'prototype'].includes(k);   // 객체 키로 쓰면 Object.prototype 을 건드린다
+const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v);
+// 기억 파일을 읽는다. 없으면 빈 사전. 깨졌으면 .corrupt-<시각> 으로 옮겨 두고 빈 사전(mergeIntoConfig 와 같다) —
+// 그대로 덮어쓰면 앞서 기억한 짝이 전부 사라진다. 읽기 자체가 실패하면(다른 프로그램이 잡고 있음) 던진다 — 이번엔 쓰지 않는다.
+function readLearnedNames() {
+    const p = learnedNamesPath();
+    if (!fs.existsSync(p)) return { brands: {}, models: {} };
+    const raw = fs.readFileSync(p, 'utf-8');
+    try {
+        const v = JSON.parse(raw);
+        if (isMap(v) && isMap(v.brands) && isMap(v.models)) return v;
+        throw new Error('형식이 다릅니다');
+    } catch (e) {
+        const moved = `${p}.corrupt-${Date.now()}`;
+        fs.renameSync(p, moved);
+        console.warn('차종 기억 파일이 깨져 새로 씁니다(원본 보관):', e.message, '→', moved);
+        return { brands: {}, models: {} };
+    }
+}
 function mergeLearnedNames(names, learned) {
     for (const [b, v] of Object.entries(learned.brands || {})) {
+        if (reservedKey(b)) continue;
         const bk = Object.keys(names.brands).find(x => nameKey(x) === nameKey(b)) || b;
         names.brands[bk] ||= v;
         const models = names.models[bk] ||= {};
         for (const [m, e] of Object.entries((learned.models || {})[b] || {})) {
+            if (reservedKey(m) || !isMap(e)) continue;
             const now = models[Object.keys(models).find(x => nameKey(x) === nameKey(m)) || m] ||= { ko: m, en: null, jp: null };
             now.en ||= e.en || null; now.jp ||= e.jp || null;   // 사전 값이 이긴다
         }
@@ -1717,16 +1738,17 @@ function mergeLearnedNames(names, learned) {
 }
 function loadVehicleNames() {
     const names = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'vehicle_i18n.json'), 'utf-8'));
-    try { return mergeLearnedNames(names, JSON.parse(fs.readFileSync(learnedNamesPath(), 'utf-8'))); }
-    catch { return names; }   // 기억한 것이 아직 없다
+    try { return mergeLearnedNames(names, readLearnedNames()); }
+    catch { return names; }   // 기억 파일을 지금 못 읽는다 — 사전만
 }
 ipcMain.handle('vehicle-learn-name', async (_, input = {}) => {
     try {
         const s = v => String(v ?? '').trim();
         const brand = s(input.brand), model = s(input.model);
         if (!brand || !model) throw new Error('제조사 · 차종이 비었습니다.');
-        let learned = { brands: {}, models: {} };
-        try { learned = JSON.parse(fs.readFileSync(learnedNamesPath(), 'utf-8')); } catch {}
+        if (reservedKey(brand) || reservedKey(model)) throw new Error('쓸 수 없는 이름입니다.');
+        const learned = readLearnedNames();
+        if (!isMap(learned.models[brand])) learned.models[brand] = {};
         learned.brands[brand] ||= { ko: brand, en: s(input.brandEn) || null, jp: s(input.brandJp) || null };
         const models = learned.models[brand] ||= {};
         const entry = models[model] ||= { ko: model, en: null, jp: null };
