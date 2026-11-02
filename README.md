@@ -11,5 +11,4 @@
 - `node_modules`는 저장소에 올리지 않습니다. 오류가 나면 창에 이유가 남습니다.
 - 같은 PC에서 VERY UP이 이미 켜져 있으면 새 창 대신 켜진 창이 앞으로 옵니다(한 번에 하나만 실행).
 - 직원 PC는 이 방법 대신 설치 파일을 씁니다 — `배포_가이드.md`.
-
-<img width="1182" height="838" alt="image" src="https://github.com/user-attachments/assets/188d73ea-d5fa-4c05-84b9-2a901b8aaecc" />
+<img width="1201" height="846" alt="image" src="https://github.com/user-attachments/assets/146d7e70-8908-4c5d-9f7e-9b86fb2a89ca" />
