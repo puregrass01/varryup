@@ -16,7 +16,8 @@ const html = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="
 <script src="/src/ui/bulk-edit.js"></script>`;
 const server = http.createServer((req, res) => {
   if (req.url === '/') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(html); }
-  const file = path.resolve(root, '.' + decodeURI(req.url.split('?')[0]));
+  // 화면은 src/ui 에서 열리므로 logos/… 는 src/ui/logos/… 다.
+  const file = path.resolve(root, '.' + decodeURI(req.url.split('?')[0]).replace(/^\/logos\//, '/src/ui/logos/'));
   if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.statusCode = 404; return res.end(); }
   res.setHeader('Content-Type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'image/png');
   fs.createReadStream(file).pipe(res);

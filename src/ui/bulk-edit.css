@@ -44,6 +44,8 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 .be-table tr.be-country-head td { background:var(--paper-2); font-weight:600; padding-top:8px; padding-bottom:8px; }
 .be-table tr.be-country-head small { display:inline; margin:0 0 0 10px; font-weight:400; }
 .be-table .be-mall { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; font-weight:600; }
+/* 몰 로고는 글자 크기만큼(표의 사진 칸 규칙 .be-table img 60×52 를 덮는다) */
+.be-table .be-mall img.be-platform-logo { width:1.2em; height:1.2em; border-radius:3px; }
 .be-table a.be-page-link { display:inline-block; margin-top:var(--space-xs); font-size:12px; color:var(--accent); }
 
 /* 입력칸·셀렉트·버튼을 같은 높이(32px)와 테마 색으로 맞춘다. 환율 탭(#fx-workspace)도 같은 모양을 쓴다. */
