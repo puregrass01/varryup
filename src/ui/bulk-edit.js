@@ -17,7 +17,7 @@
   const key = r => r.id + ':' + (r.optionId || '');
   // tried: 이 목록에서 현재가·이미지를 한 번 읽으려 한 상품 ID(자동 불러오기가 같은 상품을 되풀이해 두드리지 않게).
   // absent: 나라 화면이 자리를 만들었다가 그 몰에서 못 읽은 상품 ID(다시 자리를 만들지 않게).
-  const state = (sc = scope) => { if (!states.has(sc)) states.set(sc, { rows: [], note: '', filters: {}, query: '', imageInput: '', tried: new Set(), absent: new Set() }); return states.get(sc); };
+  const state = (sc = scope) => { if (!states.has(sc)) states.set(sc, { rows: [], note: '', filters: {}, query: '', imageList: [], tried: new Set(), absent: new Set() }); return states.get(sc); };
   const rows = (sc = scope) => state(sc).rows;
   const unitOf = sc => scopes.find(s => s[0] === sc)[2];
   // 나라 화면에서 보기만 하는 몰(B2B)의 줄은 고르거나 고칠 수 없다.
@@ -89,7 +89,7 @@
     // 서버 검색칸은 아마존·eBay 에서만 보인다. 나머지 몰은 전체를 받은 뒤 같은 단어로 걸러 표 안 검색과 같다(draw).
     '<div class="be-tools"><input id="be-api-query" placeholder="상품명·SKU 검색 · 빈칸이면 전체 목록" aria-label="목록 검색어">' +
     '<button id="be-list" type="button">상품 목록 조회</button><button id="be-sync" type="button" hidden>전체 목록 동기화</button></div>' +
-    '<p class="be-help">표에 보이는 쪽의 상품은 현재가·이미지를 자동으로 불러옵니다. 상품을 선택하고 가격 적용·이미지 적용으로 값을 넣은 뒤 선택 변경 저장을 누르세요. 다른 쪽의 안 읽은 상품은 적용할 때 먼저 불러옵니다. 쿠팡 이미지는 상품 전체 옵션에 적용됩니다.</p>' +
+    '<p class="be-help">표에 보이는 쪽의 상품은 현재가·이미지를 자동으로 불러옵니다. 상품을 선택하고 가격 적용, 또는 사진 열 목록에 이미지를 끌어 놓고 [↓]로 값을 넣은 뒤 선택 변경 저장을 누르세요. 다른 쪽의 안 읽은 상품은 적용할 때 먼저 불러옵니다. 쿠팡 이미지는 상품 전체 옵션에 적용됩니다.</p>' +
     '<div class="be-actions">' +
     // 선택·해제는 표 머리의 전체선택 체크 하나로 한다. 판매가·이미지 입력은 표 머리 아래 줄, 그 열 바로 밑에 있다.
     // 현재가·이미지는 보이는 쪽을 자동으로 읽는다(autoLoad) — 예전 '선택 상품 현재가·이미지 불러오기' 버튼은 없앴다.
@@ -100,10 +100,8 @@
     '<div class="be-body"><div class="be-filters" id="be-filters" role="group" aria-label="표 필터"></div>' +
     '<div class="be-scroll"><table class="be-table"><thead><tr><th class="be-check-column"><label class="be-th-check-label"><input type="checkbox" id="be-th-select-all" aria-label="필터 결과 모든 페이지 전체선택" title="필터에 맞는 모든 페이지의 행을 선택합니다 · 다시 누르면 선택을 모두 해제합니다"> 전체선택</label></th><th class="be-photo-column"><span id="be-photo-label">사진</span><small id="be-image-hint"></small></th><th>상품명 / 옵션</th><th>상품번호 / SKU</th><th>브랜드 / 차종</th><th id="be-price-label">기존 판매가</th><th>판매가 덮어쓰기</th><th>처리 결과</th></tr>' +
     // 열마다 칸 하나씩(합치지 않는다) — 입력이 그 열 머리 바로 밑에 온다. 이미지는 사진 열, 판매가는 판매가 덮어쓰기 열.
-    '<tr class="be-th-tools"><td></td><td class="be-photo-column"><div class="be-tool" role="group" aria-label="이미지 입력">' +
-    '<input id="be-image-value" type="text" placeholder="ESM URL 또는 &lt;img&gt; HTML" title="빈칸이면 이미지 설정의 ESM 상세 목록을 불러옵니다" aria-label="선택 상품에 적용할 이미지 URL 목록">' +
-    '<select id="be-image-op" aria-label="이미지 적용 방식"><option value="replace">교체</option><option value="append">끝에 추가</option><option value="remove">이 URL 제거</option></select>' +
-    '<button id="be-image-apply" type="button">이미지 적용</button></div></td><td></td><td></td><td></td><td></td>' +
+    '<tr class="be-th-tools"><td></td><td class="be-photo-column"><div class="be-tool be-image-tool" role="group" aria-label="이미지 입력"><div id="be-image-list"></div>' +
+    '<button id="be-image-apply" type="button" title="선택 상품의 이미지를 이 목록으로 바꿉니다" aria-label="선택 상품 이미지를 이 목록으로 교체">↓</button></div></td><td></td><td></td><td></td><td></td>' +
     '<td><div class="be-tool" role="group" aria-label="판매가 덮어쓰기"><input id="be-value" type="number" min="0" placeholder="판매가" aria-label="선택 행에 넣을 판매가">' +
     '<span id="be-currency" class="be-unit"></span><select id="be-price-source" aria-label="판매가 값 출처" title="환율가: 국내 기준가 등급 ÷ 오늘 환율(우대 없음)에서 앞 두 자리만 남긴 값을 행마다 계산합니다(아마존·eBay 전용)">' +
     '<option value="direct">직접 입력</option><option value="fx">환율가</option></select><button id="be-apply" type="button">가격 적용</button></div></td><td></td></tr>' +
@@ -139,7 +137,7 @@
     state().query = query;
     state().filters = Object.fromEntries([...filters].map(([k, s]) => [k, s.value]));
     scope = id; page = 0; query = state().query; $('be-search').value = query;
-    $('be-image-value').value = state().imageInput;
+    renderImageList();
     rebuildFilters(); draw(); tell(state().note);
   }
   const logoOf = id => { const [, , , logo] = scopes.find(s => s[0] === id), img = el('img', 'be-platform-logo' + (id === 'ebay' ? ' be-platform-logo-wide' : ''));
@@ -198,7 +196,7 @@
     const policy = imagePolicy(scope);
     // 아임웹 네 범위도 Open API 로 읽고 쓴다(2026-10-05) — 예전의 '카탈로그 참조 · API 연동 전' 잠금은 없앴다.
     $('be-price-label').textContent = '기존 판매가';
-    for (const id of ['be-price-source', 'be-apply', 'be-save', 'be-image-value', 'be-image-op', 'be-image-apply', 'be-th-select-all', 'be-country-apply', 'be-country-images']) $(id).disabled = busy;
+    for (const id of ['be-price-source', 'be-apply', 'be-save', 'be-image-apply', 'be-th-select-all', 'be-country-apply', 'be-country-images']) $(id).disabled = busy;
     // 나라 화면은 가격 전용이다 — 표 머리의 이미지 · 가격 입력 줄 대신 [본사 값으로 맞추기] · [본사 상세 이미지 →] 를 쓴다.
     root.querySelector('.be-th-tools').hidden = !!country;
     $('be-country-apply').hidden = !country; $('be-country-images').hidden = !country || !COUNTRIES[country].images;
@@ -340,9 +338,10 @@
       return tr;
   }
   // 작업 중에도 왼쪽 레일(표 안 검색·필터)은 잠그지 않는다 — 자동 불러오기가 도는 동안에도 계속 찾고 거를 수 있게.
+  // 표 머리 이미지 목록도 행과 따로라 잠그지 않는다(풀 때 첫 장의 ← 까지 켜지 않게 — 그 칸은 갤러리가 정한다).
   function lock(value) {
     busy = value;
-    root.querySelectorAll('button, input, select').forEach(n => { if (!n.closest('#be-filters')) n.disabled = value; });
+    root.querySelectorAll('button, input, select').forEach(n => { if (!n.closest('#be-filters, #be-image-list')) n.disabled = value; });
     $('be-stop').hidden = !value; $('be-stop').disabled = false;
     draw();
   }
@@ -435,7 +434,7 @@
         const before = rows(sc).filter(x => x.id === r.id);
         const picked = before.some(x => x.optionId) ? new Map(before.map(x => [x.optionId || '', x.selected])) : null;
         const wasSelected = before.some(x => x.selected);
-        // 이미지 변경안(이미지 적용·✖)이 걸린 상품은 변경안과 그때 읽은 revision 을 새 행에 옮긴다. 가격 적용이 안 읽은 행을
+        // 이미지 변경안([↓]·✖)이 걸린 상품은 변경안과 그때 읽은 revision 을 새 행에 옮긴다. 가격 적용이 안 읽은 행을
         // 불러오며 행을 바꿔 끼울 때 변경안이 조용히 사라지던 것. revision 을 그대로 두어 저장의 expectedRevision 검사가 맞다.
         const draft = before.find(x => x.imagesReady && Array.isArray(x.newImages));
         const links = Object.fromEntries(LINK_KEYS.map(k => [k, before.find(b => b[k])?.[k]]).filter(([, v]) => v));
@@ -543,40 +542,27 @@
       ' 1 USD = ' + Number(plan.rate.KRW.toFixed(2)).toLocaleString('ko-KR') + '원(' + plan.rate.marketDate + ' 기준). 선택 변경 저장을 누르면 반영됩니다.');
   }));
   $('be-price-source').addEventListener('change', draw);
-  $('be-image-value').addEventListener('input', e => { state().imageInput = e.target.value; });
-  // ESM 이미지호스팅 썸네일을 끌어 놓으면 기본 동작은 커서 자리에 구분자 없이 끼워 넣어 기존 주소를 깨뜨린다 → 끝에 붙인다.
-  $('be-image-value').addEventListener('drop', e => {
-    const urls = window.VUImages?.esmUrls?.(e.dataTransfer.getData('text/html'), e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')) || [];
-    if (!urls.length) return;
-    e.preventDefault();
-    const now = e.target.value.trim().replace(/[|\s]+$/, '');   // 'a|' 끝 구분자에 또 붙여 'a||u' 가 되지 않게
-    e.target.value = state().imageInput = /<img\b/i.test(now) ? [now, ...urls.map(u => `<img src="${u}">`)].join('') : [now, ...urls].filter(Boolean).join('|');
-  });
-  // 이미지 적용: 교체(입력 목록으로 바꿈) · 끝에 추가 · 이 URL 제거(같은 URL 만 뺌). 상품마다 지금 목록을 기준으로 변경안을 만든다.
+  // 표 머리 이미지 목록: 끌어 놓은 이미지(ESM 이미지호스팅 · 탐색기 파일은 ESM 에 올려서 · + ESM 상세는 이미지 설정의 선택분).
+  // 넣을 때마다 갤러리가 그 몰 기준으로 ESM 확인(bulk-images-import)을 마친 목록만 남긴다. 몰마다 따로 둔다.
+  // draw() 마다 다시 그리지 않는다 — 다시 그리면 갤러리가 기다리던 ESM 업로드 결과를 버린다.
+  function renderImageList() {
+    const sc = scope, list = () => state(sc).imageList;
+    const set = urls => { state(sc).imageList = [...urls]; if (sc === scope) renderImageList(); };
+    window.VUImageGallery.render($('be-image-list'), list(), {
+      scope: sc, onReplace: set,
+      onRemove: i => set(list().filter((_, k) => k !== i)),
+      onMove: (i, step) => { const l = [...list()]; [l[i], l[i + step]] = [l[i + step], l[i]]; set(l); },
+    });
+    $('be-image-list').querySelector('.vu-image-save-hint').textContent = '이미지를 끌어 놓고 [↓]로 선택 상품에 넣습니다.';
+  }
+  // [↓]: 선택 상품의 이미지를 표 머리 목록으로 바꾼다(교체). 저장은 선택 변경 저장이 한다.
   $('be-image-apply').addEventListener('click', () => run(async () => {
-    const picked = selected(), op = $('be-image-op').value;
-    if (!picked.length) { tell('이미지를 적용할 상품을 선택하세요.'); return; }
-    let input = $('be-image-value').value.trim();
-    if (!input && op === 'remove') { tell('제거할 이미지 URL을 입력하세요.'); return; }
-    if (!input) {
-      tell('ESM 상세 이미지 목록을 불러오는 중…');
-      const library = await ipc.invoke('image-library-load');
-      if (!library?.success) throw new Error(library?.error || '이미지 설정을 불러오지 못했습니다.');
-      const profileId = scope.startsWith('amazon-') ? 'amazon' : scope === 'ebay' ? 'ebay' : 'domestic';
-      const profile = library.profiles?.find(p => p.id === profileId);
-      const hosted = profile?.items?.filter(item => item.selected && item.role === '상세' && item.source === 'esm').map(item => item.url || item.path) || [];
-      if (!hosted.length) throw new Error('저장된 ESM 상세 이미지가 없습니다. ESM URL 또는 <img> HTML을 입력하세요.');
-      input = hosted.join('|');
-    }
-    // 제거는 새 이미지를 올리지 않으니 ESM 확인 없이 적은 URL 그대로 맞춘다(주소 표기만 URL 규칙으로 맞춤).
-    const same = url => { try { return new URL(String(url).trim()).href; } catch { return String(url).trim(); } };
-    let checked;
-    if (op === 'remove') {
-      // <img> HTML 을 붙여 넣으면 src 만 뽑아 맞춘다(가져오기와 같은 입력). DOMParser 문서는 이미지를 읽지 않는다.
-      const list = /<img\b/i.test(input) ? [...new DOMParser().parseFromString(input, 'text/html').querySelectorAll('img[src]')].map(img => img.getAttribute('src')) : input.split(/[|\r\n]/);
-      checked = { images: list.map(x => x.trim()).filter(Boolean), verified: 0 };
-      if (!checked.images.length) { tell('제거할 이미지 URL을 찾지 못했습니다. URL 또는 <img src="…"> HTML을 입력하세요.'); return; }
-    } else { tell('ESM 호스팅 이미지 확인 중…'); checked = await call('bulk-images-import', { scope, input }); }
+    // 목록은 넣을 때 ESM 확인 · 몰별 장수 한도(parseImageUrls)를 이미 거쳤다. 확인 · 업로드 중에는 갤러리가 + ESM 상세를 꺼 둔다 —
+    // 그동안 누르면 방금 끌어 놓은 이미지가 빠진 옛 목록이 들어간다.
+    if ($('be-image-list').querySelector('.vu-image-add')?.disabled) { tell('이미지 목록에 넣는 중입니다. 끝난 뒤 [↓]를 누르세요.'); return; }
+    const picked = selected(), images = [...state().imageList];
+    if (!picked.length) { tell('이미지를 넣을 상품을 선택하세요.'); return; }
+    if (!images.length) { tell('사진 열 머리의 목록에 이미지를 끌어 놓으세요.'); return; }
     // 변경안을 걸기 전에 상품마다 지금 이미지(revision)를 읽는다('이미지 목록 조회'와 같은 길). 상품 하나가 실패해도 나머지는
     // 그대로 두고, 중단을 누르면 다음 상품부터 멈춘다. 지금 이미지를 모르는 상품에는 변경을 걸지 않는다.
     const ids = new Set(picked.map(r => r.id)), snapshots = new Map(), failed = new Map(), ready = new Set();
@@ -587,27 +573,15 @@
       try { snapshots.set(id, await call('bulk-images-load', { scope, id })); ready.add(id); }
       catch (e) { failed.set(id, e.message); if (e.blocking) break; }
     }
-    const drop = new Set(checked.images.map(same)), max = imagePolicy(scope).max;
-    const staged = new Set(), empty = new Set(), over = new Set(), untouched = new Set();
+    const staged = new Set();
     rows().filter(r => ids.has(r.id)).forEach(r => {
       if (!ready.has(r.id)) { if (failed.has(r.id)) r.imageResult = '기존 이미지 확인 실패 — 변경 안 함: ' + failed.get(r.id); return; }
       const snapshot = snapshots.get(r.id);
-      if (snapshot) Object.assign(r, { images: snapshot.images, imageRevision: snapshot.revision, imagesReady: true, newImages: null });
-      const current = Array.isArray(r.newImages) ? r.newImages : r.images;
-      const next = op === 'append' ? [...current, ...checked.images] : op === 'remove' ? current.filter(url => !drop.has(same(url))) : [...checked.images];
-      // 빈 목록·장수 초과는 저장에서 막히므로 변경안을 만들지 않고 상품명을 알린다.
-      if (!next.length) { empty.add(r.name); r.imageResult = '이미지가 하나도 남지 않아 적용 안 함'; return; }
-      if (next.length > max) { over.add(r.name); r.imageResult = '이미지 ' + max + '장 한도를 넘어 적용 안 함'; return; }
-      if (op === 'remove' && next.length === current.length) { untouched.add(r.id); return; }
-      r.newImages = next; r.imageResult = '이미지 변경 대기'; staged.add(r.id);
+      if (snapshot) Object.assign(r, { images: snapshot.images, imageRevision: snapshot.revision, imagesReady: true });
+      r.newImages = [...images]; r.imageResult = '이미지 변경 대기'; staged.add(r.id);
     });
-    state().imageInput = checked.images.join('|'); $('be-image-value').value = state().imageInput;
     const skipped = ids.size - ready.size - failed.size;
-    const done = { replace: '이미지 ' + checked.images.length + '장으로 교체', append: '끝에 이미지 ' + checked.images.length + '장 추가', remove: '입력한 URL 제거' }[op];
-    tell(staged.size + '개 상품에 ' + done + ' 대기' + (op === 'remove' ? '' : '(ESM ' + checked.verified + '장 확인)') + '.' +
-      (untouched.size ? ' 입력한 URL이 없는 상품 ' + untouched.size + '개.' : '') +
-      (empty.size ? ' 이미지가 하나도 남지 않아 적용하지 않은 상품: ' + [...empty].join(', ') + '.' : '') +
-      (over.size ? ' ' + max + '장 한도를 넘어 적용하지 않은 상품: ' + [...over].join(', ') + '.' : '') +
+    tell(staged.size + '개 상품에 이미지 ' + images.length + '장으로 교체 대기.' +
       (failed.size ? ' 기존 이미지 확인 실패 ' + failed.size + '개(변경 안 함, 처리 결과 칸 확인).' : '') +
       (skipped ? ' 중단으로 ' + skipped + '개 건너뜀.' : '') + ' 선택 변경 저장을 누르면 반영됩니다.');
   }));
@@ -997,5 +971,5 @@
   window.addEventListener('beforeunload', e => {
     if (busy || [...states.values()].some(s => s.rows.some(dirty)) || window.VUFxAutoPrice?.isDirty()) { e.preventDefault(); e.returnValue = ''; }
   });
-  rebuildFilters(); draw();
+  renderImageList(); rebuildFilters(); draw();
 })();

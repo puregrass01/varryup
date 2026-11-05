@@ -13,7 +13,7 @@ const html = `<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="
 <style>body{margin:0;height:100vh;display:flex;flex-direction:column;font-family:Arial,sans-serif}#mode-bar{padding:8px}iframe{display:none}</style>
 <div id="mode-bar"></div><div id="section8-body"><div id="section8-main"></div></div><iframe id="form-frame"></iframe><section id="bulk-edit-workspace"></section>
 <script>var isBulkRunning=false,currentMode='edit';window.VUProductTable={normalize:r=>({brand:'옵틱글래스',vehicle:'BMW',model:'X5',kind:'광각미러'})};</script>
-<script src="/src/ui/bulk-edit.js"></script>`;
+<script src="/src/ui/image-gallery.js"></script><script src="/src/ui/bulk-edit.js"></script>`;
 const server = http.createServer((req, res) => {
   if (req.url === '/') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(html); }
   // 화면은 src/ui 에서 열리므로 logos/… 는 src/ui/logos/… 다.

@@ -104,15 +104,22 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 .be-group { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
 .be-group-end { margin-left:auto; }
 .be-unit { font-size:12px; font-weight:600; color:var(--text-secondary); min-width:28px; }
-/* 열 머리 아래 입력 줄: 칸 폭 안에서 줄을 바꿔 쌓는다(판매가 열 [칸][통화] / [값 출처][가격 적용], 사진 열 [URL] / [방식][이미지 적용]). */
+/* 열 머리 아래 입력 줄: 칸 폭 안에서 줄을 바꿔 쌓는다(판매가 열 [칸][통화] / [값 출처][가격 적용], 사진 열 [이미지 목록][↓]). */
 .be-table .be-th-tools td { padding:var(--space-xs) var(--space-sm) var(--space-sm); background:var(--paper-2); vertical-align:top; }
 .be-tool { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-xs); }
 .be-tool select, .be-tool button { flex:1 1 auto; }
-#be-image-op { flex:1 1 0; min-width:0; }   /* 사진 열: [방식][이미지 적용] 을 한 줄에 — 남는 폭은 방식 칸이 갖는다 */
-#be-image-apply { flex:none; }
+/* 사진 열: 끌어 놓는 이미지 목록(image-gallery.js) 옆에 [↓]. 붙여 넣기 칸 · 빈 목록 문구는 쓰지 않는다(안내는 목록 밑 한 줄).
+   갤러리 버튼은 위의 32px 버튼 규칙을 걷어 낸다(× 는 image-gallery.css 의 #bulk-edit-workspace 규칙). */
+.be-image-tool { flex-wrap:nowrap; align-items:flex-start; }
+#be-image-list { flex:1 1 0; min-width:0; }
+#be-image-list .vu-image-gallery { gap:6px; max-height:190px; margin:0; padding:0; }
+#be-image-list :is(.vu-image-import, .vu-image-empty) { display:none; }
+#be-image-list .vu-image-open { display:block; height:auto; padding:0; border:0; background:transparent; }
+#be-image-list .vu-image-moves button { height:20px; padding:0 4px; font-size:11px; }
+#be-image-list .vu-image-add { flex:none; width:54px; height:54px; padding:2px; white-space:normal; font-size:11px; border-style:dashed; }
+#be-image-apply { flex:none; font-size:16px; }
 /* width 를 auto 로 두면 숫자 칸의 기본 폭(약 170px)이 열 최소 폭이 되어 1200px 창에서 표가 넘친다 — 72px 에서 늘어나게만 한다. */
 #be-value { width:72px; flex:1 0 72px; font-family:var(--font-mono); }
-#be-image-value { width:100%; }
 .be-state { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:var(--space-xs) var(--space-md); margin:2px 0 6px; }
 .be-state .be-help { margin:0; }
 .be-th-check-label { display:inline-flex; align-items:center; gap:5px; cursor:pointer; user-select:none; font-size:12px; font-weight:600; }
