@@ -39,6 +39,9 @@ html.embedded-platform body { background-color: var(--bg-panel); }
 /* 판매가 칸: 한국 1set · 운전석 · 조수석 한 줄, 미국 · 일본 한 줄 */
 #imwebHeadTab .ih-new .dual-input { width: 100%; max-width: 100%; }
 #imwebHeadTab .ih-new .dual-input > .input-col { flex: 1 1 0; min-width: 0; }
+/* 수정 칸 [상품명] 옆에 불러온 상품의 판매 페이지 주소(누르면 기본 브라우저). 길면 줄임표. */
+#imwebHeadTab .ih-name-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+#imwebHeadTab .ih-page-link { font-size: 0.75rem; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Compact layout ─────────────────────────────────────────────
    The shell already halves .form-input, but the panel stayed the full

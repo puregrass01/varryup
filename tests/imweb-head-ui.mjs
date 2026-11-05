@@ -37,6 +37,7 @@ try {
         return { success: true, data: { items: [{ id: data.ids[0], rows: rows(data.scope) }], blocked: '' } };
       }
       if (channel === 'bulk-save-batch') return window.saveReply(data);
+      if (channel === 'open-product-page') return { ok: true };
       if (channel === 'imweb-head-price-preview') return { success: true, plan: { USD: { combos: [data.usd ? Number(data.usd) : 160] }, JPY: { combos: [data.usd ? 14000 : 25000] } } };
       if (channel === 'imweb-head-register') {
         if (window.registerReply?.__reject) throw new Error(window.registerReply.__reject);
@@ -69,6 +70,12 @@ try {
   assert.equal(await page.locator('#ihResults tbody tr').count(), 1, '[No.1041] 은 빠진다');
   assert.deepEqual(await callsOf('bulk-price-load-many'), [{ scope: 'imweb-ko', ids: ['11'], includeImages: true }]);
   assert.equal(await page.locator('#ihName').inputValue(), '옵틱글래스 광각미러 [No.104(옵)]');
+  // 상품명 옆에 불러온 상품의 판매 페이지 주소. 누르면 main(open-product-page)이 연다 — 폼은 그 주소로 넘어가지 않는다.
+  assert.equal(await page.locator('#ihPageLink').textContent(), 'https://optic-glass.co.kr/shop_view/?idx=11');
+  await page.locator('#ihPageLink').click();
+  assert.deepEqual(await callsOf('open-product-page'), [{ scope: 'imweb-ko', id: '11' }]);
+  assert.match(page.url(), /index\.html\?mode=edit$/);
+  if (process.env.SHOT) await page.locator('#ihLoaded').screenshot({ path: process.env.SHOT });
   assert.equal(await page.locator('#ihBasePrice').inputValue(), '80000');
   assert.deepEqual(await page.locator('#ihCombos label').allTextContents(), ['1set — 최종가 (KRW)', '운전석 · 숨김 — 최종가 (KRW)']);
   assert.equal(await page.locator('#ihImageList img').count(), 2);
@@ -160,6 +167,9 @@ try {
   assert.equal(untagged.ok, false);
   assert.match(untagged.error, /상품명에 \[No\.104\(옵\)\] 를 남겨 주세요/);
   assert.equal((await callsOf('bulk-save-batch')).length, saves, '거부는 IPC 없이');
+  // 미국 · 일본 구역은 판매 페이지 도메인을 확인하지 못해 링크가 없다
+  await page.evaluate(() => { setImwebHeadScope('imweb-en'); return loadImwebHead('11'); });
+  assert.equal(await page.locator('#ihPageLink').isHidden(), true);
 
   assert.equal(await page.evaluate(() => calls.some(c => /register|update|publish/.test(c.channel))), false);
   assert.deepEqual(errors, []);

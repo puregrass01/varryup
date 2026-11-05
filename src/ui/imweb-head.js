@@ -53,7 +53,7 @@
       <div id="ihResults" style="margin:6px 0"></div>
       <div id="ihLoaded" hidden>
         <h3 style="margin:2px 0;font-size:0.85rem">사진 · 상품 이미지</h3><div id="ihImageList"></div>
-        <div class="form-group"><label class="form-label" for="ihName">상품명</label><input id="ihName" class="form-input" autocomplete="off"></div>
+        <div class="form-group"><div class="ih-name-head"><label class="form-label" for="ihName">상품명</label><a id="ihPageLink" class="ih-page-link" href="#" hidden></a></div><input id="ihName" class="form-input" autocomplete="off"></div>
         <div class="form-group"><label class="form-label" for="ihBasePrice" id="ihBaseLabel">기본 판매가</label><input id="ihBasePrice" class="form-input" type="number" min="0"></div>
         <div id="ihCombos"></div>
         <p class="help-text">조합 가격은 추가금이 아니라 그 조합의 최종가입니다 — 기본 판매가만 바꾸면 조합 가격은 그대로입니다.</p>
@@ -70,6 +70,8 @@
   // scope: 지금 칸의 구역. loaded: 불러온 상품 { scope, key, id, name, base, combos:[{optionId, label, price}], images, imageRevision }.
   // 구역이 바뀌어도 loaded · 입력은 지우지 않는다 — 저장만 거부한다(불러온 구역과 지금 구역이 같아야 저장).
   let scope = 'imweb-ko', loaded = null, images = [], busy = false, priceAsk = 0;
+  // 판매 페이지 주소 규칙은 일괄 수정과 같다(country_sync.js). 못 읽으면 링크만 없다 — 불러오기는 막지 않는다.
+  const pageUrl = import('../utils/country_sync.js').then(m => m.productPageUrl, () => () => '');
 
   function render() {
     const [country, currency] = UNITS[scope];
@@ -151,6 +153,9 @@
       combos: rows.filter(r => r.optionId).map(r => ({ optionId: r.optionId, label: r.variant.replace(/^조합 · /, ''), price: r.price })) };
     images = [...loaded.images];
     $('ihName').value = loaded.name;
+    // 상품명 옆 판매 페이지(손님 화면). 영문 · 일본 구역은 도메인을 확인하지 못해 없다.
+    const url = (await pageUrl)({ scope: at.scope, id: base.id }), link = $('ihPageLink');
+    link.hidden = !url; link.textContent = link.title = url;
     $('ihBaseLabel').textContent = base.variant.replace('기본 판매가', `기본 판매가 (${currency})`);
     $('ihBasePrice').value = loaded.base; $('ihBasePrice').step = currency === 'USD' ? '0.01' : '1';
     $('ihCombos').replaceChildren(...loaded.combos.map((c, i) => {
@@ -297,5 +302,11 @@
   let lastIdx = '';
   $('ihUrl').addEventListener('input', () => { const idx = urlIdx(); if (idx && idx !== lastIdx) { lastIdx = idx; window.findImwebHead(); } else if (!idx) lastIdx = ''; });
   $('ihUpdateBtn').addEventListener('click', () => window.updateImwebHead());
+  // 폼(iframe)이 그 주소로 넘어가지 않게 막고, main 이 상품번호로 주소를 다시 만들어 기본 브라우저로 연다.
+  $('ihPageLink').addEventListener('click', e => {
+    e.preventDefault();
+    if (loaded) ipc.invoke('open-product-page', { scope: loaded.scope, id: loaded.id })
+      .then(r => { if (!r?.ok) log(r?.error || '판매 페이지를 열지 못했습니다.', 'error'); }, err => log(err.message, 'error'));
+  });
   render();
 })();
