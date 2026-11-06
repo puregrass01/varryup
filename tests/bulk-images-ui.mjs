@@ -53,7 +53,7 @@ try {
           items.push({id,rows:one.data.map(r=>({...r,images:['https://ai.esmplus.com/test/old.jpg','https://ai.esmplus.com/test/detail.jpg'],imageRevision:'old',imagesReady:true,newImages:null}))}); }
         return {success:true,data:{items,blocked:''}};
       }
-      // 쿠팡 옵션 11 은 BSA판, 12 는 일반판(가격 정책이 판을 읽는다).
+      // 쿠팡 옵션 11 은 BSA판, 12 는 일반판(가격 정책은 판과 상관없이 같은 값 — 11-06).
       if(channel==='bulk-price-load') return {success:true,data:(data.scope==='coupang'?['11','12']:['']).map(optionId=>({...data,optionId,
         ...(data.scope==='coupang'&&{variant:optionId==='11'?'1개 No.906 BSA':'1개 No.101',identity:{nos:[optionId==='11'?'906':'101'],bsa:optionId==='11'}}),name:data.scope.startsWith('imweb-')?'와이드/광각미러':'Product '+data.id,price:window.loadedPrice || (data.scope==='imweb-en'?'58':'10000'),ready:true,priceReadonly:data.scope==='imweb-ko'}))};
       if(channel==='bulk-images-load') return {success:true,data:{images:['https://ai.esmplus.com/test/old.jpg','https://ai.esmplus.com/test/detail.jpg'],revision:'old'}};
@@ -67,6 +67,7 @@ try {
       if(channel==='bulk-images-validate') return {success:true,data:{images:data.urls,verified:data.urls.length}};
       if(channel==='bulk-images-save') return imageFailure ? {success:false,error:'Timed out',stage:'unknown'} : {success:true,data:{status:'VERIFIED',images:data.urls,revision:'new'}};
       if(channel==='bulk-price-save') return {success:true,data:{status:'VERIFIED',price:data.newPrice}};
+      if(channel==='amazon-refresh-cache') return {success:true};
       if(channel==='fx-auto-price-plan') return {success:true,data:{rows:data.rows.map(r=>({...r,target:'120',raw:119.6,action:'update',tier:{krw:150000,label:'일반 미러'}})),rate:{KRW:1400,marketDate:'2026-10-26'}}};
       throw new Error('Unexpected IPC '+channel);
     }}});
@@ -284,12 +285,12 @@ try {
   assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-save-batch').length),beforeEmpty,'empty array cannot trigger a marketplace write');
   assert.match(await page.locator('#be-status').textContent(),/^Product 1: 이미지가 하나도 남지 않았습니다\(빈 항목/,'막힌 행의 이름을 댄다');
 
-  // ── 서버 검색칸·전체 목록 동기화·환율가는 아마존·eBay 에서만, 가격 정책은 아임웹 본사·쿠팡에서만 ──
+  // ── 서버 검색칸·전체 목록 동기화·환율가는 아마존·eBay 에서만, 가격 정책은 쿠팡·네이버에서만 ──
   const visible=async()=>page.evaluate(()=>({query:!document.getElementById('be-api-query').hidden,sync:!document.getElementById('be-sync').hidden,
     fx:!document.querySelector('#be-price-source option[value="fx"]').hidden,policy:!document.querySelector('#be-price-source option[value="policy"]').hidden}));
   for (const scope of ['naver','coupang','imweb-b2b','imweb-en','imweb-ko','imweb-jp']) {
     await page.locator(`[data-scope="${scope}"]`).click();
-    assert.deepEqual(await visible(),{query:false,sync:false,fx:false,policy:scope==='coupang'||scope==='imweb-ko'},scope);
+    assert.deepEqual(await visible(),{query:false,sync:false,fx:false,policy:scope==='coupang'||scope==='naver'},scope);
   }
   for (const scope of ['amazon-us','amazon-jp','ebay']) {
     await page.locator(`[data-scope="${scope}"]`).click();
@@ -383,14 +384,20 @@ try {
   assert.match(await page.locator('#be-status').textContent(),/^판매가를 넣을 수 있는 행이 없습니다\. 상품 1개가 옵션 2행으로 펼쳐져 판매가를 넣지 않았습니다\./);
   await page.locator('#be-apply').click(); await idle();
   assert.deepEqual(await page.locator('#be-body input[type=number]').evaluateAll(n=>n.map(x=>x.value)),['20000','20000']);
-  // 가격 정책: 줄마다 판(옵션 11 = BSA, 12 = 일반)을 읽어 1set 판매가를 넣는다. 보내지는 않는다.
+  // 가격 정책(11-06): 판 구분 없이 판매가 100,000 · 정가 140,000. 적용은 보내지 않고, 저장이 정가를 함께 실어 보낸다(묻고 나서).
   await page.locator('#be-price-source').selectOption('policy');
   assert.equal(await page.locator('#be-value').isDisabled(),true,'정책가는 행마다 계산 — 판매가 칸 잠금');
   await page.evaluate(()=>{calls.length=0;});
   await page.locator('#be-apply').click(); await idle();
-  assert.deepEqual(await page.locator('#be-body input[type=number]').evaluateAll(n=>n.map(x=>x.value)),['135000','100000']);
-  assert.match(await page.locator('#be-status').textContent(),/^2행에 정책 판매가를 입력했습니다\..*알림설정 할인 −10,000 · 첫 구매가 −10,000/);
+  assert.deepEqual(await page.locator('#be-body input[type=number]').evaluateAll(n=>n.map(x=>x.value)),['100000','100000']);
+  assert.match(await page.locator('#be-status').textContent(),/^2행에 정책 판매가 · 정가를 입력했습니다\..*알람설정 할인 90,000\(−10,000\) · 첫 구매가 80,000\(−10,000\)/);
   assert.equal(await page.evaluate(()=>calls.some(c=>c.channel==='bulk-save-batch'||c.channel.endsWith('-save'))),false,'policy apply never sends');
+  let asked='';
+  page.once('dialog',d=>{asked=d.message(); d.accept();});
+  await page.locator('#be-save').click(); await idle();
+  assert.match(asked,/정가\(취소선\)도 함께 보내는 행: 2행 \(정가 140,000 KRW\)/,'정가가 섞이면 언제나 묻는다');
+  assert.deepEqual(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-save-batch').flatMap(c=>c.data.jobs.map(j=>[j.optionId,j.newPrice,j.newList]))),
+    [['11','100000','140000'],['12','100000','140000']]);
   await page.locator('#be-price-source').selectOption('direct');
   // 불러온 가격이 가격 필터에서 빠져도 고른 줄을 채우고 그 수를 알린다.
   await page.evaluate(()=>{window.failLoad=true;});
@@ -416,6 +423,14 @@ try {
   await page.locator('#be-search').fill('Product 51'); await settle();
   assert.deepEqual(await loads(),['1~25','26~50','51~51']);
   assert.match(await page.locator('#be-count').textContent(),/선택 0행/);
+  // ── 데이터 갱신: 전체 목록 동기화 → 목록 캐시를 건너뛴 목록(force) → 보이는 쪽 밖까지 모든 상품의 현재가, 목록 값과 다른 행 수 ──
+  await page.evaluate(()=>{calls.length=0; window.loadedPrice='12345';});
+  await page.locator('#be-refresh').click(); await idle();
+  assert.deepEqual(await page.evaluate(()=>calls.filter(c=>c.channel==='amazon-refresh-cache'||c.channel==='bulk-price-list').map(c=>[c.channel,c.data.force])),
+    [['amazon-refresh-cache',undefined],['bulk-price-list',true]]);
+  assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-price-load-many').flatMap(c=>c.data.ids).length),51,'읽기 전용 1개 밖 모든 상품');
+  assert.match(await page.locator('#be-status').textContent(),/^데이터 갱신 완료: 현재가를 읽은 행 51개, 목록 값과 현재가가 달랐던 행 51개\.$/);
+  assert.equal(await page.evaluate(()=>calls.some(c=>c.channel==='bulk-save-batch'||c.channel.endsWith('-save'))),false,'refresh never writes');
   assert.deepEqual(errors,[]);
   console.log('PASS: photo previews, header image list (drop · <img> HTML · + ESM 상세 · reorder) + [↓] replace, automatic revision load, full-image viewer, staged apply, filtered saves, uncertain-write stop, Coupang deduplication, Imweb on the Open API (no catalog lock), dynamic price filtering, all-page selection, URL previews, per-platform state, drafts kept through price auto-load, option spread not flattened, price-filter apply, visible-page auto-load.');
 } finally { await browser?.close(); await new Promise(resolve=>server.close(resolve)); }

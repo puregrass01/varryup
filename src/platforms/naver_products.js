@@ -96,6 +96,47 @@ function combinationGroups(oi) {
   return [1, 2, 3, 4].map(i => names[`optionGroupName${i}`] || '').filter(Boolean);
 }
 
+// 판매자 즉시할인(원상품 customerBenefit.immediateDiscountPolicy.discountMethod { value, unitType: WON|PERCENT, startDate, endDate }
+// — 커머스API 토론 #2997 · #3888). 기간 밖이면 걸리지 않은 것으로 본다.
+function activeDiscount(p, now = Date.now()) {
+  const m = p?.customerBenefit?.immediateDiscountPolicy?.discountMethod;
+  if (!m || !(Number(m.value) > 0)) return null;
+  const at = d => (d ? Date.parse(d) : NaN);
+  return at(m.startDate) > now || at(m.endDate) < now ? null : m;
+}
+/**
+ * 손님이 내는 기본 판매가 = 원상품 salePrice(즉시할인이 있으면 정가 자리) − 즉시할인. 앱 화면의 네이버 '판매가'는 모두 이 값이다
+ * (상품 수정 탭 · 6몰 표 · 일괄 수정 — 11-06 정가 + 즉시할인 구조).
+ * ponytail: 퍼센트 할인의 원 단위 끝자리 처리는 확인하지 못해 버림으로 계산한다. 네이버 목록의 discountedPrice 와 몇 원 다를 수
+ * 있다(데이터 갱신의 '달랐던 행' 수에만 보인다). 쓰기는 이 값끼리 비교하고, 판매가를 바꾸면 원 할인으로 정확히 맞춘다.
+ */
+export function naverFinalPrice(p, now = Date.now()) {
+  const sale = Number(p?.salePrice ?? 0), m = activeDiscount(p, now);
+  if (!m) return sale;
+  return sale - (m.unitType === 'WON' ? Number(m.value) : Math.floor(sale * Number(m.value) / 100));
+}
+/**
+ * 원상품 p 의 판매가(naverFinalPrice)를 price 로 맞춘다 — 네이버 판매가를 쓰는 길(buildNaverProductUpdate)이 모두 여기를 지난다.
+ * 정가(취소선)는 네이버에 칸이 없어 salePrice = 정가, 즉시할인(원) = 정가 − 판매가로 둔다.
+ *   list 를 주면 그 정가로. 안 주면 걸린 할인이 있는 상품은 지금 정가를 두고 할인만 바꾼다 — salePrice 에 판매가를 바로 쓰면
+ *   걸린 할인이 한 번 더 빠진다(6몰 표에 100,000 을 넣으면 60,000 이 되던 것, 11-06 리뷰).
+ *   정가보다 높이면 할인을 null 로 지운다(토론 #3888). 걸리지 않은(기간 밖) 할인은 건드리지 않는다.
+ * 할인 기간(startDate · endDate) · 모바일 할인 같은 곁 필드는 남긴다 — 전체 PUT 에서 빠지면 지워진다(전략 문서 §1.1).
+ * 판매가가 그대로고 정가를 주지 않으면 아무것도 바꾸지 않는다(상품명만 고칠 때 퍼센트 할인을 원으로 바꾸지 않게).
+ */
+function setNaverPrice(p, price, list = null) {
+  if (list == null && naverFinalPrice(p) === price) return;
+  const discount = activeDiscount(p);
+  const base = list ?? (discount && Number(p.salePrice) > price ? Number(p.salePrice) : price);
+  if (base < price) throw new Error(`정가(${base})는 판매가(${price}) 이상이어야 합니다.`);
+  p.salePrice = base;
+  const benefit = p.customerBenefit ||= {}, policy = benefit.immediateDiscountPolicy;
+  const won = m => ({ ...m, value: base - price, unitType: 'WON' });
+  if (base > price) benefit.immediateDiscountPolicy = { ...policy, discountMethod: won(discount || {}),
+    ...(policy?.mobileDiscountMethod && { mobileDiscountMethod: won(policy.mobileDiscountMethod) }) };
+  else if (discount) benefit.immediateDiscountPolicy = null;
+}
+
 export function naverEditProduct(body, originNo, inputNo = originNo) {
   const p = body?.originProduct;
   if (!p || typeof p !== 'object') throw new Error('네이버 원상품 응답 형식을 확인할 수 없습니다.');
@@ -109,7 +150,8 @@ export function naverEditProduct(body, originNo, inputNo = originNo) {
   }));
   return {
     inputNo: String(inputNo), originNo: String(originNo), title: p.name || '',
-    statusType: p.statusType || '', salePrice: p.salePrice ?? 0, groups, options,
+    // salePrice 는 손님이 내는 판매가(즉시할인 뒤). 원상품의 salePrice 칸은 할인이 있으면 정가다.
+    statusType: p.statusType || '', salePrice: naverFinalPrice(p), groups, options,
     detailImages: extractNaverDetailImages(p.detailContent), revision: revisionOf(body),
     optionNotice: (oi.optionSimple?.length || oi.optionStandards?.length)
       ? '단독형·표준형 옵션은 현재 값을 유지합니다. 이 화면에서는 조합형 옵션을 편집할 수 있습니다.' : ''
@@ -126,8 +168,9 @@ export function buildNaverProductUpdate(body, data) {
     p.name = title;
   }
   if (data.salePrice !== undefined) {
-    p.salePrice = integer(data.salePrice, '판매가');
-    if (p.salePrice <= 0) throw new Error('판매가는 0보다 커야 합니다.');
+    const price = integer(data.salePrice, '판매가');
+    if (price <= 0) throw new Error('판매가는 0보다 커야 합니다.');
+    setNaverPrice(p, price, data.listPrice == null ? null : integer(data.listPrice, '정가'));
   }
   if (data.options !== undefined) {
     if (!Array.isArray(data.options)) throw new Error('옵션 목록이 올바르지 않습니다.');
@@ -217,8 +260,11 @@ export function buildNaverCopyProduct(template, data) {
   if (!splitValues(data.optionModel).length) throw new Error('옵션 > 모델명을 입력해주세요.');
   p.name = title;
   if (String(data.price ?? '').trim()) {
-    p.salePrice = integer(data.price, '판매가');
-    if (p.salePrice <= 0) throw new Error('판매가는 0보다 커야 합니다.');
+    const price = integer(data.price, '판매가');
+    if (price <= 0) throw new Error('판매가는 0보다 커야 합니다.');
+    // 템플릿에 가격 정책의 원 즉시할인(정가 구조)이 걸려 있으면 입력값을 손님이 내는 값으로 맞춘다 — 그대로 salePrice 에 쓰면
+    // 새 상품마다 할인이 한 번 더 빠진다. 템플릿의 퍼센트 할인(프로모션)은 예전처럼 그대로 물려준다.
+    if (activeDiscount(p)?.unitType === 'WON') setNaverPrice(p, price); else p.salePrice = price;
   }
   const stock = integer(String(data.stock ?? '').trim() || '999', '재고');
   p.statusType = 'SALE';
@@ -317,26 +363,33 @@ export class NaverProducts {
    * 쪽(bulk_price_ipc)이 판매가만으로 한 번 한다. updateProduct 의 엄격 검증(재고·상세이미지 비교)은
    * 주문으로 재고가 바뀌기만 해도 '실패'로 보고해서 일괄 수정에는 맞지 않는다.
    * 네이버에는 절대 판매가를 지정하는 부분 수정 API 가 없어(bulk-update 는 상대 증감만) 원상품 전체를 다시 보낸다.
+   *
+   * salePrice 는 손님이 내는 판매가(할인 뒤, naverFinalPrice)다. listPrice(가격 정책의 정가)를 주면 원상품 판매가 = 정가,
+   * 즉시할인(원) = 정가 − 판매가로 맞춘다 — 판단은 setNaverPrice(buildNaverProductUpdate) 한 곳에서 한다.
    * @returns {{ originNo, unchanged: boolean, salePrice: number }}
    */
-  async updateSalePrice({ originNo: inputNo, salePrice, expectedPrice }) {
+  async updateSalePrice({ originNo: inputNo, salePrice, expectedPrice, listPrice = null }) {
     if (this.busy) throw markPreSend(new Error('네이버 상품 저장이 진행 중입니다. 완료 후 다시 시도해주세요.'));
-    let originNo, price;
-    try { originNo = productNo(inputNo); price = integer(salePrice, '판매가'); }
+    let originNo, price, list;
+    try { originNo = productNo(inputNo); price = integer(salePrice, '판매가'); list = listPrice == null ? null : integer(listPrice, '정가'); }
     catch (e) { throw markPreSend(e); }
     if (price <= 0) throw markPreSend(new Error('판매가는 0보다 커야 합니다.'));
+    if (list != null && list < price) throw markPreSend(new Error(`정가(${list})는 판매가(${price}) 이상이어야 합니다.`));
     this.busy = true;
     try {
       let current;
       try { current = await this.api.originProduct(originNo); }
       catch (e) { throw markPreSend(e); }
-      const now = current?.originProduct?.salePrice;
-      if (now == null) throw markPreSend(new Error('네이버 원상품 응답에 판매가가 없습니다.'));
-      if (expectedPrice !== undefined && Number(now) !== Number(expectedPrice)) {
+      const p = current?.originProduct;
+      if (p?.salePrice == null) throw markPreSend(new Error('네이버 원상품 응답에 판매가가 없습니다.'));
+      const now = naverFinalPrice(p);
+      if (expectedPrice !== undefined && now !== Number(expectedPrice)) {
         throw markPreSend(new Error(`현재 판매가(${now})가 조회 이후 변경됐습니다. 다시 불러온 뒤 수정하세요.`));
       }
-      if (Number(now) === price) return { originNo, unchanged: true, salePrice: Number(now) };
-      const body = buildNaverProductUpdate(current, { salePrice: price });
+      let body;
+      try { body = buildNaverProductUpdate(current, { salePrice: price, listPrice: list }); }
+      catch (e) { throw markPreSend(e); }
+      if (now === price && Number(body.originProduct.salePrice) === Number(p.salePrice)) return { originNo, unchanged: true, salePrice: now };
       await this.api.request('PUT', `/v2/products/origin-products/${originNo}`, body);
       this.api.invalidateProducts();
       return { originNo, unchanged: false, salePrice: price };

@@ -315,6 +315,8 @@ export class NaverAPI {
           channelProductNo: channel.channelProductNo ?? null,
           statusType: channel.statusType || '',
           salePrice: channel.salePrice ?? 0,
+          // 즉시할인 뒤 값(공식 답변 토론 #1492). 일괄 수정의 판매가는 이 값이다 — salePrice 는 할인이 있으면 정가.
+          discountedPrice: channel.discountedPrice ?? null,
           stockQuantity: channel.stockQuantity ?? 0,
           brandName: channel.brandName || '',
           modelName: channel.modelName || '',

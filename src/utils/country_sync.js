@@ -34,22 +34,45 @@ export function editionOf(text) {
 }
 
 /**
+ * 나라 화면 기준(본사몰) 상품의 판. { bsa: true|false, by } | { bsa: null, why }.
+ * 근거 순서: 옵션 · 상품명 표기 → 차량 카탈로그(상품번호의 bsa 칸이 모두 같을 때).
+ * BSA 표기가 없다고 일반이라고 보지 않는다(identity.bsa 는 이름에 BSA 가 없다는 뜻일 뿐) — BSA판을 따로 만든 상품은
+ * 옵션에도 이름에도 BSA 가 없다(11-06 스냅샷 본사몰 217개 중 54개 — 1set 220,000).
+ */
+export function editionFor(row, catalog) {
+  const text = editionOf(row.variant) ?? editionOf(row.name);
+  if (text !== null) return { bsa: text, by: '옵션 · 상품명 표기' };
+  const nos = row.identity?.nos || [];
+  if (nos.length !== 1) return { bsa: null, why: '상품번호를 하나로 읽지 못해 판(BSA · 일반)을 모름' };
+  const no = nos[0];
+  // 'Bsa 제작 필요' 는 아직 BSA판이 없다는 뜻이다. 브라켓 · 크기 메모는 BSA 와 상관없다.
+  const marks = (catalog?.variants || []).filter(v => String(v.no).toUpperCase() === no)
+    .map(v => /bsa/i.test(v.bsa || '') && !/제작/.test(v.bsa));
+  if (!marks.length) return { bsa: null, why: `카탈로그에서 No.${no} 를 찾지 못해 판을 모름` };
+  if (marks.every(Boolean)) return { bsa: true, by: `카탈로그 No.${no} BSA 가능` };
+  if (!marks.some(Boolean)) return { bsa: false, by: `카탈로그 No.${no} BSA 없음` };
+  return { bsa: null, why: `카탈로그 No.${no} 에 BSA 가능 · 불가 줄이 섞여 판을 모름` };
+}
+
+/**
  * 기준 상품 한 개의 줄(기본가 + 조합)에서 판(true=BSA · false=일반 · null=구분 없음)별 조합가 두 벌.
  * set: 1set 조합가(쿠팡 · 아마존 · eBay 의 판매 단위), left: 운전석 조합가(네이버 기본 판매가 — 네이버는 한쪽씩 판다:
  * 운전석 +0 · 조수석 −10000 추가금. 베리맵 대조 240개 중 217개가 본사 운전석가와 같고 1set 가와 같은 것은 0개, 11-02).
  * 조합이 하나도 없는 상품은 기본가를 1set 으로 본다.
+ * edition: 조합 문구에 판이 없을 때 쓸 상품의 판(editionFor — 카탈로그). BSA판을 따로 만든 본사 상품은
+ * 문구에 BSA 가 없어(2142 크라이슬러 200C 등) 판을 모르면 BSA 짝은 못 맞추고 일반 짝에 BSA 값이 들어갔다(11-06).
  */
-export function referencePrices(rows) {
+export function referencePrices(rows, edition = null) {
   const set = new Map(), left = new Map(), valid = v => v !== '' && v != null && Number.isFinite(Number(v)) && Number(v) > 0;
   if (!rows.some(r => r.optionId)) {
     if (!valid(rows[0]?.price)) return { error: '기준 판매가 없음' };
-    set.set(null, String(rows[0].price));
+    set.set(edition, String(rows[0].price));
     return { set, left };
   }
   for (const r of rows.filter(r => r.optionId && valid(r.price))) {
     const [table, what] = SET.test(r.variant || '') ? [set, '1set'] : LEFT.test(r.variant || '') ? [left, '운전석'] : [];
     if (!table) continue;
-    const key = editionOf(r.variant);
+    const key = editionOf(r.variant) ?? edition;
     if (table.has(key) && Number(table.get(key)) !== Number(r.price)) return { error: `같은 판의 ${what} 조합가가 둘 이상` };
     table.set(key, String(r.price));
   }

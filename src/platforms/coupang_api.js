@@ -343,6 +343,18 @@ export class CoupangAPI {
   }
 
   /**
+   * 옵션의 할인율 기준가(손님 화면의 취소선 정가)를 바꿉니다. 승인완료 옵션만, 0원부터 10원 단위
+   * (공식 문서 '상품 아이템별 할인율 기준가격 변경', 11-06 확인).
+   */
+  async updateItemOriginalPrice(vendorItemId, price) {
+    this.clearProductCache();
+    if (!/^\d+$/.test(String(vendorItemId ?? ''))) throw new Error('옵션ID(vendorItemId)가 올바르지 않습니다.');
+    const value = Number(price);
+    if (!Number.isSafeInteger(value) || value < 0 || value % 10 !== 0) throw new Error('쿠팡 할인율 기준가는 10원 단위 0 이상의 정수여야 합니다.');
+    return this._request('PUT', `${API_PATH_PREFIX}/vendor-items/${vendorItemId}/original-prices/${value}`);
+  }
+
+  /**
    * 승인완료 상품의 옵션 재고를 바꿉니다. 승인완료 상품의 가격·재고는 상품 수정(PUT seller-products)으로
    * 바뀌지 않는다 — 쿠팡 공식 문서 '가격과 재고가 변경되지 않습니다' · '상품 아이템별 수량 변경'.
    */

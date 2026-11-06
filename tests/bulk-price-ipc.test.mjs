@@ -17,7 +17,7 @@ import { registerBulkPriceIPC } from '../src/bulk_price_ipc.js';
 import { Coupang, findProductIdsFromSheet } from '../src/platforms/coupang.js';
 import { Amazon, JP_MARKETPLACE_ID, US_MARKETPLACE_ID } from '../src/platforms/amazon.js';
 import { NaverAPI } from '../src/platforms/naver_api.js';
-import { NaverProducts } from '../src/platforms/naver_products.js';
+import { NaverProducts, naverFinalPrice, naverEditProduct, buildNaverProductUpdate } from '../src/platforms/naver_products.js';
 import { AmazonAPI } from '../src/platforms/amazon_api.js';
 import { EbayAPIError } from '../src/platforms/ebay_api.js';
 import { EbayStore } from '../src/platforms/ebay_store.js';
@@ -245,6 +245,32 @@ test('쿠팡 가격 변경: 조회 이후 바뀌었거나 변경폭(50% 인하·
   assert.ok(!calls.some(c => c.method === 'PUT'));
 });
 
+test('쿠팡 정가(가격 정책): 검사를 다 마친 뒤 할인율 기준가 → 판매가 순서로, 판매가가 같아도 기준가는 보낸다', async t => {
+  const { coupang, calls } = coupangSetup(t, call => (call.method === 'GET'
+    ? json({ code: 'SUCCESS', data: { salePrice: 140000 } }) : json({ code: 'SUCCESS', data: null })));
+  assert.deepEqual(await coupang.changeItemPrice({ vendorItemId: '555', salePrice: '100000', expectedPrice: '140000', listPrice: 140000 }),
+    { unchanged: false, salePrice: 100000 });
+  assert.deepEqual(calls.filter(c => c.method === 'PUT').map(c => c.url.replace(/^.*\/vendor-items\//, '')),
+    ['555/original-prices/140000', '555/prices/100000']);
+  calls.length = 0;
+  assert.equal((await coupang.changeItemPrice({ vendorItemId: '555', salePrice: '140000', expectedPrice: '140000', listPrice: 140000 })).unchanged, false);
+  assert.deepEqual(calls.filter(c => c.method === 'PUT').map(c => c.url.replace(/^.*\/vendor-items\//, '')), ['555/original-prices/140000']);
+  calls.length = 0;
+  await assert.rejects(coupang.changeItemPrice({ vendorItemId: '555', salePrice: '100000', expectedPrice: '140000', listPrice: 90000 }), e => {
+    assert.equal(e.stage, 'pre-send'); assert.match(e.message, /판매가 이상/); return true;
+  });
+  // 50% 상한에 걸리면 기준가도 보내지 않는다(반쯤 바뀐 채로 남지 않게).
+  await assert.rejects(coupang.changeItemPrice({ vendorItemId: '555', salePrice: '60000', expectedPrice: '140000', listPrice: 140000 }), /50% 인하/);
+  assert.ok(!calls.some(c => c.method === 'PUT'));
+});
+
+test('쿠팡 정가: 기준가가 지금 판매가보다 낮아지면 판매가를 먼저 내린다(기준가 < 판매가인 순간이 없게)', async t => {
+  const { coupang, calls } = coupangSetup(t, call => (call.method === 'GET'
+    ? json({ code: 'SUCCESS', data: { salePrice: 150000 } }) : json({ code: 'SUCCESS', data: null })));
+  await coupang.changeItemPrice({ vendorItemId: '7', salePrice: '100000', expectedPrice: '150000', listPrice: 140000 });
+  assert.deepEqual(calls.filter(c => c.method === 'PUT').map(c => c.url.replace(/^.*\/vendor-items\//, '')), ['7/prices/100000', '7/original-prices/140000']);
+});
+
 test('쿠팡 API: 프록시 자체 오류와 HTTP 200 + code:ERROR 를 구분해 표시한다', async t => {
   let body, status;
   const { coupang } = coupangSetup(t, () => json(body, status), { proxyUrl: 'https://admin.example.test', proxyToken: 'STAFF' });
@@ -405,6 +431,66 @@ test('네이버 판매가 변경: GET 1회 + PUT 1회, 재고·상세이미지 �
   });
   assert.deepEqual(calls.map(c => c[0]), ['GET'], '기대가가 다르면 PUT 을 보내지 않는다');
   assert.equal((await products.updateSalePrice({ originNo: '123', salePrice: '10000', expectedPrice: '10000' })).unchanged, true);
+});
+
+test('네이버 정가 + 즉시할인: 판매가는 할인 뒤 값, 정가를 주면 salePrice=정가 · 즉시할인(원)=차액, 할인 상품은 할인만 바꾼다', async () => {
+  let origin = { originProduct: { name: 'P', salePrice: 140000, detailContent: '<p>x</p>' } };
+  const puts = [];
+  const api = {
+    originProduct: async () => structuredClone(origin),
+    request: async (method, p, body) => { puts.push(body.originProduct); origin = structuredClone(body); return {}; },
+    invalidateProducts() {},
+  };
+  const products = new NaverProducts(api);
+  // 1) 가격 정책: 140,000 → 판매가 100,000 · 정가 140,000
+  await products.updateSalePrice({ originNo: '1', salePrice: 100000, expectedPrice: 140000, listPrice: 140000 });
+  assert.equal(puts.at(-1).salePrice, 140000);
+  assert.deepEqual(puts.at(-1).customerBenefit.immediateDiscountPolicy, { discountMethod: { value: 40000, unitType: 'WON' } });
+  assert.equal(naverFinalPrice(origin.originProduct), 100000);
+  assert.equal(naverEditProduct(origin, '1').salePrice, 100000, '앱 화면(상품 수정 탭 · 6몰 표 · 일괄 수정)의 판매가는 할인 뒤 값');
+  // 2) 같은 값을 다시 보내면 변경 없음
+  assert.equal((await products.updateSalePrice({ originNo: '1', salePrice: 100000, expectedPrice: 100000, listPrice: 140000 })).unchanged, true);
+  // 3) 정가 없이 판매가만(나라 탭 · 직접 입력): 정가 140,000 은 두고 할인만 바꾼다 — salePrice 에 쓰면 할인이 두 번 빠진다
+  await products.updateSalePrice({ originNo: '1', salePrice: 95000, expectedPrice: 100000 });
+  assert.equal(puts.at(-1).salePrice, 140000);
+  assert.equal(puts.at(-1).customerBenefit.immediateDiscountPolicy.discountMethod.value, 45000);
+  // 4) 정가보다 높이면 할인을 지운다(null — 커머스API 토론 #3888)
+  await products.updateSalePrice({ originNo: '1', salePrice: 150000, expectedPrice: 95000 });
+  assert.equal(puts.at(-1).salePrice, 150000);
+  assert.equal(puts.at(-1).customerBenefit.immediateDiscountPolicy, null);
+  // 5) 정가가 판매가보다 낮으면 보내지 않는다
+  const before = puts.length;
+  await assert.rejects(products.updateSalePrice({ originNo: '1', salePrice: 100000, expectedPrice: 150000, listPrice: 90000 }), e => e.stage === 'pre-send');
+  assert.equal(puts.length, before);
+});
+
+test('네이버 판매가 쓰기는 모두 같은 규칙: 상품 수정 탭 · 6몰 표(updateProduct)도 할인을 두 번 빼지 않고, 할인 기간 · 모바일 할인을 지우지 않는다', () => {
+  const dated = { value: 40000, unitType: 'WON', startDate: '2026-11-01T00:00:00', endDate: '2099-12-31T23:59:59' };
+  const body = { originProduct: { name: 'P', salePrice: 140000, detailContent: '<p>x</p>',
+    customerBenefit: { immediateDiscountPolicy: { discountMethod: dated, mobileDiscountMethod: { ...dated } }, reviewPointPolicy: { textReviewPoint: 50 } } } };
+  // 6몰 표의 '변경 판매가' 100,000 → 상품 수정 탭 → buildNaverProductUpdate(salePrice). 예전에는 salePrice=100,000 + 할인 40,000 = 60,000.
+  const same = buildNaverProductUpdate(body, { salePrice: 100000 }).originProduct;
+  assert.deepEqual([same.salePrice, same.customerBenefit], [140000, body.originProduct.customerBenefit], '판매가가 그대로면 아무것도 바꾸지 않는다');
+  const p = buildNaverProductUpdate(body, { salePrice: 90000 }).originProduct;
+  assert.equal(p.salePrice, 140000, '정가는 둔다');
+  assert.deepEqual(p.customerBenefit.immediateDiscountPolicy, { discountMethod: { ...dated, value: 50000 }, mobileDiscountMethod: { ...dated, value: 50000 } });
+  assert.deepEqual(p.customerBenefit.reviewPointPolicy, { textReviewPoint: 50 });
+  assert.equal(naverEditProduct({ originProduct: p }, '1').salePrice, 90000);
+  // 퍼센트 할인 상품은 상품명만 고칠 때(판매가 그대로) 할인 종류를 바꾸지 않는다.
+  const percent = { originProduct: { name: 'P', salePrice: 10000, detailContent: '', customerBenefit: { immediateDiscountPolicy: { discountMethod: { value: 1, unitType: 'PERCENT' } } } } };
+  const kept = buildNaverProductUpdate(percent, { title: 'Q', salePrice: naverEditProduct({ ...percent, originProduct: { ...percent.originProduct, detailContent: '' } }, '1').salePrice }).originProduct;
+  assert.deepEqual(kept.customerBenefit, percent.originProduct.customerBenefit);
+});
+
+test('네이버 할인 뒤 판매가: 원 · 퍼센트(버림), 기간 밖 할인은 없는 것으로', () => {
+  const at = Date.parse('2026-11-06T12:00:00');
+  const p = m => ({ salePrice: 140000, customerBenefit: { immediateDiscountPolicy: { discountMethod: m } } });
+  assert.equal(naverFinalPrice({ salePrice: 140000 }, at), 140000);
+  assert.equal(naverFinalPrice(p({ value: 40000, unitType: 'WON' }), at), 100000);
+  assert.equal(naverFinalPrice(p({ value: 1, unitType: 'PERCENT' }), at), 138600);
+  assert.equal(naverFinalPrice(p({ value: 40000, unitType: 'WON', endDate: '2026-11-01T00:00:00' }), at), 140000, '끝난 할인');
+  assert.equal(naverFinalPrice(p({ value: 40000, unitType: 'WON', startDate: '2026-12-01T00:00:00' }), at), 140000, '아직 시작 안 한 할인');
+  assert.equal(naverFinalPrice(p({ value: 40000, unitType: 'WON', startDate: null, endDate: null }), at), 100000);
 });
 
 test('네이버 일괄 저장: 행당 GET 2회 + PUT 1회', async () => {

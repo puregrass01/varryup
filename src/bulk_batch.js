@@ -32,7 +32,7 @@ export function createBulkBatch({ directory, validate, save, savePrices, groupSi
     const jobs = structuredClone(input.jobs).map(job => ({ type: job.type, id: String(job.id ?? '').trim(), optionId: String(job.optionId ?? '').trim(),
       ...(job.type === 'images' ? { urls: job.urls, expectedRevision: job.expectedRevision }
         : job.type === 'name' ? { newName: job.newName, expectedName: job.expectedName }
-        : { newPrice: job.newPrice, expectedPrice: job.expectedPrice }) }));
+        : { newPrice: job.newPrice, expectedPrice: job.expectedPrice, ...(job.newList && { newList: job.newList }) }) }));
     const digest = createHash('sha256').update(JSON.stringify({ scope, jobs })).digest('hex');
     if (previous) {
       if (previous.digest !== digest) throw new Error('같은 작업 ID로 다른 변경 목록을 보낼 수 없습니다.');

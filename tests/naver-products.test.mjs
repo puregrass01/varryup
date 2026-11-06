@@ -379,3 +379,14 @@ test('네이버 신규 등록 IPC 는 브라우저를 쓰지 않는다', () => {
   assert.match(source.slice(start, end), /copyRegister\(data\)/);
   assert.doesNotMatch(source, /naver_smartstore/);
 });
+
+test('복사등록: 템플릿에 가격 정책의 원 즉시할인(정가 구조)이 있으면 입력 판매가를 손님이 내는 값으로 맞춘다(퍼센트 할인은 예전처럼 물려준다)', () => {
+  const template = copyTemplate();
+  template.originProduct.salePrice = 140000;
+  template.originProduct.customerBenefit = { immediateDiscountPolicy: { discountMethod: { value: 40000, unitType: 'WON' } } };
+  const cheap = buildNaverCopyProduct(template, copyData({ price: '100000' })).originProduct;
+  assert.equal(cheap.salePrice, 140000, '정가 140,000 은 그대로');
+  assert.equal(cheap.customerBenefit.immediateDiscountPolicy.discountMethod.value, 40000, '손님은 100,000 — 할인이 한 번 더 빠지지 않는다');
+  const dear = buildNaverCopyProduct(template, copyData({ price: '150000' })).originProduct;
+  assert.deepEqual([dear.salePrice, dear.customerBenefit.immediateDiscountPolicy], [150000, null], '정가보다 비싸면 할인을 지운다');
+});

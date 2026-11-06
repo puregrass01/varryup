@@ -1,7 +1,7 @@
 (async () => {
   const { imagePolicy, parseImageUrls, sameImages, previewImageUrls } = await import('../utils/bulk_images.js');
   const { productIdentity, identityText } = await import('../utils/product_identity.js');
-  const { COUNTRIES, referencePrices, referenceRole, countryPrice, productPageUrl } = await import('../utils/country_sync.js');
+  const { COUNTRIES, referencePrices, referenceRole, countryPrice, productPageUrl, editionFor } = await import('../utils/country_sync.js');
   const { POLICY_SCOPES, policyPrice, couponGuide } = await import('../utils/price_policy.js');
   const ipc = require('electron').ipcRenderer, root = document.getElementById('bulk-edit-workspace');
   const scopes = [
@@ -10,6 +10,9 @@
     ['amazon-us', '아마존 미국', 'USD', 'logos/amazon.png'], ['amazon-jp', '아마존 일본', 'JPY', 'logos/amazon.png'], ['ebay', 'eBay', 'USD', 'logos/ebay.png']
   ];
   const states = new Map();
+  // 차량 카탈로그(data/vehicle_catalog.json): 나라 화면이 문구에 판(BSA · 일반)이 없는 본사 상품의 판을 상품번호로 정한다.
+  let catalog = null;
+  const loadCatalog = async () => catalog ||= await ipc.invoke('vehicle-load-catalog').then(r => r?.success ? r.catalog : null).catch(() => null);
   // country: 나라 화면(kr · us · jp)일 때. 그동안 scope 는 그 나라 기준 몰(본사몰 구역)이다 — 필터 · 검색 · 단위가 기준 몰 것.
   let scope = 'naver', country = null, busy = false, cancel = false, page = 0, query = '', lastTab = 'naverTab';
   const size = 25, filters = new Map();
@@ -25,7 +28,9 @@
   const locked = r => r.readonly || (!!country && COUNTRIES[country].view.includes(r.scope));
   const priceDirty = r => !r.priceReadonly && r.ready && r.newPrice !== '' && Number(r.newPrice) !== Number(r.price === '' ? NaN : r.price);
   const imageDirty = r => r.imagesReady && Array.isArray(r.newImages) && !sameImages(r.newImages, r.images);
-  const dirty = r => priceDirty(r) || imageDirty(r);
+  // 정가(newList)는 '가격 정책'만 채운다. 판매가가 그대로여도 정가는 보낸다(지금 정가를 읽지 않으므로 같은지 모른다 — 다시 써도 같다).
+  const listDirty = r => !r.priceReadonly && r.ready && !!r.newList;
+  const dirty = r => priceDirty(r) || imageDirty(r) || listDirty(r);
   function priceKey(r) {
     const value = r.price;
     return value == null || String(value).trim() === '' || !Number.isFinite(Number(value)) ? 'unknown' : String(Number(value));
@@ -89,7 +94,7 @@
     '<div id="be-platforms" class="be-platforms" role="tablist" aria-label="쇼핑몰 플랫폼"></div></div>' +
     // 서버 검색칸은 아마존·eBay 에서만 보인다. 나머지 몰은 전체를 받은 뒤 같은 단어로 걸러 표 안 검색과 같다(draw).
     '<div class="be-tools"><input id="be-api-query" placeholder="상품명·SKU 검색 · 빈칸이면 전체 목록" aria-label="목록 검색어">' +
-    '<button id="be-list" type="button">상품 목록 조회</button><button id="be-sync" type="button" hidden>전체 목록 동기화</button></div>' +
+    '<button id="be-list" type="button">상품 목록 조회</button><button id="be-refresh" type="button" title="몰 API 로 목록과 모든 쪽 상품의 현재가를 다시 읽어 이 PC 의 저장본(쿠팡 판매가 · 아마존 · eBay 목록)을 고칩니다. 상품마다 호출이라 수 분 걸릴 수 있습니다">데이터 갱신</button><button id="be-sync" type="button" hidden>전체 목록 동기화</button></div>' +
     '<p class="be-help">표에 보이는 쪽의 상품은 현재가·이미지를 자동으로 불러옵니다. 상품을 선택하고 가격 적용, 또는 사진 열 목록에 이미지를 끌어 놓고 [↓]로 값을 넣은 뒤 선택 변경 저장을 누르세요. 다른 쪽의 안 읽은 상품은 적용할 때 먼저 불러옵니다. 쿠팡 이미지는 상품 전체 옵션에 적용됩니다.</p>' +
     '<div class="be-actions">' +
     // 선택·해제는 표 머리의 전체선택 체크 하나로 한다. 판매가·이미지 입력은 표 머리 아래 줄, 그 열 바로 밑에 있다.
@@ -104,7 +109,7 @@
     '<tr class="be-th-tools"><td></td><td class="be-photo-column"><div class="be-tool be-image-tool" role="group" aria-label="이미지 입력"><div id="be-image-list"></div>' +
     '<button id="be-image-apply" type="button" title="선택 상품의 이미지를 이 목록으로 바꿉니다" aria-label="선택 상품 이미지를 이 목록으로 교체">↓</button></div></td><td></td><td></td><td></td><td></td>' +
     '<td><div class="be-tool" role="group" aria-label="판매가 덮어쓰기"><input id="be-value" type="number" min="0" placeholder="판매가" aria-label="선택 행에 넣을 판매가">' +
-    '<span id="be-currency" class="be-unit"></span><select id="be-price-source" aria-label="판매가 값 출처" title="환율가: 국내 기준가 등급 ÷ 오늘 환율(우대 없음)에서 앞 두 자리만 남긴 값을 행마다 계산합니다(아마존·eBay 전용). 가격 정책: 11-05·11-06 정책표의 판(BSA·일반)별 1set 판매가(아임웹 본사·쿠팡 전용)">' +
+    '<span id="be-currency" class="be-unit"></span><select id="be-price-source" aria-label="판매가 값 출처" title="환율가: 국내 기준가 등급 ÷ 오늘 환율(우대 없음)에서 앞 두 자리만 남긴 값을 행마다 계산합니다(아마존·eBay 전용). 가격 정책: 11-06 정책표의 1set 판매가 100,000 · 정가 140,000(쿠팡·스마트스토어 전용, 저장 때 정가도 보냅니다)">' +
     '<option value="direct">직접 입력</option><option value="fx">환율가</option><option value="policy">가격 정책</option></select><button id="be-apply" type="button">가격 적용</button></div></td><td></td></tr>' +
     '</thead><tbody id="be-body"></tbody></table></div></div>' +
     '<div class="be-pager"><button id="be-prev" type="button">이전</button><span id="be-page"></span><button id="be-next" type="button">다음</button></div>';
@@ -204,10 +209,12 @@
     // 서버 검색칸·전체 목록 동기화·환율가는 아마존·eBay 만. 환율가는 행마다 계산하므로 고르면 판매가 칸을 잠근다.
     const amazonEbay = /^(?:amazon-|ebay$)/.test(scope), source = $('be-price-source');
     $('be-api-query').hidden = $('be-sync').hidden = !amazonEbay;
-    // 가격 정책은 아임웹 본사 · 쿠팡만. 고를 것이 '직접 입력' 하나뿐인 몰에서는 칸째 숨긴다(표 머리 입력 줄이 한 줄 낮아진다).
+    // 나라 화면은 쪽마다 짝 상품의 현재가를 바로 읽는다 — 데이터 갱신은 몰 탭에서.
+    $('be-refresh').hidden = !!country;
+    // 가격 정책은 쿠팡 · 네이버만. 고를 것이 '직접 입력' 하나뿐인 몰에서는 칸째 숨긴다(표 머리 입력 줄이 한 줄 낮아진다).
     const fxOption = source.querySelector('[value="fx"]'), policyOption = source.querySelector('[value="policy"]');
     fxOption.hidden = fxOption.disabled = !amazonEbay;
-    policyOption.hidden = policyOption.disabled = !POLICY_SCOPES[scope];
+    policyOption.hidden = policyOption.disabled = !POLICY_SCOPES.has(scope);
     source.hidden = fxOption.disabled && policyOption.disabled;
     if (source.selectedOptions[0]?.disabled) source.value = 'direct';
     $('be-value').disabled = busy || source.value !== 'direct';
@@ -330,7 +337,8 @@
       input.value = r.newPrice; input.disabled = busy || !r.ready || locked(r) || r.priceReadonly;
       input.setAttribute('aria-label', '판매가: ' + r.name + (r.variant ? ' / ' + r.variant : ''));
       input.addEventListener('input', () => {
-        r.newPrice = input.value; r.selected = true; r.followed = false; check.checked = true; tr.classList.toggle('be-dirty', dirty(r));
+        // 손으로 고치면 정책이 넣은 정가는 버린다(다른 판매가에 정가 140,000 이 숨어 따라가지 않게 — 11-06 리뷰).
+        r.newPrice = input.value; r.newList = ''; r.selected = true; r.followed = false; check.checked = true; tr.classList.toggle('be-dirty', dirty(r));
         tooltip(input, input.value, unit);
         showCount(); syncHeader();
       });
@@ -360,11 +368,13 @@
     return true;
   }
   // 목록을 받고 첫 쪽의 현재가·이미지까지 읽는다. '상품 목록 조회'와 '전체 목록 동기화'(끝나면 바로 목록을 다시 받는다)가 같이 쓴다.
-  async function listProducts(head = '') {
+  // 돌려주는 값: 목록이 준 줄마다의 가격(데이터 갱신이 현재가와 비교한다). force 는 네이버 · 쿠팡 목록 캐시를 건너뛴다.
+  async function listProducts(head = '', force = false) {
     tell(head + '상품 목록을 불러오는 중…');
     // 숨은 검색칸(아마존·eBay 밖)에 남은 글자로 거르지 않는다.
-    const result = await call('bulk-price-list', { scope, query: $('be-api-query').hidden ? '' : $('be-api-query').value.trim() });
+    const result = await call('bulk-price-list', { scope, query: $('be-api-query').hidden ? '' : $('be-api-query').value.trim(), force });
     state().rows = result.items.map(augment); state().note = result.note || ''; state().tried = new Set(); state().targets = null; state().listed = true;
+    const listedPrices = new Map(state().rows.map(r => [key(r), r.price]));
     // 아마존·eBay 행의 환율 등급 꼬리표. 못 읽어도 목록은 그대로 쓴다.
     state().fx = /^(?:amazon-|ebay$)/.test(scope) ? await call('fx-auto-price-links', { scope }).catch(() => null) : null;
     if (country) await loadTargets();
@@ -374,14 +384,35 @@
     tell(listed);
     const loaded = await loadVisible();
     if (loaded) tell(listed + ' ' + loaded);
+    return listedPrices;
   }
   $('be-list').addEventListener('click', () => run(async () => { if (!unsaved()) await listProducts(); }));
-  $('be-sync').addEventListener('click', () => run(async () => {
-    if (unsaved()) return;
+  // 아마존 · eBay 전체 목록을 API 로 다시 받아 이 PC 캐시에 저장한다(전체 목록 동기화 · 데이터 갱신).
+  async function syncListCache() {
     tell('전체 목록 동기화 중… 완료까지 수 분 걸릴 수 있습니다.');
     const r = await ipc.invoke(scope === 'ebay' ? 'ebay-refresh-cache' : 'amazon-refresh-cache', { enrichBrand: false, marketplaceId: scope === 'amazon-jp' ? 'A1VC38T7YXB528' : 'ATVPDKIKX0DER' });
     if (!r.success) throw new Error(r.error);
+  }
+  $('be-sync').addEventListener('click', () => run(async () => {
+    if (unsaved()) return;
+    await syncListCache();
     await listProducts('목록 동기화 완료. ');
+  }));
+  // 데이터 갱신: 목록 캐시를 건너뛰어 다시 받고(아마존 · eBay 는 전체 목록 동기화), 보이는 쪽만이 아니라 모든 상품의 현재가를 몰 API 로
+  // 읽는다. 읽은 값은 몰의 저장본에 들어간다(쿠팡 판매가 캐시 · 아마존 · eBay 목록 캐시 — 네이버 · 아임웹 목록은 늘 API 에서 바로 읽는다).
+  // 목록이 보여 준 값과 현재가가 다른 행 수를 알린다. 상품마다 호출이라 오래 걸릴 수 있고 [중단]으로 멈춘다.
+  $('be-refresh').addEventListener('click', () => run(async () => {
+    if (unsaved()) return;
+    if (/^(?:amazon-|ebay$)/.test(scope)) await syncListCache();
+    const listedPrices = await listProducts('', true);
+    const rest = rows().filter(r => !r.readonly && !r.ready);
+    rest.forEach(r => state().tried.add(r.id));
+    const got = rest.length && !cancel ? await loadPrices(rest) : null;
+    const fresh = rows().filter(r => r.ready && listedPrices.has(key(r)));
+    const changed = fresh.filter(r => String(listedPrices.get(key(r)) ?? '') !== '' && Number(listedPrices.get(key(r))) !== Number(r.price)).length;
+    const unreadLeft = rows().filter(r => !r.readonly && !r.ready).length;
+    tell('데이터 갱신 ' + (cancel ? '중단' : '완료') + ': 현재가를 읽은 행 ' + rows().filter(r => r.ready).length + '개, 목록 값과 현재가가 달랐던 행 ' + changed + '개' +
+      (unreadLeft ? ', 읽지 못한 행 ' + unreadLeft + '개' + (got?.firstError ? '(' + got.firstError + ')' : '') : '') + (got?.blocked ? '. 멈춘 이유: ' + got.blocked : '') + '.');
   }));
   // 머리글 전체선택: 체크하면 필터 결과의 모든 페이지를 고르고, 풀면 (예전 '선택 해제' 버튼처럼) 선택을 모두 지운다.
   const toggleAllSelection = checked => {
@@ -494,9 +525,7 @@
   // 행은 먼저 읽는다(현재가 불러오기와 같은 길). 보내기는 '선택 변경 저장'과 그 확인창에서만 한다.
   // 환율가 = 국내 기준가 등급 ÷ 오늘 환율(우대 없음)을 앞 두 자리만 남긴 값. 판단은 환율 자동 변경과 같다(fx_auto_price.js).
   // 자동 저장이 건너뛰는 10% 초과 변동도 채운다. 환율 변동 1% 미만·이미 같은 가격은 지금 판매가를 그대로 둔다.
-  // 가격 정책 = price_policy.js 의 판(BSA · 일반)별 1set 판매가. 판을 문구로 모르면 차량 카탈로그로 찾는다.
-  let catalog = null;
-  const loadCatalog = async () => catalog ||= await ipc.invoke('vehicle-load-catalog').then(r => r?.success ? r.catalog : null).catch(() => null);
+  // 가격 정책 = price_policy.js 의 1set 판매가 · 정가(판 구분 없음, 11-06). 정가는 저장 때 판매가와 함께 나간다(newList).
   $('be-apply').addEventListener('click', () => run(async () => {
     const source = $('be-price-source').value, fx = source === 'fx', policy = source === 'policy', value = $('be-value').value;
     if (source === 'direct' && (!value || Number(value) <= 0)) { tell('덮어쓸 판매가를 입력하세요.'); return; }
@@ -524,18 +553,20 @@
       (hidden ? ' 현재가를 불러온 뒤 가격 필터에서 빠진 행 ' + hidden + '개도 채웠습니다(필터를 바꿔야 보이고 저장됩니다).' : '') +
       (loaded?.blocked ? ' 현재가 조회를 멈춘 이유: ' + loaded.blocked : '');
     if (!ready.length) { tell('판매가를 넣을 수 있는 행이 없습니다.' + notes); return; }
+    // 다른 값 출처로 덮으면 앞서 정책이 넣은 정가는 버린다(새 판매가가 정가보다 클 수 있다).
+    if (!policy) ready.forEach(r => { r.newList = ''; });
     const visible = new Set(pageRows()), off = ready.filter(r => inView.has(r) && !visible.has(r)).length;
     const where = off ? '(다른 페이지 ' + off + '행 포함)' : '';
     if (policy) {
-      const cat = await loadCatalog(), skipped = new Map();
+      const skipped = new Map();
       let filled = 0;
       for (const r of ready) {
-        const x = policyPrice(scope, r, { hasCombos: rows().some(o => o.id === r.id && o.optionId), catalog: cat });
-        if (x.skip) { r.result = '정책 건너뜀: ' + x.skip; const why = x.skip.replace(/No\.\S+|지금 [\d,]+/g, '…'); skipped.set(why, (skipped.get(why) || 0) + 1); continue; }
-        r.newPrice = String(x.price); r.result = x.result; filled++;
+        const x = policyPrice(scope, r);
+        if (x.skip) { r.result = '정책 건너뜀: ' + x.skip; const why = x.skip.replace(/지금 [\d,]+/g, '…'); skipped.set(why, (skipped.get(why) || 0) + 1); continue; }
+        r.newPrice = String(x.price); r.newList = String(x.list); r.result = x.result; filled++;
       }
-      tell(filled + '행에 정책 판매가를 입력했습니다' + where + '.' + (skipped.size ? ' 건너뜀: ' + [...skipped].map(([why, n]) => why + ' ' + n + '행').join(' · ') + '.' : '') + notes +
-        ' 쿠폰은 판매자센터에서 따로 만듭니다(' + couponGuide(scope) + ' — docs/coupon-discount.md). 선택 변경 저장을 누르면 판매가만 반영됩니다.');
+      tell(filled + '행에 정책 판매가 · 정가를 입력했습니다' + where + '.' + (skipped.size ? ' 건너뜀: ' + [...skipped].map(([why, n]) => why + ' ' + n + '행').join(' · ') + '.' : '') + notes +
+        ' 선택 변경 저장을 누르면 판매가와 정가를 함께 보냅니다. 쿠폰은 판매자센터에서 따로 만듭니다(' + couponGuide() + ' — docs/coupon-discount.md).');
       return;
     }
     if (!fx) {
@@ -667,6 +698,7 @@
   }
   async function openCountry(code) {
     country = code; switchScope(COUNTRIES[code].ref);
+    await loadCatalog();   // follow 가 본사 상품의 판을 카탈로그로 정한다
     if (!rows().length) await listProducts();
     else {
       if (!state().targets) await loadTargets();
@@ -687,7 +719,9 @@
       if (!members.length) continue;
       const mine = rows().filter(r => r.id === g.id), loaded = mine.length > 0 && mine.every(r => r.ready);
       const nos = mine[0]?.identity?.nos || [];
-      const ref = loaded && { no: nos.length === 1 ? nos[0] : g.t.no, ...referencePrices(mine.map(r => ({ ...r, price: priceDirty(r) ? r.newPrice : r.price }))) };
+      // 조합 문구에 판이 없는 본사 상품은 카탈로그로 판을 정한다(가격 정책과 같은 규칙). 모르면 예전처럼 null.
+      const edition = mine[0] ? editionFor(mine[0], catalog).bsa : null;
+      const ref = loaded && { no: nos.length === 1 ? nos[0] : g.t.no, ...referencePrices(mine.map(r => ({ ...r, price: priceDirty(r) ? r.newPrice : r.price })), edition) };
       for (const r of members) {
         const fx = state(r.scope).fx;
         const hint = r.scope === 'coupang' ? (g.t.coupang || []).find(([id, option]) => id === r.id && option === String(r.optionId))?.[2]
@@ -780,14 +814,16 @@
     // 기존가가 0 인 행(아임웹 추가금 방식 옵션 등)은 몇 %인지 셀 수 없어 큰 변화로 본다 — 예전엔 0% 로 세어 묻지 않았다.
     const changes = work.map(x => ({ x, rate: Number(x.expectedPrice) > 0 ? Number(x.newPrice) / Number(x.expectedPrice) - 1 : Infinity }));
     const big = changes.filter(c => Math.abs(c.rate) >= BIG_CHANGE);
-    const malls = [...new Set(jobs.map(x => x.r.scope || scope))];
-    if (!country && !off && !big.length) return true;
+    const malls = [...new Set(jobs.map(x => x.r.scope || scope))], lists = work.filter(x => x.newList);
+    // 정가(가격 정책)는 새로 쓰는 값이라 언제나 묻는다.
+    if (!country && !off && !big.length && !lists.length) return true;
     const pct = rate => Number.isFinite(rate) ? (rate > 0 ? '+' : '') + Math.round(rate * 100) + '%' : '기존 0에서';
     const money = (v, r) => Number(v).toLocaleString('ko-KR') + ' ' + unitOf(r.scope || scope);
     const rates = changes.map(c => c.rate).filter(Number.isFinite), worst = big.sort((a, b) => Math.abs(b.rate) - Math.abs(a.rate))[0];
     const lines = ['선택 변경 ' + (country ? jobs.length + '건' : work.length + '행') + '을 저장합니다.'];
     const per = (sc, type) => jobs.filter(x => (x.r.scope || scope) === sc && x.type === type).length;
     if (country) lines.push('· ' + malls.map(sc => titleOf(sc) + ' ' + [per(sc, 'price') && '판매가 ' + per(sc, 'price') + '행', per(sc, 'images') && '이미지 ' + per(sc, 'images') + '개 상품'].filter(Boolean).join(' + ')).join(' · ') + ' (몰마다 차례로 보냅니다)');
+    if (lists.length) lines.push('· 정가(취소선)도 함께 보내는 행: ' + lists.length + '행 (정가 ' + [...new Set(lists.map(x => money(x.newList, x.r)))].join(' · ') + ')');
     if (off) lines.push('· 지금 보이는 페이지 밖의 행: ' + off + '행');
     if (big.length) lines.push('· 기존가 대비 ' + Math.round(BIG_CHANGE * 100) + '% 이상 바뀌는 행: ' + big.length + '행 (가장 큰 변화: ' + titleOf(worst.x.r.scope || scope) + ' ' +
       worst.x.r.name + (worst.x.r.variant ? ' / ' + worst.x.r.variant : '') + ' ' + money(worst.x.expectedPrice, worst.x.r) + ' → ' + money(worst.x.newPrice, worst.x.r) + ', ' + pct(worst.rate) + ')');
@@ -812,7 +848,7 @@
         else { report('확인 필요: ' + (result.message || '반영 확인 필요')); count.check++; }
         if (['VERIFIED', 'UNCHANGED'].includes(result.status)) {
           if (imageJob) targets.forEach(x => { x.images = result.images; x.imageRevision = result.revision; x.newImages = null; });
-          else { r.price = result.price; r.newPrice = String(result.price); }
+          else { r.price = result.price; r.newPrice = String(result.price); r.newList = ''; }
         } else if (imageJob) targets.forEach(x => { x.imagesReady = false; });
         else r.ready = false;
       } else {
@@ -834,7 +870,7 @@
       const outcome = await call('bulk-save-batch', { jobId: batchJobId, scope: sc, jobs: work.map(job => ({
         type: job.type, id: job.r.id, optionId: job.r.optionId,
         ...(job.type === 'images' ? { urls: job.urls, expectedRevision: job.expectedRevision }
-          : { newPrice: job.newPrice, expectedPrice: job.expectedPrice }),
+          : { newPrice: job.newPrice, expectedPrice: job.expectedPrice, ...(job.newList && { newList: job.newList }) }),
       })) });
       outcome.results.forEach(apply);
       return { ...outcome, left: work.length - received.size };
@@ -850,7 +886,7 @@
     for (const r of selected()) {
       const sc = r.scope || scope;
       if (!plan.has(sc)) plan.set(sc, { price: [], images: new Map() });
-      if (priceDirty(r)) plan.get(sc).price.push({ r, type: 'price', newPrice: r.newPrice, expectedPrice: r.price });
+      if (priceDirty(r) || listDirty(r)) plan.get(sc).price.push({ r, type: 'price', newPrice: r.newPrice, expectedPrice: r.price, newList: listDirty(r) ? r.newList : '' });
       if (imageDirty(r) && !plan.get(sc).images.has(r.id)) plan.get(sc).images.set(r.id, { r, type: 'images', urls: [...r.newImages], expectedRevision: r.imageRevision });
     }
     const batches = [...plan].map(([sc, p]) => [sc, [...p.images.values(), ...p.price]]).filter(([, work]) => work.length);

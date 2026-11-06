@@ -229,8 +229,8 @@ export class Coupang {
    * 보여 주기만 한다 — 판매가를 고치려면 지금처럼 현재가를 다시 불러오고, 저장은 그 값과 비교한다.
    * @returns {{ items: object[], cached: number }} cached: 옵션·판매가를 펼친 상품 수
    */
-  async listForPriceEdit() {
-    const products = await this.fetchAllProducts();
+  async listForPriceEdit({ force = false } = {}) {
+    const products = await this.fetchAllProducts(force);
     const known = this.store && this.config?.vendorId ? this.store.products(this.config.vendorId) : {};
     // 쿠팡 목록에 없는 상품(삭제됨)은 캐시에서 뺀다 — 목록은 전체를 다 읽었을 때만 돌아온다(fetchAllProducts).
     this._cache((store, vendorId) => store.keepOnly(vendorId, products.map(p => p.id)));
@@ -509,13 +509,19 @@ export class Coupang {
    * 상품 수정(PUT seller-products)은 승인 전 상품만 판매가를 바꿀 수 있고 승인 요청까지 다시 보내므로
    * (쿠팡 공식 문서), 승인완료 상품은 아이템별 가격 변경 API 로만 바꾼다.
    * 여기서 쓰기 전에 던지는 오류는 stage=pre-send 로 표시해 화면이 '전송 안 됨'으로 구분하게 한다.
+   * listPrice(가격 정책의 정가)를 주면 할인율 기준가도 바꾼다 — 검사를 다 마친 뒤에.
+   * ponytail: 지금 기준가는 읽지 않고 그대로 다시 쓴다(같은 값이면 쿠팡에서 바뀌는 것이 없다). 쓰기 뒤 확인도 판매가만 한다 —
+   * 기준가까지 확인하려면 기준가를 돌려주는 조회 API 를 먼저 찾아야 한다.
    * @returns {{ unchanged: boolean, salePrice: number }}
    */
-  async changeItemPrice({ vendorItemId, salePrice, expectedPrice }) {
+  async changeItemPrice({ vendorItemId, salePrice, expectedPrice, listPrice = null }) {
     if (!this.api) this.loadConfig();
-    const price = Number(salePrice);
+    const price = Number(salePrice), list = listPrice == null ? null : Number(listPrice);
     if (!Number.isSafeInteger(price) || price <= 0 || price % 10 !== 0) {
       throw markPreSend(new Error('쿠팡 판매가는 10원 단위 양의 정수여야 합니다.'));
+    }
+    if (list != null && (!Number.isSafeInteger(list) || list < price || list % 10 !== 0)) {
+      throw markPreSend(new Error(`쿠팡 정가(할인율 기준가 ${listPrice})는 판매가 이상 10원 단위여야 합니다.`));
     }
     if (!vendorItemId) throw markPreSend(new Error('승인완료 전 옵션(옵션ID 없음)은 판매가를 바꿀 수 없습니다.'));
     let current;
@@ -525,12 +531,16 @@ export class Coupang {
     if (expectedPrice !== undefined && now !== Number(expectedPrice)) {
       throw markPreSend(new Error(`쿠팡 현재 판매가(${now.toLocaleString('ko-KR')}원)가 조회 이후 변경됐습니다. 다시 불러온 뒤 수정하세요.`));
     }
-    if (now === price) return { unchanged: true, salePrice: now };
+    if (now === price && list == null) return { unchanged: true, salePrice: now };
     // 쿠팡 기본 변경폭: 기존가 대비 최대 50% 인하·100% 인상. 넘으면 쿠팡이 거부하므로 보내기 전에 알린다.
-    if (now > 0 && (price < now * 0.5 || price > now * 2)) {
+    if (now !== price && now > 0 && (price < now * 0.5 || price > now * 2)) {
       throw markPreSend(new Error(`쿠팡은 한 번에 기존가(${now.toLocaleString('ko-KR')}원)의 50% 인하·100% 인상까지만 바꿀 수 있습니다. 두 번에 나눠 바꾸거나 쿠팡 판매자센터에서 변경해주세요.`));
     }
-    await this.api.updateItemPrice(vendorItemId, price);
+    // 기준가가 지금 판매가보다 낮아지는 순간이 없게: 기준가가 지금 판매가 이상이면 기준가 먼저, 아니면 판매가 먼저(11-06 리뷰).
+    const listFirst = list != null && list >= now;
+    if (listFirst) await this.api.updateItemOriginalPrice(vendorItemId, list);
+    if (now !== price) await this.api.updateItemPrice(vendorItemId, price);
+    if (list != null && !listFirst) await this.api.updateItemOriginalPrice(vendorItemId, list);
     return { unchanged: false, salePrice: price };
   }
 

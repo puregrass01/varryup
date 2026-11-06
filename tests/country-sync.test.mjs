@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { referencePrices, referenceRole, pickPrice, countryPrice, countryTargets, productPageUrl, editionOf } from '../src/utils/country_sync.js';
+import { referencePrices, referenceRole, pickPrice, countryPrice, countryTargets, productPageUrl, editionOf, editionFor } from '../src/utils/country_sync.js';
 import { productIdentity } from '../src/utils/product_identity.js';
 import { registerBulkPriceIPC } from '../src/bulk_price_ipc.js';
 
@@ -17,6 +17,35 @@ test('판: 조합 문구(값만 이은 optionTextOf)의 번역된 BSA 값을 읽
   assert.equal(editionOf('조합 · あり / 1セット(左右) · 품절'), true);
   assert.equal(editionOf('BSA(後側方警戒システム)の有無=あり / セット内容=1セット(左右)'), true);
   assert.equal(editionOf('조합 · 1set'), null);
+});
+
+test('판(editionFor): 표기 → 카탈로그. 본사 상품은 표기가 없다고 일반으로 보지 않는다', () => {
+  // 카탈로그 bsa 칸은 '이 차에 BSA판이 있는가' 메모다(빈칸 · 'Bsa가능' · 'Bsa 제작 필요' · 브라켓 메모 등).
+  const catalog = { variants: [{ no: '101', bsa: '' }, { no: '101', bsa: '사각브라켓' }, { no: '610', bsa: 'Bsa가능' }, { no: '610', bsa: 'BSA 가능' },
+    { no: '612', bsa: 'Bsa가능' }, { no: '612', bsa: '' }, { no: '777', bsa: 'Bsa 제작 필요' }] };
+  const head = (no, variant, extra = {}) => ({ variant: '조합 · ' + variant, name: `옵틱글래스 BMW X5 광각미러 [No.${no}]`, identity: { nos: [no], bsa: false }, ...extra });
+  assert.equal(editionFor(head('101', 'BSA 있음 / 1set'), catalog).bsa, true);
+  assert.equal(editionFor(head('610', 'BSA 없음 / 1set'), catalog).bsa, false, '문구가 카탈로그보다 먼저');
+  assert.equal(editionFor(head('101', '1set', { name: '옵틱글래스 BMW X5 (BSA) 광각미러 [No.101]' }), catalog).bsa, true);
+  assert.deepEqual(editionFor(head('610', '1set'), catalog), { bsa: true, by: '카탈로그 No.610 BSA 가능' }, 'identity.bsa(false)를 믿지 않는다');
+  assert.equal(editionFor(head('101', '1set'), catalog).bsa, false, '빈칸 · 브라켓 메모는 BSA 아님');
+  assert.equal(editionFor(head('777', '1set'), catalog).bsa, false, "'Bsa 제작 필요' 는 아직 BSA판 없음");
+  assert.match(editionFor(head('612', '1set'), catalog).why, /섞여/);
+  assert.match(editionFor(head('999', '1set'), catalog).why, /찾지 못해/);
+  assert.match(editionFor(head('101', '1set', { identity: { nos: ['101', '102'] } }), catalog).why, /하나로/);
+});
+
+test('기준가: 조합 문구에 판이 없는 본사 상품은 넘겨받은 판(카탈로그)으로 — BSA 짝만 맞추고 일반 짝에는 넣지 않는다', () => {
+  // 2142 크라이슬러 200C [No.4013]: 구성 선택 1set · 운전석 · 조수석만 있고 BSA 표기가 없는 BSA판(11-06 실조회).
+  const rows = imwebRows([['1set', 220000], ['운전석', 115000], ['조수석', 105000]]);
+  const ref = referencePrices(rows, true);
+  assert.deepEqual([...ref.set], [[true, '220000']]);
+  assert.deepEqual([...ref.left], [[true, '115000']]);
+  assert.deepEqual(pickPrice(ref.set, true), { price: '220000' });
+  assert.match(pickPrice(ref.set, false).skip, /일반판 1set 가격이 없음/, '일반 짝에 BSA 값을 넣지 않는다');
+  assert.deepEqual([...referencePrices(rows).set], [[null, '220000']], '판을 모르면 예전처럼 null');
+  assert.deepEqual([...referencePrices(imwebRows([['BSA 없음 / 1set', 150000]]), true).set], [[false, '150000']], '문구가 먼저');
+  assert.deepEqual([...referencePrices([{ id: '1', optionId: '', price: 99000 }], false).set], [[false, '99000']]);
 });
 
 test('기준가: 1set · 운전석 조합가를 판별로 읽고, 조수석과 기본가는 쓰지 않는다', () => {

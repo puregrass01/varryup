@@ -51,20 +51,23 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
     return id;
   };
   const priceOf = value => value === '' || value == null ? '' : String(value);
+  // 네이버 목록 · 검색의 채널상품 가격: 즉시할인 뒤 값(discountedPrice)이 판매가다. 없으면(옛 캐시 등) salePrice.
+  const naverShown = p => p.discountedPrice ?? p.salePrice;
   const samePrice = (a, b) => (a === '' || b === '') ? a === b : Number(a) === Number(b);
   const config = get => { const service = get(); service.loadConfig(); return service; };
   function row(input, price, extra = {}) {
     return { ...input, price: priceOf(price), currency: currency(input.scope), ready: true, ...extra };
   }
-  async function list({ scope, query = '' }) {
+  // force: [데이터 갱신] — 네이버 · 쿠팡 목록의 5분 메모리 캐시를 건너뛰고 몰 API 로 다시 받는다.
+  async function list({ scope, query = '', force = false }) {
     currency(scope);
     let items = [], note = '', truncated = false;
-    if (scope === 'naver') items = (await naverAPI().allProducts()).map(p => ({
-      ...p, price: p.salePrice, image: p.representativeImage }));
+    if (scope === 'naver') items = (await naverAPI().allProducts({ force: !!force })).map(p => ({
+      ...p, price: naverShown(p), image: p.representativeImage }));
     else if (scope === 'coupang') {
       // 쿠팡 목록 API 에는 옵션ID·판매가가 없다(공식 문서). 이 PC 에서 불러온 적 있는 상품만 그때 읽은 판매가를
       // 옵션 행의 '(목록)' 가격으로 펼친다(coupang.js listForPriceEdit). 고치려면 지금처럼 현재가를 다시 불러온다.
-      const listed = await config(coupang).listForPriceEdit();
+      const listed = await config(coupang).listForPriceEdit({ force: !!force });
       items = listed.items;
       note = listed.cached
         ? `쿠팡 목록에는 옵션·판매가가 없어, 이 PC 에서 불러온 적 있는 상품 ${listed.cached}개는 그때 읽은 판매가를 '(목록)' 으로 보여 줍니다. 가격을 바꾸려면 현재가를 다시 불러오세요.`
@@ -176,7 +179,7 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
     const ready = new Map();
     try {
       if (scope === 'naver' && !includeImages) {
-        for (const [id, p] of await naverListed(list)) ready.set(id, [row(inputOf(id), p.salePrice,
+        for (const [id, p] of await naverListed(list)) ready.set(id, [row(inputOf(id), naverShown(p),
           { name: p.name || '', variant: '기본 판매가 · 옵션 추가금 유지', image: images?.[id] || p.representativeImage?.url })]);
       } else if (markets[scope]) {
         for (const [id, p] of await config(amazon).loadProductsForEdit(list, markets[scope])) ready.set(id, [amazonRow(inputOf(id), p)]);
@@ -218,12 +221,13 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
   const writers = {
     naver: {
       // 조회·비교·PUT 을 한 번에 한다(행당 GET 2회 + PUT 1회).
-      write: ({ id, price, expected }) => naverProducts().updateSalePrice({ originNo: id, salePrice: price, expectedPrice: expected }),
+      // 판매가는 즉시할인 뒤 값이다. list(정가)를 주면 원상품 판매가 = 정가, 즉시할인 = 정가 − 판매가로 보낸다.
+      write: ({ id, price, expected, list }) => naverProducts().updateSalePrice({ originNo: id, salePrice: price, expectedPrice: expected, ...(list != null && { listPrice: list }) }),
       current: async ({ id }) => (await naverProducts().loadProductForEdit(id)).salePrice,
     },
     coupang: {
-      // 상품 수정(PUT seller-products) 대신 아이템별 가격 변경 API. 조회·비교·변경폭 확인을 coupang.js 가 한다.
-      write: ({ input, price, expected }) => config(coupang).changeItemPrice({ vendorItemId: input.optionId, salePrice: price, expectedPrice: expected }),
+      // 상품 수정(PUT seller-products) 대신 아이템별 가격 변경 API. 조회·비교·변경폭 확인을 coupang.js 가 한다. list 는 할인율 기준가.
+      write: ({ input, price, expected, list }) => config(coupang).changeItemPrice({ vendorItemId: input.optionId, salePrice: price, expectedPrice: expected, ...(list != null && { listPrice: list }) }),
       current: async ({ input }) => (await config(coupang).api.getItemInventory(input.optionId)).salePrice,
     },
     'amazon-us': amazonWriter,
@@ -260,7 +264,15 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
     if (input.expectedPrice === undefined) throw new Error('현재가를 먼저 불러오세요.');
     const writer = writers[input.scope];
     if (!writer) throw new Error('이 게시판에는 수정할 판매가가 없습니다.');
-    return { id, input, unit, price, expected: priceOf(input.expectedPrice) };
+    // 정가(가격 정책): 쿠팡 할인율 기준가 · 네이버 정가 + 즉시할인만. 판매가 이상, 쿠팡은 10원 단위.
+    const list = String(input.newList ?? '').trim();
+    if (list) {
+      if (!['coupang', 'naver'].includes(input.scope)) throw new Error('정가는 쿠팡 · 네이버에서만 바꿀 수 있습니다.');
+      if (!/^\d+$/.test(list) || Number(list) < Number(price) || Number(list) > Number.MAX_SAFE_INTEGER)
+        throw new Error(`정가(${list})는 판매가(${price}) 이상인 정수여야 합니다.`);
+      if (input.scope === 'coupang' && Number(list) % 10 !== 0) throw new Error('쿠팡 정가는 10원 단위로 입력하세요.');
+    }
+    return { id, input, unit, price, expected: priceOf(input.expectedPrice), list: list ? Number(list) : null };
   }
   async function save(input) {
     const ctx = priceContext(input), writer = writers[input.scope], { price } = ctx;
@@ -300,7 +312,7 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
     try { listed = await naverListed(sent.map(s => s.ctx.id)); } catch { /* 아래 1건 조회로 확인한다 */ }
     for (const { i, ctx } of sent) {
       const seen = listed.get(ctx.id);
-      outcomes[i] = { success: true, data: seen && samePrice(priceOf(seen.salePrice), ctx.price)
+      outcomes[i] = { success: true, data: seen && samePrice(priceOf(naverShown(seen)), ctx.price)
         ? { status: 'VERIFIED', price: ctx.price } : await verify(writers.naver, ctx) };
     }
     return outcomes;
