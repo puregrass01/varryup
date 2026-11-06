@@ -56,7 +56,9 @@ export class EbayAPI {
   async token() {
     if (this.accessToken && Date.now() < this.expiresAt) return this.accessToken;
     if (!this.config.refreshToken) throw new Error('판매자 계정을 연결하거나 Refresh Token을 저장해주세요.');
-    if (!this.refreshing) this.refreshing = this.tokenRequest({ grant_type: 'refresh_token', refresh_token: this.config.refreshToken, scope: EBAY_SCOPES }).finally(() => { this.refreshing = null; });
+    // config.scopes 가 '' 이면 scope 를 빼서 동의된 범위를 그대로 받는다(ops 주문 알림 워커). 앱은 EBAY_SCOPES.
+    const scope = this.config.scopes ?? EBAY_SCOPES;
+    if (!this.refreshing) this.refreshing = this.tokenRequest({ grant_type: 'refresh_token', refresh_token: this.config.refreshToken, ...(scope && { scope }) }).finally(() => { this.refreshing = null; });
     await this.refreshing;
     return this.accessToken;
   }
