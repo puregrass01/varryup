@@ -53,7 +53,9 @@ try {
           items.push({id,rows:one.data.map(r=>({...r,images:['https://ai.esmplus.com/test/old.jpg','https://ai.esmplus.com/test/detail.jpg'],imageRevision:'old',imagesReady:true,newImages:null}))}); }
         return {success:true,data:{items,blocked:''}};
       }
-      if(channel==='bulk-price-load') return {success:true,data:(data.scope==='coupang'?['11','12']:['']).map(optionId=>({...data,optionId,name:data.scope.startsWith('imweb-')?'와이드/광각미러':'Product '+data.id,price:window.loadedPrice || (data.scope==='imweb-en'?'58':'10000'),ready:true,priceReadonly:data.scope==='imweb-ko'}))};
+      // 쿠팡 옵션 11 은 BSA판, 12 는 일반판(가격 정책이 판을 읽는다).
+      if(channel==='bulk-price-load') return {success:true,data:(data.scope==='coupang'?['11','12']:['']).map(optionId=>({...data,optionId,
+        ...(data.scope==='coupang'&&{variant:optionId==='11'?'1개 No.906 BSA':'1개 No.101',identity:{nos:[optionId==='11'?'906':'101'],bsa:optionId==='11'}}),name:data.scope.startsWith('imweb-')?'와이드/광각미러':'Product '+data.id,price:window.loadedPrice || (data.scope==='imweb-en'?'58':'10000'),ready:true,priceReadonly:data.scope==='imweb-ko'}))};
       if(channel==='bulk-images-load') return {success:true,data:{images:['https://ai.esmplus.com/test/old.jpg','https://ai.esmplus.com/test/detail.jpg'],revision:'old'}};
       if(channel==='image-library-load') return {success:true,profiles:['domestic','amazon','ebay'].map(id=>({id,items:[{role:'대표',selected:true,source:'local',url:'https://ai.esmplus.com/main.jpg'},{role:'상세',selected:true,source:'esm',url:'https://ai.esmplus.com/default.jpg'}]}))};
       if(channel==='bulk-images-import') {
@@ -282,16 +284,16 @@ try {
   assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-save-batch').length),beforeEmpty,'empty array cannot trigger a marketplace write');
   assert.match(await page.locator('#be-status').textContent(),/^Product 1: 이미지가 하나도 남지 않았습니다\(빈 항목/,'막힌 행의 이름을 댄다');
 
-  // ── 서버 검색칸·전체 목록 동기화·환율가는 아마존·eBay 에서만 ──
+  // ── 서버 검색칸·전체 목록 동기화·환율가는 아마존·eBay 에서만, 가격 정책은 아임웹 본사·쿠팡에서만 ──
   const visible=async()=>page.evaluate(()=>({query:!document.getElementById('be-api-query').hidden,sync:!document.getElementById('be-sync').hidden,
-    fx:!document.querySelector('#be-price-source option[value="fx"]').hidden}));
+    fx:!document.querySelector('#be-price-source option[value="fx"]').hidden,policy:!document.querySelector('#be-price-source option[value="policy"]').hidden}));
   for (const scope of ['naver','coupang','imweb-b2b','imweb-en','imweb-ko','imweb-jp']) {
     await page.locator(`[data-scope="${scope}"]`).click();
-    assert.deepEqual(await visible(),{query:false,sync:false,fx:false},scope);
+    assert.deepEqual(await visible(),{query:false,sync:false,fx:false,policy:scope==='coupang'||scope==='imweb-ko'},scope);
   }
   for (const scope of ['amazon-us','amazon-jp','ebay']) {
     await page.locator(`[data-scope="${scope}"]`).click();
-    assert.deepEqual(await visible(),{query:true,sync:true,fx:true},scope);
+    assert.deepEqual(await visible(),{query:true,sync:true,fx:true,policy:false},scope);
   }
   // 숨은 검색칸에 남은 글자로 목록을 거르지 않는다.
   // (자동 불러오기를 실패시켜 둔다 — 아래 가격 적용·이미지 적용이 안 읽은 행을 먼저 읽는 길을 본다.)
@@ -381,6 +383,15 @@ try {
   assert.match(await page.locator('#be-status').textContent(),/^판매가를 넣을 수 있는 행이 없습니다\. 상품 1개가 옵션 2행으로 펼쳐져 판매가를 넣지 않았습니다\./);
   await page.locator('#be-apply').click(); await idle();
   assert.deepEqual(await page.locator('#be-body input[type=number]').evaluateAll(n=>n.map(x=>x.value)),['20000','20000']);
+  // 가격 정책: 줄마다 판(옵션 11 = BSA, 12 = 일반)을 읽어 1set 판매가를 넣는다. 보내지는 않는다.
+  await page.locator('#be-price-source').selectOption('policy');
+  assert.equal(await page.locator('#be-value').isDisabled(),true,'정책가는 행마다 계산 — 판매가 칸 잠금');
+  await page.evaluate(()=>{calls.length=0;});
+  await page.locator('#be-apply').click(); await idle();
+  assert.deepEqual(await page.locator('#be-body input[type=number]').evaluateAll(n=>n.map(x=>x.value)),['135000','100000']);
+  assert.match(await page.locator('#be-status').textContent(),/^2행에 정책 판매가를 입력했습니다\..*알림설정 할인 −10,000 · 첫 구매가 −10,000/);
+  assert.equal(await page.evaluate(()=>calls.some(c=>c.channel==='bulk-save-batch'||c.channel.endsWith('-save'))),false,'policy apply never sends');
+  await page.locator('#be-price-source').selectOption('direct');
   // 불러온 가격이 가격 필터에서 빠져도 고른 줄을 채우고 그 수를 알린다.
   await page.evaluate(()=>{window.failLoad=true;});
   await page.locator('[data-scope="amazon-us"]').click(); await page.locator('#be-list').click(); await idle();

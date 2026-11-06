@@ -2,6 +2,7 @@
   const { imagePolicy, parseImageUrls, sameImages, previewImageUrls } = await import('../utils/bulk_images.js');
   const { productIdentity, identityText } = await import('../utils/product_identity.js');
   const { COUNTRIES, referencePrices, referenceRole, countryPrice, productPageUrl } = await import('../utils/country_sync.js');
+  const { POLICY_SCOPES, policyPrice, couponGuide } = await import('../utils/price_policy.js');
   const ipc = require('electron').ipcRenderer, root = document.getElementById('bulk-edit-workspace');
   const scopes = [
     ['naver', '네이버', 'KRW', 'logos/naver.png'], ['coupang', '쿠팡', 'KRW', 'logos/coupang.png'], ['imweb-b2b', '아임웹 B2B', 'KRW', 'logos/b2b.png'],
@@ -103,8 +104,8 @@
     '<tr class="be-th-tools"><td></td><td class="be-photo-column"><div class="be-tool be-image-tool" role="group" aria-label="이미지 입력"><div id="be-image-list"></div>' +
     '<button id="be-image-apply" type="button" title="선택 상품의 이미지를 이 목록으로 바꿉니다" aria-label="선택 상품 이미지를 이 목록으로 교체">↓</button></div></td><td></td><td></td><td></td><td></td>' +
     '<td><div class="be-tool" role="group" aria-label="판매가 덮어쓰기"><input id="be-value" type="number" min="0" placeholder="판매가" aria-label="선택 행에 넣을 판매가">' +
-    '<span id="be-currency" class="be-unit"></span><select id="be-price-source" aria-label="판매가 값 출처" title="환율가: 국내 기준가 등급 ÷ 오늘 환율(우대 없음)에서 앞 두 자리만 남긴 값을 행마다 계산합니다(아마존·eBay 전용)">' +
-    '<option value="direct">직접 입력</option><option value="fx">환율가</option></select><button id="be-apply" type="button">가격 적용</button></div></td><td></td></tr>' +
+    '<span id="be-currency" class="be-unit"></span><select id="be-price-source" aria-label="판매가 값 출처" title="환율가: 국내 기준가 등급 ÷ 오늘 환율(우대 없음)에서 앞 두 자리만 남긴 값을 행마다 계산합니다(아마존·eBay 전용). 가격 정책: 11-05·11-06 정책표의 판(BSA·일반)별 1set 판매가(아임웹 본사·쿠팡 전용)">' +
+    '<option value="direct">직접 입력</option><option value="fx">환율가</option><option value="policy">가격 정책</option></select><button id="be-apply" type="button">가격 적용</button></div></td><td></td></tr>' +
     '</thead><tbody id="be-body"></tbody></table></div></div>' +
     '<div class="be-pager"><button id="be-prev" type="button">이전</button><span id="be-page"></span><button id="be-next" type="button">다음</button></div>';
   // 일일 환율 자동 변경 패널(fx-auto-price.js)은 모드 바 '환율' 탭의 칸에 붙는다. 일괄 화면 바로 뒤 형제 칸이다.
@@ -203,10 +204,13 @@
     // 서버 검색칸·전체 목록 동기화·환율가는 아마존·eBay 만. 환율가는 행마다 계산하므로 고르면 판매가 칸을 잠근다.
     const amazonEbay = /^(?:amazon-|ebay$)/.test(scope), source = $('be-price-source');
     $('be-api-query').hidden = $('be-sync').hidden = !amazonEbay;
-    // 다른 몰에서는 고를 것이 '직접 입력' 하나뿐이라 칸째 숨긴다(표 머리 입력 줄이 한 줄 낮아진다).
-    source.hidden = source.options[1].hidden = source.options[1].disabled = !amazonEbay;
-    if (!amazonEbay) source.value = 'direct';
-    $('be-value').disabled = busy || source.value === 'fx';
+    // 가격 정책은 아임웹 본사 · 쿠팡만. 고를 것이 '직접 입력' 하나뿐인 몰에서는 칸째 숨긴다(표 머리 입력 줄이 한 줄 낮아진다).
+    const fxOption = source.querySelector('[value="fx"]'), policyOption = source.querySelector('[value="policy"]');
+    fxOption.hidden = fxOption.disabled = !amazonEbay;
+    policyOption.hidden = policyOption.disabled = !POLICY_SCOPES[scope];
+    source.hidden = fxOption.disabled && policyOption.disabled;
+    if (source.selectedOptions[0]?.disabled) source.value = 'direct';
+    $('be-value').disabled = busy || source.value !== 'direct';
     root.querySelector('.be-help').textContent = country ? COUNTRY_HELP : defaultHelp;
     $('be-photo-label').textContent = country ? '쇼핑몰' : '사진 · ' + policy.label;
     $('be-image-hint').textContent = country ? '' : policy.display === 'images' ? 'HTML 이미지 지원 · 순서대로 미리보기' : '이미지 미리보기 · 저장은 URL 배열';
@@ -490,9 +494,12 @@
   // 행은 먼저 읽는다(현재가 불러오기와 같은 길). 보내기는 '선택 변경 저장'과 그 확인창에서만 한다.
   // 환율가 = 국내 기준가 등급 ÷ 오늘 환율(우대 없음)을 앞 두 자리만 남긴 값. 판단은 환율 자동 변경과 같다(fx_auto_price.js).
   // 자동 저장이 건너뛰는 10% 초과 변동도 채운다. 환율 변동 1% 미만·이미 같은 가격은 지금 판매가를 그대로 둔다.
+  // 가격 정책 = price_policy.js 의 판(BSA · 일반)별 1set 판매가. 판을 문구로 모르면 차량 카탈로그로 찾는다.
+  let catalog = null;
+  const loadCatalog = async () => catalog ||= await ipc.invoke('vehicle-load-catalog').then(r => r?.success ? r.catalog : null).catch(() => null);
   $('be-apply').addEventListener('click', () => run(async () => {
-    const fx = $('be-price-source').value === 'fx', value = $('be-value').value;
-    if (!fx && (!value || Number(value) <= 0)) { tell('덮어쓸 판매가를 입력하세요.'); return; }
+    const source = $('be-price-source').value, fx = source === 'fx', policy = source === 'policy', value = $('be-value').value;
+    if (source === 'direct' && (!value || Number(value) <= 0)) { tell('덮어쓸 판매가를 입력하세요.'); return; }
     // 고른 줄은 불러오기 전에 키로 기억한다. 불러온 가격이 가격 필터에서 빠져도 그 줄을 채우고, 필터가 숨기던 선택 줄은 건드리지 않는다.
     const before = selected(), wanted = new Set(before.map(key)), ids = new Set(before.map(r => r.id));
     if (!before.length) { tell('가격을 넣을 상품을 선택하세요.'); return; }
@@ -503,7 +510,8 @@
     const spread = new Set(), picked = [];
     for (const r of rows()) {
       if (wanted.has(key(r))) picked.push(r);
-      else if (wanted.has(r.id + ':')) { if (rows().filter(x => x.id === r.id).length > 1) spread.add(r.id); else picked.push(r); }
+      // 가격 정책은 줄마다 판 · 구성을 읽어 값을 정하므로 펼쳐진 옵션 줄도 그대로 채운다.
+      else if (wanted.has(r.id + ':')) { if (!policy && rows().filter(x => x.id === r.id).length > 1) spread.add(r.id); else picked.push(r); }
     }
     const ready = picked.filter(r => r.ready && !r.readonly && !r.priceReadonly);
     // 고른 상품 안의 읽기 전용 줄(쿠팡 승인 전 옵션·이미지만 고칠 수 있는 줄)은 건너뛰고 개수만 알린다.
@@ -518,6 +526,18 @@
     if (!ready.length) { tell('판매가를 넣을 수 있는 행이 없습니다.' + notes); return; }
     const visible = new Set(pageRows()), off = ready.filter(r => inView.has(r) && !visible.has(r)).length;
     const where = off ? '(다른 페이지 ' + off + '행 포함)' : '';
+    if (policy) {
+      const cat = await loadCatalog(), skipped = new Map();
+      let filled = 0;
+      for (const r of ready) {
+        const x = policyPrice(scope, r, { hasCombos: rows().some(o => o.id === r.id && o.optionId), catalog: cat });
+        if (x.skip) { r.result = '정책 건너뜀: ' + x.skip; const why = x.skip.replace(/No\.\S+|지금 [\d,]+/g, '…'); skipped.set(why, (skipped.get(why) || 0) + 1); continue; }
+        r.newPrice = String(x.price); r.result = x.result; filled++;
+      }
+      tell(filled + '행에 정책 판매가를 입력했습니다' + where + '.' + (skipped.size ? ' 건너뜀: ' + [...skipped].map(([why, n]) => why + ' ' + n + '행').join(' · ') + '.' : '') + notes +
+        ' 쿠폰은 판매자센터에서 따로 만듭니다(' + couponGuide(scope) + ' — docs/coupon-discount.md). 선택 변경 저장을 누르면 판매가만 반영됩니다.');
+      return;
+    }
     if (!fx) {
       ready.forEach(r => { r.newPrice = value; });
       tell(ready.length + '행에 가격을 입력했습니다' + where + '.' + notes + ' 선택 변경 저장을 누르면 반영됩니다.');
