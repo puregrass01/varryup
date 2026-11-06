@@ -7,6 +7,7 @@
 //   5) 좌측 변경 판매가(USD)가 이베이 · 아마존 미국 칸에 들어간다 · 자사몰 [No.번호] 막기 · 결과는 카드마다 한 줄
 //   6) 현황판 칸 · 카드 머리 → 그 몰 전체 탭, [← 6몰 표] 로 돌아온다
 //   7) 셸 이미지 목록의 줄을 카드 갤러리(iframe)에 끌어 놓으면 그 주소가 끝에 붙는다
+//   8) 좌측 [일괄 수정](수정 모드만) = 상품 정보(검색 조건)의 상품을 여섯 몰에서 불러와(같은 상품이면 안 부름) 바뀐 몰을 묻고 모두 저장
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -255,14 +256,58 @@ try {
   await frame.locator('#naverTab').waitFor({ state: 'visible' });
   assert.equal(await frame.locator('#ssEditTitle').inputValue(), '옵틱글래스 기아 K5 새 제목', '카드와 탭은 같은 상태다');
 
-  // 신규 모드에는 표가 없다
+  // 신규 모드에는 표가 없다 · 좌측 버튼은 일괄 등록(수정 모드는 일괄 수정)
+  assert.deepEqual([await page.locator('#btn-bulk-edit').isVisible(), await page.locator('#btn-bulk-register').isVisible()], [true, false]);
   await page.locator('label[for="mode-new"]').click();
   await page.waitForTimeout(200);
   assert.equal(await frame.locator('#mallGridTab').isVisible(), false);
   assert.equal(await page.locator('#btn-grid-back').isVisible(), false);
+  assert.deepEqual([await page.locator('#btn-bulk-edit').isVisible(), await page.locator('#btn-bulk-register').isVisible()], [false, true]);
+
+  // 7) 좌측 [일괄 수정]: 상품 정보(검색 조건)의 상품을 여섯 몰에서 불러와 바뀐 몰(좌측 변경 판매가)을 모두 묻고 저장한다
+  const p2 = await context.newPage();
+  p2.on('pageerror', error => errors.push(error.message));
+  await p2.goto(pathToFileURL(path.resolve('src/ui/index_up.html')).href + '?mode=edit');
+  const f2 = p2.frameLocator('#form-frame'), c2 = () => p2.frames().find(f => f.url().includes('/index.html'));
+  await f2.locator('#mallGridTab').waitFor({ state: 'visible' });
+  await p2.locator('#btn-bulk-edit').click();
+  assert.equal((await c2().evaluate(() => calls.filter(c => c.channel === 'bulk-price-load-many').length)), 0, '상품을 안 골랐으면 부르지 않는다');
+  await p2.evaluate(() => {
+    const set = (id, v) => { document.getElementById(id).value = v; };
+    set('inp-no', '612'); set('inp-brand', '기아'); set('inp-carmodel', 'K5');
+    set('inp-sku', 'OBM0501N612'); set('inp-amz-sku', 'OBM0501N612'); set('inp-cpid', '9876');
+    const usd = document.getElementById('inp-edit-usd'); usd.value = '120'; usd.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  const bulkAsked = new Promise(resolve => p2.once('dialog', async d => { const t = d.message(); await d.accept(); resolve(t); }));
+  await p2.locator('#btn-bulk-edit').click();
+  const bulkText = await bulkAsked;
+  assert.match(bulkText, /아마존 \/ 미국 판매가 \(USD\) \/ 109\.99 → 120/);
+  assert.match(bulkText, /eBay 미국 \/ 판매가 \(USD\) \/ 59\.99 → 120/);
+  await c2().waitForFunction(() => ['amazon', 'ebay'].every(id => /✅/.test(document.querySelector(`.mg-card[data-mall="${id}"] .mg-result`).textContent)));
+  assert.deepEqual(await c2().evaluate(() => calls.filter(c => c.channel === 'bulk-save-batch').map(c => [c.data.scope, c.data.jobs[0].newPrice])), [['amazon-us', '120']]);
+  assert.equal(await c2().evaluate(() => calls.filter(c => c.channel === 'ebay-update').at(-1).data.price), '120');
+  // 같은 상품이면 다시 불러오지 않는다 — 바뀐 칸이 없으면 보내지 않는다
+  const loadsBefore = await c2().evaluate(() => calls.filter(c => c.channel === 'bulk-price-load-many').length);
+  await p2.locator('#btn-bulk-edit').click();
+  await c2().waitForFunction(() => /바뀐 칸이 없습니다/.test(document.getElementById('mgStatus').textContent));
+  assert.equal(await c2().evaluate(() => calls.filter(c => c.channel === 'bulk-price-load-many').length), loadsBefore);
+  // 고르기가 시작한 불러오기(무거운 네이버 찾기)가 끝나기 전에 눌러도 기다렸다가 네이버까지 묻고 저장한다
+  await p2.evaluate(() => {
+    document.getElementById('inp-brand').value = 'SLOW';
+    const db = document.getElementById('inp-db-search');
+    db.dataset.vuChoosing = '1'; db.dispatchEvent(new Event('change', { bubbles: true })); delete db.dataset.vuChoosing;
+  });
+  await c2().waitForFunction(() => /불러오는 중/.test(document.querySelector('.mg-card[data-mall="naver"]').textContent));
+  await p2.evaluate(() => { const krw = document.getElementById('inp-edit-krw'); krw.value = '120000'; krw.dispatchEvent(new Event('change', { bubbles: true })); });
+  const slowAsked = new Promise(resolve => p2.once('dialog', async d => { const t = d.message(); await d.accept(); resolve(t); }));
+  await p2.locator('#btn-bulk-edit').click();
+  assert.match(await slowAsked, /네이버 \/ 기본 판매가 \(원\) \/ 115000 → 120000/, '아직 불러오던 네이버도 빠지지 않는다');
+  await c2().waitForFunction(() => /✅/.test(document.querySelector('.mg-card[data-mall="naver"] .mg-result').textContent));
+  assert.equal(await c2().evaluate(() => calls.filter(c => c.channel === 'smartstore-update-product').at(-1).data.salePrice), 120000);
+  await p2.close();
 
   assert.deepEqual(errors, []);
-  console.log('PASS: 6몰 표 — 카드 6장 · 한꺼번에 불러오기 · 이 몰에 없음 · 바뀐 칸만(묻고 보냄) · 쿠팡 재승인 경고 · 아마존 이미지 둘 다 · 타일 끌기 · 좌측 변경 판매가 · [No.번호] 막기 · 탭 오가기 · 신규 모드엔 없음');
+  console.log('PASS: 6몰 표 — 카드 6장 · 한꺼번에 불러오기 · 이 몰에 없음 · 바뀐 칸만(묻고 보냄) · 쿠팡 재승인 경고 · 아마존 이미지 둘 다 · 타일 끌기 · 좌측 변경 판매가 · [No.번호] 막기 · 탭 오가기 · 신규 모드엔 없음 · 좌측 [일괄 수정](불러오기 + 바뀐 몰 모두 저장)');
 } finally {
   await browser.close();
 }

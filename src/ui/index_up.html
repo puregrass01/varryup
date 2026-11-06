@@ -551,7 +551,7 @@
       padding: 9px;
       font-size: 13px;
     }
-    #btn-bulk-register {
+    #btn-bulk-register, #btn-bulk-edit {
       width: 100%;
       margin-top: var(--space-sm);
       padding: 10px;
@@ -916,6 +916,9 @@
            들어가므로 이 버튼은 넣는 버튼이 아니다 — 빠졌거나 어긋난 것을 로그로 보여 준다. -->
       <button id="btn-run" class="vu-key">입력 확인</button>
       <button id="btn-bulk-register" class="btn-bulk vu-key vu-key-accent">일괄 등록</button>
+      <!-- 일괄 수정 (단일 상품 수정 모드에서만 — section8-mode.js 가 보이고 숨긴다). 상품 정보(검색 조건)의 상품을 여섯 몰에서
+           불러와 바뀐 몰을 모두 API 로 저장한다(runBulkEdit). -->
+      <button id="btn-bulk-edit" class="btn-bulk vu-key vu-key-accent" style="display:none">일괄 수정</button>
     </div><!-- /section7 -->
 
     <!-- ── SECTION 8 (우측 — 자세히 보기) ── -->
@@ -2724,14 +2727,38 @@ function openGridMall(country, type) {
   scheduleFrameSync();
 }
 
-// 좌측의 지금 열쇠로 6몰 표를 불러온다(상품 고르기 · 표의 [다시 불러오기]).
+// 좌측 상품 정보(검색 조건)의 지금 열쇠 — 6몰 표가 몰마다 상품을 찾는 값.
+function mallKeys() {
+  const v = id => ($(id)?.value || '').trim();
+  return { no: bareNoOf(v('inp-no')), brand: v('inp-brand'), model: v('inp-carmodel'),
+    sku: v('inp-sku'), amzSku: v('inp-amz-sku'), cpid: v('inp-cpid') };
+}
+// 좌측의 지금 열쇠로 6몰 표를 불러온다(상품 고르기 · 표의 [다시 불러오기] · 일괄 수정).
 function loadMallGrid() {
   const grid = $('form-frame')?.contentWindow?.VUMallGrid;
   if (currentMode !== 'edit' || !grid) return;
   pushEditPrices();
-  const v = id => ($(id)?.value || '').trim();
-  grid.load({ no: bareNoOf(v('inp-no')), brand: v('inp-brand'), model: v('inp-carmodel'),
-    sku: v('inp-sku'), amzSku: v('inp-amz-sku'), cpid: v('inp-cpid') });
+  return grid.load(mallKeys());
+}
+
+// 좌측 [일괄 수정]: 상품 정보(검색 조건)의 상품을 여섯 몰에서 불러와(이미 그 상품이면 다시 안 부름) 바뀐 몰을 모두 API 로
+// 저장한다. 저장은 6몰 표의 [바뀐 몰 모두 저장]과 같은 길 — 보내기 전에 '몰 / 칸 / 이전 → 새' 를 묻고, 결과는 카드마다 한 줄.
+async function runBulkEdit() {
+  const grid = $('form-frame')?.contentWindow?.VUMallGrid;
+  if (currentMode !== 'edit' || !grid) return;
+  if (grid.busy()) return addLog('6몰 표가 저장 중입니다 — 끝난 뒤 다시 누르세요.', 'warn');
+  if (!Object.values(mallKeys()).some(Boolean)) return addLog('상품 정보(검색 조건)의 본사몰 상품 찾기에서 상품을 먼저 고르세요.', 'warn');
+  showMallGrid();
+  // 고르기가 시작한 불러오기가 아직 돌면 끝나기를 기다린다 — 덜 불러온 몰은 바뀐 칸이 없어 저장에서 말없이 빠진다.
+  await grid.settled();
+  const keys = mallKeys(), loaded = () => JSON.stringify(grid.keys()) === JSON.stringify(keys);
+  if (loaded()) pushEditPrices();
+  else {
+    await loadMallGrid();
+    await grid.settled();
+    if (!loaded()) return;   // 다시 불러오기를 취소했다(저장 안 한 수정이 있음)
+  }
+  await grid.saveAll();
 }
 
 // 좌측 변경 판매가 → 통화가 맞는 카드 칸(네이버 · 쿠팡 원, 아마존 미국 · 이베이 달러, 아마존 일본 엔)에 '바뀐 값' 으로.
@@ -2922,8 +2949,8 @@ async function runBulkRegister() {
 }
 
 /* ══════════════════════════════════════════════
-   변경 판매가 (단일 상품 수정 모드) — 6몰 표의 카드 칸에 넣는다(pushEditPrices). 예전 '일괄 수정' 버튼 ·
-   결과 카드는 6몰 표의 [저장] · [바뀐 몰 모두 저장] 과 카드마다의 결과 줄로 바뀌었다(10-29).
+   변경 판매가 (단일 상품 수정 모드) — 6몰 표의 카드 칸에 넣는다(pushEditPrices). 저장은 카드 [저장] · [바뀐 몰 모두 저장] ·
+   좌측 [일괄 수정](11-06 되살림 — 불러오기 + 바뀐 몰 모두 저장, runBulkEdit), 결과는 카드마다 한 줄.
 ══════════════════════════════════════════════ */
 // 좌측 '변경 판매가' 칸 — 통화마다 하나. 카드는 자기 통화 칸만 읽는다(mall-grid.js price).
 const EDIT_PRICES = {
@@ -2976,8 +3003,9 @@ document.querySelectorAll('.mode-label').forEach(lbl => {
   });
 });
 
-// 일괄 등록 버튼
+// 일괄 등록 · 일괄 수정 버튼
 $('btn-bulk-register')?.addEventListener('click', runBulkRegister);
+$('btn-bulk-edit')?.addEventListener('click', runBulkEdit);
 // 6몰 표: [← 6몰 표] · 본사몰 상품 찾기에서 고르기(목록 선택만 — vu-suggest choose 가 vuChoosing 을 건다) · 변경 판매가
 $('btn-grid-back').addEventListener('click', showMallGrid);
 $('inp-db-search').addEventListener('change', e => { if (e.target.dataset.vuChoosing === '1') setTimeout(loadMallGrid, 150); });

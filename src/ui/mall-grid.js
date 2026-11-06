@@ -19,7 +19,7 @@
   const AMZ_MARKETS = [['amazon-us', '미국', 'USD'], ['amazon-jp', '일본', 'JPY']];
   // cards[id]: { status: idle|loading|missing|pick|error|ready, note, rows, result, before: Map(칸 → 불러온 값), owner, applied }
   const cards = {};
-  let gen = 0, busy = false, lastKeys = {}, prices = {}, priceOpts = {};
+  let gen = 0, busy = false, lastKeys = {}, prices = {}, priceOpts = {}, pending = Promise.resolve();
 
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   // 안내 줄은 ' — ' 앞만 보이고 이유는 마우스를 올리면 보인다(카드를 짧게).
@@ -575,7 +575,7 @@
     lastKeys = keys;
     const my = ++gen;
     say('여섯 몰에서 불러오는 중…');
-    await Promise.all(MALLS.map(m => loadCard(m.id, keys, my)));
+    await (pending = Promise.all(MALLS.map(m => loadCard(m.id, keys, my))));
     if (my !== gen) return;
     const count = s => MALLS.filter(m => cards[m.id]?.status === s).length;
     say(`불러옴 ${count('ready')} · 이 몰에 없음 ${count('missing')} · 고르기 ${count('pick')} · 오류 ${count('error')}`);
@@ -640,7 +640,8 @@
     }
   }
 
-  $('mgSaveAll').onclick = () => saveCards(MALLS.map(m => m.id));
+  const saveAll = () => saveCards(MALLS.map(m => m.id));
+  $('mgSaveAll').onclick = saveAll;
   // 셸이 있으면 좌측의 지금 값으로(셸 loadMallGrid), 없으면 지난 열쇠로.
   $('mgReload').onclick = () => (window.parent !== window && window.parent.loadMallGrid ? window.parent.loadMallGrid() : load(lastKeys));
   MALLS.forEach(m => { const box = el('article', 'mg-card vu-cut'); box.dataset.mall = m.id; $('mgGrid').append(box); });
@@ -653,5 +654,8 @@
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     MALLS.forEach(m => renderCard(m.id));
   };
-  window.VUMallGrid = { load, setPrices, changes: changesOf, busy: () => busy };
+  // keys · settled · saveAll: 셸 좌측 [일괄 수정]이 불러오기가 끝나기를 기다려(아직 불러오는 몰은 바뀐 칸이 없어 저장에서 빠진다)
+  // 지금 불러온 상품인지 보고 바뀐 몰을 모두 저장한다. lastKeys 는 불러오기를 시작할 때 바뀐다 — 끝났는지는 settled 로 본다.
+  const settled = async () => { for (let p; p !== pending;) await (p = pending); };
+  window.VUMallGrid = { load, setPrices, changes: changesOf, busy: () => busy, keys: () => lastKeys, settled, saveAll };
 })();
