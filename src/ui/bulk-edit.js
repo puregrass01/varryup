@@ -2,7 +2,6 @@
   const { imagePolicy, parseImageUrls, sameImages, previewImageUrls } = await import('../utils/bulk_images.js');
   const { productIdentity, identityText } = await import('../utils/product_identity.js');
   const { COUNTRIES, referencePrices, referenceRole, countryPrice, productPageUrl, editionFor } = await import('../utils/country_sync.js');
-  const { POLICY_SCOPES, policyPrice, couponGuide } = await import('../utils/price_policy.js');
   const ipc = require('electron').ipcRenderer, root = document.getElementById('bulk-edit-workspace');
   const scopes = [
     ['naver', '네이버', 'KRW', 'logos/naver.png'], ['coupang', '쿠팡', 'KRW', 'logos/coupang.png'], ['imweb-b2b', '아임웹 B2B', 'KRW', 'logos/b2b.png'],
@@ -95,7 +94,7 @@
     // 서버 검색칸은 아마존·eBay 에서만 보인다. 나머지 몰은 전체를 받은 뒤 같은 단어로 걸러 표 안 검색과 같다(draw).
     '<div class="be-tools"><input id="be-api-query" placeholder="상품명·SKU 검색 · 빈칸이면 전체 목록" aria-label="목록 검색어">' +
     '<button id="be-list" type="button">상품 목록 조회</button><button id="be-refresh" type="button" title="몰 API 로 목록과 모든 쪽 상품의 현재가를 다시 읽어 이 PC 의 저장본(쿠팡 판매가 · 아마존 · eBay 목록)을 고칩니다. 상품마다 호출이라 수 분 걸릴 수 있습니다">데이터 갱신</button><button id="be-sync" type="button" hidden>전체 목록 동기화</button></div>' +
-    '<p class="be-help">표에 보이는 쪽의 상품은 현재가·이미지를 자동으로 불러옵니다. 상품을 선택하고 가격 적용, 또는 사진 열 목록에 이미지를 끌어 놓고 [↓]로 값을 넣은 뒤 선택 변경 저장을 누르세요. 다른 쪽의 안 읽은 상품은 적용할 때 먼저 불러옵니다. 쿠팡 이미지는 상품 전체 옵션에 적용됩니다.</p>' +
+    '<p class="be-help">표에 보이는 쪽의 상품은 현재가·이미지를 자동으로 불러옵니다. 상품을 선택하고 판매가 열 머리 칸에 값을 넣거나 사진 열 목록에 이미지를 끌어 놓은 뒤, 그 옆 [↓]로 넣고 선택 변경 저장을 누르세요. 행의 판매가 칸을 바로 고쳐도 됩니다. 다른 쪽의 안 읽은 상품은 적용할 때 먼저 불러옵니다. 쿠팡 이미지는 상품 전체 옵션에 적용됩니다.</p>' +
     '<div class="be-actions">' +
     // 선택·해제는 표 머리의 전체선택 체크 하나로 한다. 판매가·이미지 입력은 표 머리 아래 줄, 그 열 바로 밑에 있다.
     // 현재가·이미지는 보이는 쪽을 자동으로 읽는다(autoLoad) — 예전 '선택 상품 현재가·이미지 불러오기' 버튼은 없앴다.
@@ -104,13 +103,14 @@
     '<div class="be-state"><div id="be-status" role="status" aria-live="polite"></div><p class="be-help" id="be-count"></p></div>' +
     // 필터는 표 왼쪽 레일에 세로로 쌓는다(표 안 검색이 맨 위). 표는 나머지 폭을 쓴다.
     '<div class="be-body"><div class="be-filters" id="be-filters" role="group" aria-label="표 필터"></div>' +
-    '<div class="be-scroll"><table class="be-table"><thead><tr><th class="be-check-column"><label class="be-th-check-label"><input type="checkbox" id="be-th-select-all" aria-label="필터 결과 모든 페이지 전체선택" title="필터에 맞는 모든 페이지의 행을 선택합니다 · 다시 누르면 선택을 모두 해제합니다"> 전체선택</label></th><th class="be-photo-column"><span id="be-photo-label">사진</span><small id="be-image-hint"></small></th><th>상품명 / 옵션</th><th>상품번호 / SKU</th><th>브랜드 / 차종</th><th id="be-price-label">기존 판매가</th><th>판매가 덮어쓰기</th><th>처리 결과</th></tr>' +
+    '<div class="be-scroll"><table class="be-table"><thead><tr><th class="be-check-column"><label class="be-th-check-label"><input type="checkbox" id="be-th-select-all" aria-label="필터 결과 모든 페이지 전체선택" title="필터에 맞는 모든 페이지의 행을 선택합니다 · 다시 누르면 선택을 모두 해제합니다"> 전체선택</label></th><th class="be-photo-column"><span id="be-photo-label">사진</span><small id="be-image-hint"></small></th><th>상품명 / 옵션</th><th>상품번호 / SKU</th><th>브랜드 / 차종</th><th>판매가 덮어쓰기</th><th>처리 결과</th></tr>' +
     // 열마다 칸 하나씩(합치지 않는다) — 입력이 그 열 머리 바로 밑에 온다. 이미지는 사진 열, 판매가는 판매가 덮어쓰기 열.
+    // 판매가 열의 행 칸이 곧 지금 판매가다(불러오면 현재가로 채운다) — 따로 보이던 '기존 판매가' 열은 없앴다(11-09).
     '<tr class="be-th-tools"><td></td><td class="be-photo-column"><div class="be-tool be-image-tool" role="group" aria-label="이미지 입력"><div id="be-image-list"></div>' +
-    '<button id="be-image-apply" type="button" title="선택 상품의 이미지를 이 목록으로 바꿉니다" aria-label="선택 상품 이미지를 이 목록으로 교체">↓</button></div></td><td></td><td></td><td></td><td></td>' +
-    '<td><div class="be-tool" role="group" aria-label="판매가 덮어쓰기"><input id="be-value" type="number" min="0" placeholder="판매가" aria-label="선택 행에 넣을 판매가">' +
-    '<span id="be-currency" class="be-unit"></span><select id="be-price-source" aria-label="판매가 값 출처" title="환율가: 국내 기준가 등급 ÷ 오늘 환율(우대 없음)에서 앞 두 자리만 남긴 값을 행마다 계산합니다(아마존·eBay 전용). 가격 정책: 11-06 정책표의 1set 판매가 100,000 · 정가 140,000(쿠팡·스마트스토어 전용, 저장 때 정가도 보냅니다)">' +
-    '<option value="direct">직접 입력</option><option value="fx">환율가</option><option value="policy">가격 정책</option></select><button id="be-apply" type="button">가격 적용</button></div></td><td></td></tr>' +
+    '<button id="be-image-apply" type="button" title="선택 상품의 이미지를 이 목록으로 바꿉니다" aria-label="선택 상품 이미지를 이 목록으로 교체">↓</button></div></td><td></td><td></td><td></td>' +
+    // 판매가 열: [칸][통화][↓] — 사진 열 [목록][↓] 과 같은 모양. 값 출처(직접 입력 · 환율가 · 가격 정책) 드롭다운은 없앴다(11-09).
+    '<td><div class="be-tool be-price-tool" role="group" aria-label="판매가 덮어쓰기"><input id="be-value" type="number" min="0" placeholder="판매가" aria-label="선택 행에 넣을 판매가">' +
+    '<span id="be-currency" class="be-unit"></span><button id="be-apply" type="button" title="선택 행의 판매가를 이 값으로 바꿉니다" aria-label="선택 행 판매가를 이 값으로 교체">↓</button></div></td><td></td></tr>' +
     '</thead><tbody id="be-body"></tbody></table></div></div>' +
     '<div class="be-pager"><button id="be-prev" type="button">이전</button><span id="be-page"></span><button id="be-next" type="button">다음</button></div>';
   // 일일 환율 자동 변경 패널(fx-auto-price.js)은 모드 바 '환율' 탭의 칸에 붙는다. 일괄 화면 바로 뒤 형제 칸이다.
@@ -154,8 +154,11 @@
     b.addEventListener('click', () => { if (!busy) { country = null; switchScope(id); } });
     $('be-platforms').append(b);
   }
+  // 나라 탭은 국기 + 나라 이름(logos/flags — 사용자가 준 그림, 11-09). 국기는 장식이라 alt 를 비운다(이름이 버튼 글자).
+  const FLAGS = { kr: 'kr.png', us: 'us.png', jp: 'jp.webp' };
   for (const [code, c] of Object.entries(COUNTRIES)) {
-    const b = el('button', '', c.label); b.type = 'button'; b.dataset.country = code; b.setAttribute('role', 'tab');
+    const b = el('button', 'be-country-btn'), flag = el('img', 'be-flag'); b.type = 'button'; b.dataset.country = code; b.setAttribute('role', 'tab');
+    flag.src = 'logos/flags/' + FLAGS[code]; flag.alt = ''; flag.width = 21; flag.height = 14; b.append(flag, el('span', '', c.label));
     b.title = `${[c.ref, ...c.targets, ...c.view].map(titleOf).join(' · ')} 상품을 본사몰 상품 묶음으로 한 표에 모아 봅니다` + (c.view.length ? ` (${c.view.map(titleOf).join(' · ')}는 보기만)` : '');
     b.addEventListener('click', () => run(() => openCountry(code)));
     $('be-countries').append(b);
@@ -201,23 +204,15 @@
     const filtered = view(), unit = unitOf(scope);
     const policy = imagePolicy(scope);
     // 아임웹 네 범위도 Open API 로 읽고 쓴다(2026-10-05) — 예전의 '카탈로그 참조 · API 연동 전' 잠금은 없앴다.
-    $('be-price-label').textContent = '기존 판매가';
-    for (const id of ['be-price-source', 'be-apply', 'be-save', 'be-image-apply', 'be-th-select-all', 'be-country-apply', 'be-country-images']) $(id).disabled = busy;
+    for (const id of ['be-apply', 'be-save', 'be-image-apply', 'be-th-select-all', 'be-country-apply', 'be-country-images']) $(id).disabled = busy;
     // 나라 화면은 가격 전용이다 — 표 머리의 이미지 · 가격 입력 줄 대신 [본사 값으로 맞추기] · [본사 상세 이미지 →] 를 쓴다.
     root.querySelector('.be-th-tools').hidden = !!country;
     $('be-country-apply').hidden = !country; $('be-country-images').hidden = !country || !COUNTRIES[country].images;
-    // 서버 검색칸·전체 목록 동기화·환율가는 아마존·eBay 만. 환율가는 행마다 계산하므로 고르면 판매가 칸을 잠근다.
-    const amazonEbay = /^(?:amazon-|ebay$)/.test(scope), source = $('be-price-source');
-    $('be-api-query').hidden = $('be-sync').hidden = !amazonEbay;
+    // 서버 검색칸·전체 목록 동기화는 아마존·eBay 만.
+    $('be-api-query').hidden = $('be-sync').hidden = !/^(?:amazon-|ebay$)/.test(scope);
     // 나라 화면은 쪽마다 짝 상품의 현재가를 바로 읽는다 — 데이터 갱신은 몰 탭에서.
     $('be-refresh').hidden = !!country;
-    // 가격 정책은 쿠팡 · 네이버만. 고를 것이 '직접 입력' 하나뿐인 몰에서는 칸째 숨긴다(표 머리 입력 줄이 한 줄 낮아진다).
-    const fxOption = source.querySelector('[value="fx"]'), policyOption = source.querySelector('[value="policy"]');
-    fxOption.hidden = fxOption.disabled = !amazonEbay;
-    policyOption.hidden = policyOption.disabled = !POLICY_SCOPES.has(scope);
-    source.hidden = fxOption.disabled && policyOption.disabled;
-    if (source.selectedOptions[0]?.disabled) source.value = 'direct';
-    $('be-value').disabled = busy || source.value !== 'direct';
+    $('be-value').disabled = busy;
     root.querySelector('.be-help').textContent = country ? COUNTRY_HELP : defaultHelp;
     $('be-photo-label').textContent = country ? '쇼핑몰' : '사진 · ' + policy.label;
     $('be-image-hint').textContent = country ? '' : policy.display === 'images' ? 'HTML 이미지 지원 · 순서대로 미리보기' : '이미지 미리보기 · 저장은 URL 배열';
@@ -234,7 +229,7 @@
     if (country) for (const g of pageGroups()) {
       // 묶음 머리: 본사몰 상품명 · 번호, 시트로 찾은 짝이면 표시, 인덱스에 없으면 그 이유.
       const head = el('tr', 'be-country-head'), td = el('td', '', g.own[0].name);
-      td.colSpan = 8;
+      td.colSpan = 7;
       td.append(el('small', '', titleOf(scope) + ' 상품 ' + g.id + (g.t.missing ? ' · ' + g.t.missing : g.t.via === 'sheet' ? ' · Vehicles 시트로 찾은 짝' : '') +
         (g.t.missing ? '' : ' · 짝 ' + g.members.length + '줄')));
       head.append(td); body.append(head);
@@ -243,7 +238,7 @@
     else for (const r of pageRows()) body.append(rowEl(r));
     if (!filtered.length) {
       const td = el('td', '', rows().length ? '필터에 맞는 상품이 없습니다.' : '플랫폼을 선택하고 상품 목록을 조회하세요.');
-      td.colSpan = 8; const tr = el('tr'); tr.append(td); body.append(tr);
+      td.colSpan = 7; const tr = el('tr'); tr.append(td); body.append(tr);
     }
     autoLoad();
   }
@@ -329,12 +324,11 @@
       const own = platformId(r); if (own) id.append(el('small', 'be-own-id', own));
       tr.append(id);
       const taxonomy = el('td', '', r.tax.brand); taxonomy.append(el('small', '', r.tax.vehicle + ' / ' + r.tax.model)); tr.append(taxonomy);
-      const current = el('td', 'be-price', r.ready ? (r.price === '' ? '미등록' : Number(r.price).toLocaleString('ko-KR') + ' ' + unit) : (r.price !== '' ? (Number.isFinite(Number(r.price)) ? Number(r.price).toLocaleString('ko-KR') + ' ' + unit : r.price) + ' (목록)' : '조회 필요'));
-      const fx = state(sc).fx, tier = fx?.links?.[r.id];
-      if (tier) current.append(el('small', '', (fx.on ? '환율 자동 · ' : '환율 등급 · ') + tier));
-      tr.append(current);
-      const priceCell = el('td'), input = el('input'); input.type = 'number'; input.step = unit === 'USD' ? '.01' : '1'; input.min = unit === 'USD' ? '.01' : '1';
+      // 판매가 칸 하나가 지금 판매가이자 덮어쓸 값이다. 흐린 글자 = 지금 판매가(불러오기 전에는 목록 가격) — 칸을 비우면 그 값으로 돌아간다.
+      const priceCell = el('td', 'be-price'), input = el('input'); input.type = 'number'; input.step = unit === 'USD' ? '.01' : '1'; input.min = unit === 'USD' ? '.01' : '1';
       input.value = r.newPrice; input.disabled = busy || !r.ready || locked(r) || r.priceReadonly;
+      input.placeholder = r.price !== '' ? String(r.price) : r.ready ? '미등록' : '조회 필요';
+      const fx = state(sc).fx, tier = fx?.links?.[r.id];
       input.setAttribute('aria-label', '판매가: ' + r.name + (r.variant ? ' / ' + r.variant : ''));
       input.addEventListener('input', () => {
         // 손으로 고치면 정책이 넣은 정가는 버린다(다른 판매가에 정가 140,000 이 숨어 따라가지 않게 — 11-06 리뷰).
@@ -344,7 +338,9 @@
       });
       // 나라 화면의 본사 줄을 고치면(칸을 떠날 때) 묶음의 다른 몰 줄이 그 값을 따라간다.
       if (country && sc === scope) input.addEventListener('change', () => { follow(groups().filter(g => g.id === r.id), true); draw(); });
-      input.addEventListener('mouseover', () => tooltip(input, input.value, unit)); priceCell.append(input); tr.append(priceCell);
+      input.addEventListener('mouseover', () => tooltip(input, input.value || input.placeholder, unit)); priceCell.append(input, el('span', 'be-unit', unit));
+      if (tier) priceCell.append(el('small', '', (fx.on ? '환율 자동 · ' : '환율 등급 · ') + tier));
+      tr.append(priceCell);
       const resultCell = el('td', 'be-result', r.result || (r.priceReadonly ? '이미지만 수정 가능' : r.readonly ? '판매가 없음' : r.ready ? '가격 입력 가능' : '현재가 조회 전'));
       if (r.imageResult) resultCell.append(el('small', '', r.imageResult)); tr.append(resultCell);
       return tr;
@@ -432,7 +428,7 @@
   // 묶음 조회가 없는 쿠팡·eBay 는 메인이 상품마다 읽으므로, 진행 표시와 중단이 늦지 않게 작게 나눠 보낸다.
   // 네이버도 이미지까지 읽느라 메인이 상품마다 원상품을 읽는다(목록 조회 결과에는 상세 이미지가 없다) — 같은 이유로 작게.
   const LOAD_CHUNK = { naver: 10, 'amazon-us': 40, 'amazon-jp': 40, ebay: 8, coupang: 4 };
-  // 행의 상품마다 현재가·이미지를 읽어 행을 바꿔 끼운다. 자동 불러오기(보이는 쪽)와 '가격 적용'(안 읽은 선택 행)이 같이 쓴다.
+  // 행의 상품마다 현재가·이미지를 읽어 행을 바꿔 끼운다. 자동 불러오기(보이는 쪽)와 판매가 [↓](안 읽은 선택 행)이 같이 쓴다.
   async function loadPrices(work, sc = scope) {
     const products = [...new Map(work.map(r => [r.id, r])).values()];
     let ok = 0, failed = 0, firstError = '', blocked = '', noImages = 0;
@@ -469,7 +465,7 @@
         const before = rows(sc).filter(x => x.id === r.id);
         const picked = before.some(x => x.optionId) ? new Map(before.map(x => [x.optionId || '', x.selected])) : null;
         const wasSelected = before.some(x => x.selected);
-        // 이미지 변경안([↓]·✖)이 걸린 상품은 변경안과 그때 읽은 revision 을 새 행에 옮긴다. 가격 적용이 안 읽은 행을
+        // 이미지 변경안([↓]·✖)이 걸린 상품은 변경안과 그때 읽은 revision 을 새 행에 옮긴다. 판매가 [↓]가 안 읽은 행을
         // 불러오며 행을 바꿔 끼울 때 변경안이 조용히 사라지던 것. revision 을 그대로 두어 저장의 expectedRevision 검사가 맞다.
         const draft = before.find(x => x.imagesReady && Array.isArray(x.newImages));
         const links = Object.fromEntries(LINK_KEYS.map(k => [k, before.find(b => b[k])?.[k]]).filter(([, v]) => v));
@@ -521,26 +517,23 @@
     clearTimeout(autoTimer);
     autoTimer = setTimeout(() => { if (!busy && unread().length) run(async () => { const note = await loadVisible(); if (note) tell(note); }); }, 300);
   }
-  // 가격 적용: 값 출처가 '직접 입력'이면 칸의 값을, '환율가'면 행마다 계산한 값을 고른 행에 넣는다. 현재가를 아직 안 읽은
-  // 행은 먼저 읽는다(현재가 불러오기와 같은 길). 보내기는 '선택 변경 저장'과 그 확인창에서만 한다.
-  // 환율가 = 국내 기준가 등급 ÷ 오늘 환율(우대 없음)을 앞 두 자리만 남긴 값. 판단은 환율 자동 변경과 같다(fx_auto_price.js).
-  // 자동 저장이 건너뛰는 10% 초과 변동도 채운다. 환율 변동 1% 미만·이미 같은 가격은 지금 판매가를 그대로 둔다.
-  // 가격 정책 = price_policy.js 의 1set 판매가 · 정가(판 구분 없음, 11-06). 정가는 저장 때 판매가와 함께 나간다(newList).
+  // 판매가 [↓]: 열 머리 칸의 값을 고른 행에 넣는다. 현재가를 아직 안 읽은 행은 먼저 읽는다(현재가 불러오기와 같은 길).
+  // 보내기는 '선택 변경 저장'과 그 확인창에서만 한다. 예전 값 출처(환율가 · 가격 정책) 드롭다운은 11-09 에 없앴다 —
+  // 환율가는 '환율' 탭(fx-auto-price.js), 정책가 표는 price_policy.js 에 남아 있다.
   $('be-apply').addEventListener('click', () => run(async () => {
-    const source = $('be-price-source').value, fx = source === 'fx', policy = source === 'policy', value = $('be-value').value;
-    if (source === 'direct' && (!value || Number(value) <= 0)) { tell('덮어쓸 판매가를 입력하세요.'); return; }
+    const value = $('be-value').value;
+    if (!value || Number(value) <= 0) { tell('덮어쓸 판매가를 입력하세요.'); return; }
     // 고른 줄은 불러오기 전에 키로 기억한다. 불러온 가격이 가격 필터에서 빠져도 그 줄을 채우고, 필터가 숨기던 선택 줄은 건드리지 않는다.
     const before = selected(), wanted = new Set(before.map(key)), ids = new Set(before.map(r => r.id));
     if (!before.length) { tell('가격을 넣을 상품을 선택하세요.'); return; }
     const pending = before.filter(r => !r.ready && !r.priceReadonly);
     const loaded = pending.length ? await loadPrices(pending) : null;
-    if (cancel) { tell('가격 적용을 중단했습니다. 판매가 칸은 바꾸지 않았습니다.'); return; }
+    if (cancel) { tell('판매가 넣기를 중단했습니다. 판매가 칸은 바꾸지 않았습니다.'); return; }
     // 상품 한 줄이 불러온 뒤 옵션 여러 줄로 펼쳐지면 옵션가가 한 값으로 납작해지지 않게 채우지 않는다(옵션을 보고 다시 적용).
     const spread = new Set(), picked = [];
     for (const r of rows()) {
       if (wanted.has(key(r))) picked.push(r);
-      // 가격 정책은 줄마다 판 · 구성을 읽어 값을 정하므로 펼쳐진 옵션 줄도 그대로 채운다.
-      else if (wanted.has(r.id + ':')) { if (!policy && rows().filter(x => x.id === r.id).length > 1) spread.add(r.id); else picked.push(r); }
+      else if (wanted.has(r.id + ':')) { if (rows().filter(x => x.id === r.id).length > 1) spread.add(r.id); else picked.push(r); }
     }
     const ready = picked.filter(r => r.ready && !r.readonly && !r.priceReadonly);
     // 고른 상품 안의 읽기 전용 줄(쿠팡 승인 전 옵션·이미지만 고칠 수 있는 줄)은 건너뛰고 개수만 알린다.
@@ -549,50 +542,15 @@
     const inView = new Set(view()), hidden = ready.filter(r => !inView.has(r)).length;
     const notes = (readonly ? ' 읽기 전용이라 건너뛴 행 ' + readonly + '개.' : '') +
       (unloaded ? ' 현재가를 불러오지 못해 건너뛴 행 ' + unloaded + '개(처리 결과 칸 확인).' : '') +
-      (spread.size ? ' 상품 ' + spread.size + '개가 옵션 ' + rows().filter(r => spread.has(r.id)).length + '행으로 펼쳐져 판매가를 넣지 않았습니다. 옵션별 현재가를 확인한 뒤 다시 가격 적용을 누르세요.' : '') +
+      (spread.size ? ' 상품 ' + spread.size + '개가 옵션 ' + rows().filter(r => spread.has(r.id)).length + '행으로 펼쳐져 판매가를 넣지 않았습니다. 옵션별 현재가를 확인한 뒤 다시 [↓]를 누르세요.' : '') +
       (hidden ? ' 현재가를 불러온 뒤 가격 필터에서 빠진 행 ' + hidden + '개도 채웠습니다(필터를 바꿔야 보이고 저장됩니다).' : '') +
       (loaded?.blocked ? ' 현재가 조회를 멈춘 이유: ' + loaded.blocked : '');
     if (!ready.length) { tell('판매가를 넣을 수 있는 행이 없습니다.' + notes); return; }
-    // 다른 값 출처로 덮으면 앞서 정책이 넣은 정가는 버린다(새 판매가가 정가보다 클 수 있다).
-    if (!policy) ready.forEach(r => { r.newList = ''; });
     const visible = new Set(pageRows()), off = ready.filter(r => inView.has(r) && !visible.has(r)).length;
     const where = off ? '(다른 페이지 ' + off + '행 포함)' : '';
-    if (policy) {
-      const skipped = new Map();
-      let filled = 0;
-      for (const r of ready) {
-        const x = policyPrice(scope, r);
-        if (x.skip) { r.result = '정책 건너뜀: ' + x.skip; const why = x.skip.replace(/지금 [\d,]+/g, '…'); skipped.set(why, (skipped.get(why) || 0) + 1); continue; }
-        r.newPrice = String(x.price); r.newList = String(x.list); r.result = x.result; filled++;
-      }
-      tell(filled + '행에 정책 판매가 · 정가를 입력했습니다' + where + '.' + (skipped.size ? ' 건너뜀: ' + [...skipped].map(([why, n]) => why + ' ' + n + '행').join(' · ') + '.' : '') + notes +
-        ' 선택 변경 저장을 누르면 판매가와 정가를 함께 보냅니다. 쿠폰은 판매자센터에서 따로 만듭니다(' + couponGuide() + ' — docs/coupon-discount.md).');
-      return;
-    }
-    if (!fx) {
-      ready.forEach(r => { r.newPrice = value; });
-      tell(ready.length + '행에 가격을 입력했습니다' + where + '.' + notes + ' 선택 변경 저장을 누르면 반영됩니다.');
-      return;
-    }
-    const plan = await call('fx-auto-price-plan', { scope, rows: ready.map(r => ({ id: r.id, optionId: r.optionId || '', price: r.price })) });
-    const byKey = new Map(plan.rows.map(x => [x.id + ':' + (x.optionId || ''), x]));
-    let filled = 0, large = 0, kept = 0, missing = 0;
-    for (const r of ready) {
-      const x = byKey.get(key(r));
-      if (!x?.target) { missing++; r.result = '환율가 없음: ' + (x?.error || '등급 없음'); continue; }
-      const tier = '국내 ' + Number(x.tier.krw).toLocaleString('ko-KR') + '원' + (x.tier.label ? ' (' + x.tier.label + ')' : '');
-      if (x.action === 'same' || x.action === 'small') {
-        kept++; r.newPrice = String(r.price);
-        r.result = (x.action === 'same' ? '환율가와 같음' : '환율 변동 1% 미만 — 그대로') + ' · ' + tier; continue;
-      }
-      r.newPrice = x.target; filled++; if (x.action === 'large') large++;
-      r.result = '환율가 ' + x.target + ' (환산 ' + Number(x.raw).toLocaleString('ko-KR', { maximumFractionDigits: 2 }) + ') · ' + tier;
-    }
-    tell(filled + '행에 환율가를 입력했습니다' + where + (large ? ', 그중 10% 넘게 바뀌는 행 ' + large + '개는 확인 후 저장하세요' : '') + '.' +
-      (kept ? ' 환율가와 같거나 변동 1% 미만이라 그대로 둔 행 ' + kept + '개.' : '') + (missing ? ' 등급·현재가가 없는 행 ' + missing + '개.' : '') + notes +
-      ' 1 USD = ' + Number(plan.rate.KRW.toFixed(2)).toLocaleString('ko-KR') + '원(' + plan.rate.marketDate + ' 기준). 선택 변경 저장을 누르면 반영됩니다.');
+    ready.forEach(r => { r.newPrice = value; });
+    tell(ready.length + '행에 가격을 입력했습니다' + where + '.' + notes + ' 선택 변경 저장을 누르면 반영됩니다.');
   }));
-  $('be-price-source').addEventListener('change', draw);
   // 표 머리 이미지 목록: 끌어 놓은 이미지(ESM 이미지호스팅 · 탐색기 파일은 ESM 에 올려서 · + ESM 상세는 이미지 설정의 선택분).
   // 넣을 때마다 갤러리가 그 몰 기준으로 ESM 확인(bulk-images-import)을 마친 목록만 남긴다. 몰마다 따로 둔다.
   // draw() 마다 다시 그리지 않는다 — 다시 그리면 갤러리가 기다리던 ESM 업로드 결과를 버린다.

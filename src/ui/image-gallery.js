@@ -20,7 +20,8 @@
         return i >= 0 ? pool.splice(i, 1)[0] : make(url);
       });
     },
-    render(container, images, { onRemove, onMove, onReplace, scope, isBusy: formBusy = () => false, onChange = () => {} } = {}) {
+    // fixed: 앞의 몇 장은 지우거나 옮길 수 없다(셸 [img] 패널의 대표 이미지). 그 칸 이름은 '대표', 뒤는 1부터 센다.
+    render(container, images, { onRemove, onMove, onReplace, scope, fixed = 0, isBusy: formBusy = () => false, onChange = () => {} } = {}) {
       const isBusy = () => uploading.has(container) || formBusy();
       // 순서 이동이 따로 없는 폼(아마존·eBay)은 목록 교체로 옮긴다. 첫 장 = 대표.
       onMove ||= onReplace && ((index, step) => {
@@ -32,8 +33,8 @@
       const gallery = node('div', 'vu-image-gallery');
       images.forEach((entry, index) => {
         const url = String(entry?.url ?? entry ?? '');
-        const tile = node('figure', 'vu-image-tile');
-        const image = node('img'); image.src = url; image.alt = '이미지 ' + (index + 1); image.loading = 'lazy';
+        const tile = node('figure', 'vu-image-tile'), name = index < fixed ? '대표 이미지' : '이미지 ' + (index + 1 - fixed);   // 칸 번호와 같은 이름
+        const image = node('img'); image.src = url; image.alt = name; image.loading = 'lazy';
         image.onerror = () => { image.alt = '미리보기 실패'; };
         const open = node('button', 'vu-image-open'); open.type = 'button'; open.title = '전체 이미지 보기';
         open.setAttribute('aria-label', image.alt + ' 확대');
@@ -47,20 +48,20 @@
           dialog.showModal(); close.focus();
         };
         const remove = node('button', 'vu-image-remove', '×'); remove.type = 'button';
-        remove.title = '이미지 삭제'; remove.setAttribute('aria-label', '이미지 ' + (index + 1) + ' 삭제');
-        remove.disabled = !onRemove || formBusy();
+        remove.title = '이미지 삭제'; remove.setAttribute('aria-label', name + ' 삭제');
+        remove.disabled = !onRemove || formBusy() || index < fixed;
         remove.onclick = event => {
           event.preventDefault(); event.stopPropagation();
           if (isBusy()) return wait();
           onRemove(index); onChange();
         };
-        tile.append(open, remove, node('figcaption', '', String(index + 1)));
+        tile.append(open, remove, node('figcaption', '', index < fixed ? '대표' : String(index + 1 - fixed)));
         if (onMove) {
           const moves = node('div', 'vu-image-moves');
           for (const [step, label] of [[-1, '앞으로'], [1, '뒤로']]) {
             const move = node('button', '', step < 0 ? '←' : '→'); move.type = 'button';
-            move.setAttribute('aria-label', '이미지 ' + (index + 1) + ' ' + label);
-            move.disabled = formBusy() || index + step < 0 || index + step >= images.length;
+            move.setAttribute('aria-label', name + ' ' + label);
+            move.disabled = formBusy() || index < fixed || index + step < fixed || index + step >= images.length;
             move.onclick = () => { if (isBusy()) return wait(); onMove(index, step); onChange(); };
             moves.append(move);
           }

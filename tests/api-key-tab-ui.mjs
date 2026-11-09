@@ -134,7 +134,7 @@ try {
     assert.ok(widths.minTable <= widths.tableBox - 17, '세로 스크롤바가 있어도 표가 칸 안에 들어간다');
     assert.ok(widths.rail >= 170 && widths.rail <= 190, '레일 약 180px');
     assert.ok(widths.photo >= 190 && widths.photo <= 210, '사진 열 약 200px');
-    assert.ok(widths.columns[7] >= 80, '처리 결과 열이 낱말 중간에서 끊길 만큼 좁지 않다');
+    assert.ok(widths.columns.at(-1) >= 80, '처리 결과 열이 낱말 중간에서 끊길 만큼 좁지 않다');
     assert.ok(widths.railOverflow <= 0, '800px 높이에서 레일의 여섯 칸이 스크롤 없이 보인다');
     assert.equal(widths.railTop, 'be-search', '표 안 검색이 레일 맨 위');
     assert.deepEqual(widths.railStack, ['표 안에서 검색', '브랜드', '차량·제조사', '차종', '상품 종류', '가격']);

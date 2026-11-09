@@ -1,65 +1,52 @@
 (() => {
   const profiles = new Map(), bundles = new Map();
-  let ipc, root, selected = 'domestic', busy = false, dragging = 0, afterChange = () => {};
+  let ipc, root, selected = 'domestic', busy = false, afterChange = () => {};
   const $ = id => root.querySelector(`#${id}`);
-  const node = (tag, text, cls) => { const el = document.createElement(tag); if (text) el.textContent = text; if (cls) el.className = cls; return el; };
   const status = text => { $('vu-image-status').textContent = text; };
   async function request(channel, data) {
     const r = await ipc.invoke(channel, data);
     if (!r?.success) throw new Error(r?.error || '이미지 목록을 읽지 못했습니다.');
     return r;
   }
+  // 목록은 6몰 카드의 '사진 · 상품 이미지'와 같은 갤러리(image-gallery.js)다 — 칸 · 번호 · ← → · ×.
+  // 대표는 늘 첫 칸(못 옮기고 못 지움). × 는 그 이미지를 뺀다(excluded) — 같은 이미지를 다시 끌어 놓거나 '기본값'으로 되돌린다.
+  // 주소가 있는 칸은 끌어서 6몰 카드 이미지 칸(iframe 갤러리)에 놓으면 그 몰 목록 끝에 붙는다.
   function draw() {
+    root.querySelectorAll('button, select, textarea').forEach(el => el.disabled = busy);   // 목록 칸 버튼은 아래 갤러리가 정한다
     const p = profiles.get(selected); if (!p) return;
     $('vu-image-folder').textContent = p.detailSource === 'esm' ? 'ESM 상세 이미지 · HTML 기본 목록' : p.folder;
     $('vu-image-seed').hidden = selected === 'domestic';
-    const list = $('vu-image-list'); list.replaceChildren();
-    p.items.forEach((item, i) => {
-      const row = node('div', '', 'vu-image-row'), label = node('label');
-      const check = node('input'); check.type = 'checkbox'; check.checked = item.selected; check.disabled = busy || i === 0;
-      check.setAttribute('aria-label', `${item.name} 포함`);
-      check.addEventListener('change', () => change({ excluded: p.items.filter(v => v.role !== '대표' && (v.path === item.path ? !check.checked : !v.selected)).map(v => v.path) }));
-      const img = node('img'); img.alt = `${item.role} ${item.name}`; img.draggable = false; if (item.previewUrl) img.src = item.previewUrl;
-      const text = node('span', `${item.role} · ${item.name}`);
-      text.append(node('small', item.error || (item.source === 'esm' ? 'ESM 이미지' : item.url ? '호스팅 저장됨' : (i === 0 && p.seed ? 'VerySeed GLOBAL 최신 사진' : '적용 시 주소 확인'))));
-      if (i === 0 && item.modified) text.append(node('small', new Date(item.modified).toLocaleString('ko-KR')));
-      label.append(check, img, text); row.append(label);
-      // 상세 줄은 끌어다 놓아 순서를 바꾼다(대표는 늘 첫 줄이라 순서는 못 바꾸고, 그 위에 놓을 수도 없다).
-      // 주소가 있는 줄은 그 주소도 싣는다 — 수정 모드의 6몰 카드(iframe 갤러리)에 놓으면 이미지 끝에 붙는다(image-gallery.js).
-      // 작업 중에 그린 줄은 run() 이 끝날 때 data-drag 로 다시 켠다(예전엔 작업 중 그린 줄이 계속 못 끌렸다).
-      const url = item.url || '';
-      if (url || i > 0) { row.dataset.drag = '1'; row.draggable = !busy; }
-      if (url) {
-        row.title = '끌어서 순서 바꾸기 · 6몰 카드 이미지 칸에 놓으면 추가';
-        row.addEventListener('dragstart', e => { e.dataTransfer.effectAllowed = 'copyMove'; e.dataTransfer.setData('text/uri-list', url); e.dataTransfer.setData('text/plain', url); });
-      }
-      if (i > 0) {
-        row.title ||= '끌어서 순서 바꾸기';
-        row.addEventListener('dragstart', e => { dragging = i; e.dataTransfer.setData('application/x-vu-row', String(i)); });
-        row.addEventListener('dragend', () => { dragging = 0; });
-        row.addEventListener('dragover', e => { if (dragging) e.preventDefault(); });
-        row.addEventListener('drop', e => {
-          if (!dragging) return;
-          e.preventDefault(); e.stopPropagation();
-          const from = dragging; dragging = 0;
-          if (from === i || busy) return;
-          const order = p.items.slice(1).map(v => v.path);
-          order.splice(i - 1, 0, ...order.splice(from - 1, 1));
-          change({ order });
-        });
-      }
-      list.append(row);
+    const shown = p.items.filter(i => i.selected), off = p.items.filter(i => i.role !== '대표' && !i.selected);
+    window.VUImageGallery.render($('vu-image-list'), shown.map(i => i.previewUrl || i.url || ''), {
+      fixed: shown[0]?.role === '대표' ? 1 : 0, isBusy: () => busy,
+      onRemove: i => change({ excluded: [...off, shown[i]].map(v => v.path) }),
+      onMove: (i, step) => {
+        const order = p.items.slice(1).map(v => v.path), a = order.indexOf(shown[i].path), b = order.indexOf(shown[i + step].path);
+        [order[a], order[b]] = [order[b], order[a]];
+        change({ order });
+      },
     });
-    if (p.errors.length) status(p.errors.join(' '));
-    else status(`${p.items.filter(i => i.selected).length}장 선택 · 대표 이미지가 항상 첫 번째입니다.`);
-    root.querySelectorAll('button, select, textarea').forEach(el => el.disabled = busy);
+    $('vu-image-list').querySelectorAll('.vu-image-tile').forEach((tile, i) => {
+      const item = shown[i];
+      tile.title = [`${item.role} · ${item.name}`, item.error || (item.source === 'esm' ? 'ESM 이미지' : item.url ? '호스팅 저장됨' : (i === 0 && p.seed ? 'VerySeed GLOBAL 최신 사진' : '적용 시 주소 확인')),
+        i === 0 && item.modified ? new Date(item.modified).toLocaleString('ko-KR') : ''].filter(Boolean).join('\n');
+      tile.querySelector('.vu-image-open').title = tile.title + '\n누르면 전체 이미지';   // 그림 위에서도 보이게(안쪽 버튼 title 이 가린다)
+      if (!item.url) return;
+      tile.draggable = true;
+      // 그림(<img>)에서 시작한 끌기는 브라우저가 text/html(<img src=미리보기>)을 먼저 싣는다 — 미리보기가 file:// 이면(대표 · 폴더 이미지)
+      // 받는 갤러리가 그 html 을 읽고 거절한다. 싣는 것을 비우고 호스팅 주소만 싣는다.
+      tile.addEventListener('dragstart', e => { e.dataTransfer.clearData(); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/uri-list', item.url); e.dataTransfer.setData('text/plain', item.url); });
+    });
+    // 이미지마다의 오류(대표 파일 없음 등)도 상태 줄에 — 예전 줄 목록은 줄마다 글자로 보였다.
+    const errors = [...p.errors, ...shown.filter(i => i.error).map(i => `${i.role} · ${i.name}: ${i.error}`)];
+    if (errors.length) status(errors.join(' '));
+    else status(`${shown.length}장 선택 · 대표 이미지가 항상 첫 번째입니다.` + (off.length ? ` 뺀 ${off.length}장은 같은 이미지를 다시 끌어 놓거나 기본값으로 되돌립니다.` : ''));
   }
   async function run(fn) {
     if (busy) return;
     busy = true; draw();
     try { await fn(); return true; } catch (e) { status(e.message); return false; }
-    finally { busy = false; root.querySelectorAll('button, select, input, textarea').forEach(el => el.disabled = false); const first = root.querySelector('input[type=checkbox]'); if (first) first.disabled = true;
-      root.querySelectorAll('.vu-image-row[data-drag]').forEach(row => { row.draggable = true; }); }
+    finally { busy = false; const said = $('vu-image-status').textContent; draw(); status(said); }   // 작업이 남긴 안내는 그대로 둔다
   }
   async function change(changes) {
     return run(async () => {
@@ -122,7 +109,7 @@
         <div id="vu-image-html-editor" hidden><label for="vu-image-html">ESM 상세 이미지 HTML</label><textarea id="vu-image-html" rows="5" placeholder='<img src="https://ai.esmplus.com/…">'></textarea><button type="button" id="vu-image-html-save">HTML 저장</button><button type="button" id="vu-image-html-cancel">취소</button></div>
         <div id="vu-image-list" class="vu-image-list"></div><div id="vu-image-status" class="vu-image-status" role="status"></div>
         <button type="button" id="vu-image-prepare" class="vu-image-prepare">일괄 적용</button>
-        <small>기본 상세 이미지는 로컬 폴더 없이 표시됩니다. 탐색기 이미지 파일을 목록에 끌어 놓으면 ESM에 올려 끝에 붙입니다. 기존 상품 수정에는 자동 적용하지 않습니다 — 줄을 6몰 카드 이미지 칸에 끌어 놓으면 그 몰 목록 끝에 붙습니다.</small>`;
+        <small>기본 상세 이미지는 로컬 폴더 없이 표시됩니다. 탐색기 이미지 파일을 목록에 끌어 놓으면 ESM에 올려 끝에 붙입니다. 기존 상품 수정에는 자동 적용하지 않습니다 — 이미지 칸을 6몰 카드 이미지 칸에 끌어 놓으면 그 몰 목록 끝에 붙습니다.</small>`;
       $('vu-image-profile').onchange = e => { selected = e.target.value; $('vu-image-html-editor').hidden = true; draw(); };
       // 편집기는 목록에 보이는 순서(끌어 옮긴 순서, 체크 끈 것 포함)로 연다 — 저장하면 이 줄 순서가 곧 목록 순서다.
       $('vu-image-html-open').onclick = () => { const p = profiles.get(selected);

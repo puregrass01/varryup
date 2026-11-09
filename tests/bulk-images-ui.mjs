@@ -209,7 +209,6 @@ try {
     await page.locator('#be-list').click(); await idle();
     assert.match(await page.locator('#be-body').textContent(), /와이드\/광각미러/);
     assert.doesNotMatch(await page.locator('#be-body').textContent(), /카탈로그/);
-    assert.match(await page.locator('#be-price-label').textContent(), /기존 판매가/);
     for (const id of ['be-th-select-all','be-apply','be-image-apply']) assert.equal(await page.locator('#'+id).isEnabled(),true, scope+' '+id);
   }
   assert.ok(await page.evaluate(()=>calls.every(c=>['bulk-price-list','bulk-price-load-many','bulk-price-load'].includes(c.channel))),'조회만 — 저장 요청 없음');
@@ -285,16 +284,15 @@ try {
   assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-save-batch').length),beforeEmpty,'empty array cannot trigger a marketplace write');
   assert.match(await page.locator('#be-status').textContent(),/^Product 1: 이미지가 하나도 남지 않았습니다\(빈 항목/,'막힌 행의 이름을 댄다');
 
-  // ── 서버 검색칸·전체 목록 동기화·환율가는 아마존·eBay 에서만, 가격 정책은 쿠팡·네이버에서만 ──
-  const visible=async()=>page.evaluate(()=>({query:!document.getElementById('be-api-query').hidden,sync:!document.getElementById('be-sync').hidden,
-    fx:!document.querySelector('#be-price-source option[value="fx"]').hidden,policy:!document.querySelector('#be-price-source option[value="policy"]').hidden}));
+  // ── 서버 검색칸·전체 목록 동기화는 아마존·eBay 에서만 ──
+  const visible=async()=>page.evaluate(()=>({query:!document.getElementById('be-api-query').hidden,sync:!document.getElementById('be-sync').hidden}));
   for (const scope of ['naver','coupang','imweb-b2b','imweb-en','imweb-ko','imweb-jp']) {
     await page.locator(`[data-scope="${scope}"]`).click();
-    assert.deepEqual(await visible(),{query:false,sync:false,fx:false,policy:scope==='coupang'||scope==='naver'},scope);
+    assert.deepEqual(await visible(),{query:false,sync:false},scope);
   }
   for (const scope of ['amazon-us','amazon-jp','ebay']) {
     await page.locator(`[data-scope="${scope}"]`).click();
-    assert.deepEqual(await visible(),{query:true,sync:true,fx:true,policy:false},scope);
+    assert.deepEqual(await visible(),{query:true,sync:true},scope);
   }
   // 숨은 검색칸에 남은 글자로 목록을 거르지 않는다.
   // (자동 불러오기를 실패시켜 둔다 — 아래 가격 적용·이미지 적용이 안 읽은 행을 먼저 읽는 길을 본다.)
@@ -308,33 +306,36 @@ try {
   await page.locator('#be-list').click(); await idle();
   assert.equal(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-price-list').at(-1).data.query),'','hidden query is not sent');
 
-  // ── 판매가 한 묶음: [칸][직접 입력/환율가][가격 적용]. 안 읽은 선택 행은 먼저 읽고 채운다. 보내지는 않는다 ──
+  // ── 판매가 한 묶음: [칸][통화][↓](11-09: 값 출처 드롭다운 · 기존 판매가 열 없앰). 안 읽은 선택 행은 먼저 읽고 채운다. 보내지는 않는다 ──
   await page.locator('[data-scope="amazon-jp"]').click();
   await page.locator('#be-api-query').fill('');
   // 판매가·이미지 입력은 표 머리 아래 줄, 그 열 바로 밑에 있다(사진 열 ← 이미지, 판매가 덮어쓰기 열 ← 판매가). 위 작업 줄에서는 뺐다.
-  assert.equal(await page.locator('thead th').nth(6).textContent(),'판매가 덮어쓰기');
+  assert.equal(await page.locator('thead th').nth(5).textContent(),'판매가 덮어쓰기');
+  assert.equal(await page.locator('thead th',{hasText:'기존 판매가'}).count(),0,'행의 판매가 칸이 곧 지금 판매가');
+  assert.equal(await page.locator('#be-price-source').count(),0,'값 출처 드롭다운 없음');
   const column=id=>page.locator('#'+id).evaluate(n=>n.closest('thead td')?.cellIndex);
-  for (const id of ['be-value','be-currency','be-price-source','be-apply']) assert.equal(await column(id),6,id);
+  for (const id of ['be-value','be-currency','be-apply']) assert.equal(await column(id),5,id);
   for (const id of ['be-image-list','be-image-apply']) assert.equal(await column(id),1,id);
+  assert.equal(await page.locator('#be-body tr').first().locator('td').count(),await page.locator('thead tr').first().locator('th').count(),'행 칸 수 = 머리 칸 수');
   assert.equal(await page.locator('.be-actions input, .be-actions select').count(),0);
   assert.equal(await page.locator('#be-fx-apply').count(),0);
-  assert.equal(await page.locator('#be-apply').textContent(),'가격 적용');
+  assert.equal(await page.locator('#be-apply').textContent(),'↓');
+  // 안 읽은 행의 판매가 칸은 잠겨 있고 목록 가격을 흐린 글자로 보인다.
+  const firstPrice=page.locator('#be-body input[type=number]').first();
+  assert.deepEqual([await firstPrice.isDisabled(),await firstPrice.getAttribute('placeholder'),await firstPrice.inputValue()],[true,'10000','']);
   await page.evaluate(()=>{calls.length=0;});
   await page.locator('#be-body input[type=checkbox]').first().check();
   await page.locator('#be-value').fill('15000'); await page.locator('#be-apply').click(); await idle();
   assert.deepEqual(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-price-load-many').map(c=>c.data.ids)),[['1']],'loads only the unloaded selected row');
   assert.equal(await page.locator('#be-body input[type=number]').first().inputValue(),'15000');
   assert.match(await page.locator('#be-status').textContent(),/^1행에 가격을 입력했습니다\. 선택 변경 저장을 누르면 반영됩니다\.$/);
+  // 두 행을 고르고 다시 [↓]: 안 읽은 둘째 행만 먼저 읽고 둘 다 같은 값으로.
   await page.locator('#be-body input[type=checkbox]').nth(1).check();
-  await page.locator('#be-price-source').selectOption('fx');
-  assert.equal(await page.locator('#be-value').isDisabled(),true,'환율가는 행마다 계산 — 판매가 칸 잠금');
-  await page.locator('#be-apply').click(); await idle();
-  assert.deepEqual(await page.evaluate(()=>calls.filter(c=>c.channel==='fx-auto-price-plan').map(c=>c.data.rows.map(r=>r.id))),[['1','2']]);
-  assert.deepEqual(await page.locator('#be-body input[type=number]').evaluateAll(n=>n.slice(0,2).map(x=>x.value)),['120','120']);
-  assert.match(await page.locator('#be-status').textContent(),/^2행에 환율가를 입력했습니다\./);
+  await page.locator('#be-value').fill('16000'); await page.locator('#be-apply').click(); await idle();
+  assert.deepEqual(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-price-load-many').map(c=>c.data.ids)),[['1'],['2']]);
+  assert.deepEqual(await page.locator('#be-body input[type=number]').evaluateAll(n=>n.slice(0,2).map(x=>x.value)),['16000','16000']);
+  assert.match(await page.locator('#be-status').textContent(),/^2행에 가격을 입력했습니다\./);
   assert.equal(await page.evaluate(()=>calls.some(c=>c.channel==='bulk-save-batch'||c.channel.endsWith('-save'))),false,'apply never sends');
-  await page.locator('#be-price-source').selectOption('direct');
-  assert.equal(await page.locator('#be-value').isEnabled(),true);
   // 판매가를 못 바꾸는 행(아임웹 본사: 이미지만)은 건너뛰고 개수를 알린다.
   await page.locator('[data-scope="imweb-ko"]').click(); await selectAll();
   await page.locator('#be-value').fill('90000'); await page.locator('#be-apply').click(); await idle();
@@ -384,21 +385,6 @@ try {
   assert.match(await page.locator('#be-status').textContent(),/^판매가를 넣을 수 있는 행이 없습니다\. 상품 1개가 옵션 2행으로 펼쳐져 판매가를 넣지 않았습니다\./);
   await page.locator('#be-apply').click(); await idle();
   assert.deepEqual(await page.locator('#be-body input[type=number]').evaluateAll(n=>n.map(x=>x.value)),['20000','20000']);
-  // 가격 정책(11-06): 판 구분 없이 판매가 100,000 · 정가 140,000. 적용은 보내지 않고, 저장이 정가를 함께 실어 보낸다(묻고 나서).
-  await page.locator('#be-price-source').selectOption('policy');
-  assert.equal(await page.locator('#be-value').isDisabled(),true,'정책가는 행마다 계산 — 판매가 칸 잠금');
-  await page.evaluate(()=>{calls.length=0;});
-  await page.locator('#be-apply').click(); await idle();
-  assert.deepEqual(await page.locator('#be-body input[type=number]').evaluateAll(n=>n.map(x=>x.value)),['100000','100000']);
-  assert.match(await page.locator('#be-status').textContent(),/^2행에 정책 판매가 · 정가를 입력했습니다\..*알람설정 할인 90,000\(−10,000\) · 첫 구매가 80,000\(−10,000\)/);
-  assert.equal(await page.evaluate(()=>calls.some(c=>c.channel==='bulk-save-batch'||c.channel.endsWith('-save'))),false,'policy apply never sends');
-  let asked='';
-  page.once('dialog',d=>{asked=d.message(); d.accept();});
-  await page.locator('#be-save').click(); await idle();
-  assert.match(asked,/정가\(취소선\)도 함께 보내는 행: 2행 \(정가 140,000 KRW\)/,'정가가 섞이면 언제나 묻는다');
-  assert.deepEqual(await page.evaluate(()=>calls.filter(c=>c.channel==='bulk-save-batch').flatMap(c=>c.data.jobs.map(j=>[j.optionId,j.newPrice,j.newList]))),
-    [['11','100000','140000'],['12','100000','140000']]);
-  await page.locator('#be-price-source').selectOption('direct');
   // 불러온 가격이 가격 필터에서 빠져도 고른 줄을 채우고 그 수를 알린다.
   await page.evaluate(()=>{window.failLoad=true;});
   await page.locator('[data-scope="amazon-us"]').click(); await page.locator('#be-list').click(); await idle();

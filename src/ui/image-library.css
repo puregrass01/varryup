@@ -3,36 +3,31 @@
 .vu-images summary { cursor:pointer; font-size:12px; font-weight:600; }
 .vu-images select { width:100%; margin:10px 0 6px; padding:6px; background:var(--bg-input); color:var(--text-primary); border:1px solid var(--input-border); border-radius:4px; font:inherit; }
 .vu-image-actions { display:flex; flex-wrap:wrap; gap:var(--space-xs); margin:7px 0; }
-.vu-images button { padding:5px 7px; border:1px solid var(--rule-2); border-radius:4px; cursor:pointer; background:var(--bg-panel); color:var(--text-primary); font:inherit; font-size:11px; }
-.vu-images button:hover:not(:disabled) { background:var(--ovl-1); }
+.vu-images button:not(.vu-image-list *) { padding:5px 7px; border:1px solid var(--rule-2); border-radius:4px; cursor:pointer; background:var(--bg-panel); color:var(--text-primary); font:inherit; font-size:11px; }
+.vu-images button:not(.vu-image-list *):hover:not(:disabled) { background:var(--ovl-1); }
 /* 꺼진 버튼은 트레이 색 + 흐린 글자(흐리게 하면 대비가 무너진다) */
-.vu-images button:disabled { color:var(--text-muted); background:var(--paper-3); border-color:var(--rule); cursor:wait; }
+.vu-images button:not(.vu-image-list *):disabled { color:var(--text-muted); background:var(--paper-3); border-color:var(--rule); cursor:wait; }
 .vu-image-path { overflow-wrap:anywhere; color:var(--text-secondary); line-height:1.5; }
-.vu-image-list { max-height:235px; overflow:auto; display:flex; flex-direction:column; gap:5px; margin:var(--space-sm) 0; }
-.vu-image-row { display:flex; align-items:center; gap:6px; min-height:48px; border-bottom:1px solid var(--rule); padding:var(--space-xs) 0; }
-/* 끌 수 있는 줄(순서 바꾸기 · 수정 모드에선 6몰 카드 이미지 칸에 놓기) */
-.vu-image-row[draggable="true"] { cursor:grab; }
-.vu-image-row[draggable="true"]:hover { background:var(--ovl-1); }
-.vu-image-row img { width:42px; height:42px; object-fit:contain; background:var(--logo-tile); border-radius:3px; }
-.vu-image-row label { display:flex; align-items:center; flex:1; gap:6px; min-width:0; }
-.vu-image-row span { overflow-wrap:anywhere; }
-.vu-image-row small { display:block; color:var(--text-secondary); margin-top:3px; }
+/* 목록 = 6몰 카드와 같은 갤러리(image-gallery.css). 패널이 좁아 칸을 54px 로 줄이고, 갤러리 자체 안내 줄은 상태 줄이 대신한다.
+   패널 버튼 규칙(.vu-images button)은 갤러리 칸 버튼(× · ← →)에 걸지 않는다 — 그 모양은 image-gallery.css 가 정한다. */
+.vu-image-list { margin:var(--space-sm) 0; }
+.vu-image-list .vu-image-gallery { gap:6px; max-height:235px; margin:0; }   /* 안쪽 여백(4px)은 남긴다 — 첫 열 포커스 테두리가 잘리지 않게 */
+.vu-image-list .vu-image-tile { width:54px; }
+.vu-image-list .vu-image-tile img { width:54px; height:54px; }
+.vu-image-list .vu-image-tile[draggable="true"] { cursor:grab; }
+.vu-image-list .vu-image-save-hint { display:none; }
 .vu-image-status { margin:6px 0; line-height:1.5; color:var(--text-secondary); overflow-wrap:anywhere; }
-.vu-images .vu-image-prepare { width:100%; background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; padding:var(--space-sm); }
-.vu-images .vu-image-prepare:hover:not(:disabled) { background:var(--accent-hover); border-color:var(--accent-hover); }
-.vu-images .vu-image-prepare:disabled { color:var(--text-muted); background:var(--paper-3); border-color:var(--rule); }
+.vu-images button.vu-image-prepare { width:100%; background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; padding:var(--space-sm); }
+.vu-images button.vu-image-prepare:hover:not(:disabled) { background:var(--accent-hover); border-color:var(--accent-hover); }
+.vu-images button.vu-image-prepare:disabled { color:var(--text-muted); background:var(--paper-3); border-color:var(--rule); }
 
 /* 신규등록 패널 오른쪽 칸(폼 옆). 예전 가운데 쇼핑몰 탭 안의 좁은 칸과 같은 촘촘한 모양이다. */
 #section8 .vu-images { flex:0 0 200px; align-self:flex-start; max-height:100%; overflow-y:auto; box-sizing:border-box; margin:0; padding:6px; font-size:10px; }
 #section8 .vu-images summary { font-size:11px; }
-#section8 .vu-images button { font-size:10px; padding:var(--space-xs); }
+#section8 .vu-images button:not(.vu-image-list *) { font-size:10px; padding:var(--space-xs); }
 #section8 .vu-images select { font-size:11px; padding:5px 2px; }
 #section8 .vu-image-path { max-height:48px; overflow:auto; font-size:9px; user-select:text; }
-#section8 .vu-image-row img { width:28px; height:34px; }
-#section8 .vu-image-row label { gap:3px; }
-#section8 .vu-image-row { gap:2px; }
-#section8 .vu-image-row small { font-size:9px; }
-#section8 .vu-image-list { max-height:none; }
+#section8 .vu-image-list .vu-image-gallery { max-height:none; }
 /* 접으면 폭을 폼에 돌려준다. */
 #section8 .vu-images:not([open]) { flex-basis:auto; }
 

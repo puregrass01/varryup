@@ -66,12 +66,12 @@ export function registerBulkPriceIPC({ ipcMain, naverAPI, naverProducts, coupang
       ...p, price: naverShown(p), image: p.representativeImage }));
     else if (scope === 'coupang') {
       // 쿠팡 목록 API 에는 옵션ID·판매가가 없다(공식 문서). 이 PC 에서 불러온 적 있는 상품만 그때 읽은 판매가를
-      // 옵션 행의 '(목록)' 가격으로 펼친다(coupang.js listForPriceEdit). 고치려면 지금처럼 현재가를 다시 불러온다.
+      // 옵션 행의 목록 가격(판매가 칸의 흐린 글자)으로 펼친다(coupang.js listForPriceEdit). 고치려면 지금처럼 현재가를 다시 불러온다.
       const listed = await config(coupang).listForPriceEdit({ force: !!force });
       items = listed.items;
       note = listed.cached
-        ? `쿠팡 목록에는 옵션·판매가가 없어, 이 PC 에서 불러온 적 있는 상품 ${listed.cached}개는 그때 읽은 판매가를 '(목록)' 으로 보여 줍니다. 가격을 바꾸려면 현재가를 다시 불러오세요.`
-        : '쿠팡 목록에는 옵션·판매가가 없습니다. 현재가를 불러오면 옵션별 판매가가 나오고, 다음 목록부터는 그 값이 \'(목록)\' 으로 보입니다.';
+        ? `쿠팡 목록에는 옵션·판매가가 없어, 이 PC 에서 불러온 적 있는 상품 ${listed.cached}개는 그때 읽은 판매가를 판매가 칸에 흐린 글자로 보여 줍니다. 가격을 바꾸려면 현재가를 다시 불러오세요.`
+        : '쿠팡 목록에는 옵션·판매가가 없습니다. 현재가를 불러오면 옵션별 판매가가 나오고, 다음 목록부터는 그 값이 판매가 칸에 흐린 글자로 보입니다.';
     } else if (markets[scope]) {
       const stats = {};
       items = await config(amazon).searchProducts({ marketplaceId: markets[scope], searchText: query }, stats);

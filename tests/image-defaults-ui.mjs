@@ -41,13 +41,15 @@ try {
   const page = await context.newPage(), errors = [];
   page.on('pageerror', e => errors.push(e.message)); page.setDefaultTimeout(10000);
   await page.goto(pathToFileURL(path.resolve('src/ui/index_up.html')).href);
-  await page.locator('.vu-image-row').first().waitFor();
+  await page.locator('#vu-image-list .vu-image-tile').first().waitFor();
+  // 국내 공통의 대표 파일이 없는 PC: 칸마다의 오류가 상태 줄에 글자로 보인다(마우스를 올리지 않아도).
+  await page.waitForFunction(() => document.getElementById('vu-image-status').textContent.includes('대표 이미지가 없습니다'));
   await page.locator('#vu-image-profile').selectOption('amazon');
   await page.locator('#cell-USA-open1').click();
   const frame = page.frameLocator('#form-frame');
   await frame.locator('#amzSubImages').waitFor({ state: 'attached' });   // 신규 폼에선 숨은 칸(이미지 목록이 채운다)
   await page.waitForFunction(() => document.getElementById('form-frame').contentDocument.getElementById('amzSubImages')?.value.split('\n').length === 6);
-  assert.equal(await page.locator('.vu-image-row').count(), 7);
+  assert.equal(await page.locator('#vu-image-list .vu-image-tile').count(), 7);
   assert.equal(await frame.locator('#amzSubImages').inputValue(), urls.join('\n'));
   assert.equal(calls.filter(c => c.channel === 'image-library-prepare').length, 0);
   assert.equal(uploads.length, 0);
@@ -59,19 +61,19 @@ try {
   await page.locator('#vu-image-html-save').click();
   await page.waitForFunction(() => document.getElementById('vu-image-status').textContent.includes('<img'));
   assert.equal(await page.locator('#vu-image-html-editor').isVisible(), true);
-  assert.equal(await page.locator('.vu-image-row').count(), 7);
+  assert.equal(await page.locator('#vu-image-list .vu-image-tile').count(), 7);
   await page.locator('#vu-image-html').fill(`<img src="${urls[1]}"><img src="${urls[0]}" onerror="window.injected=true">`);
   await page.locator('#vu-image-html-save').click();
   await page.locator('#vu-image-html-editor').waitFor({ state: 'hidden' });
-  assert.equal(await page.locator('.vu-image-row').count(), 3);
+  assert.equal(await page.locator('#vu-image-list .vu-image-tile').count(), 3);
   assert.equal(await page.evaluate(() => window.injected), undefined);
   await page.locator('#vu-image-defaults').click();
-  await page.waitForFunction(() => document.querySelectorAll('.vu-image-row').length === 7);
+  await page.waitForFunction(() => document.querySelectorAll('#vu-image-list .vu-image-tile').length === 7);
 
   offline = true;
   await page.locator('#vu-image-prepare').click();
   await page.waitForFunction(() => document.getElementById('vu-image-status').textContent.includes('기본 목록은 유지'));
-  assert.equal(await page.locator('.vu-image-row').count(), 7);
+  assert.equal(await page.locator('#vu-image-list .vu-image-tile').count(), 7);
   offline = false;
   await page.locator('#vu-image-prepare').click();
   await page.waitForFunction(() => document.getElementById('vu-image-status').textContent.includes('적용 완료'));

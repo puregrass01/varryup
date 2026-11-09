@@ -1,3 +1,4 @@
+/* Hallmark · component: tab strip (나라 탭 .be-countries = 국기 + 이름, 이 파일의 다른 규칙은 대상 아님) · genre: modern-minimal · theme: project (theme.css Cobalt/graphite 토큰) · states: default · hover · focus-visible · active · selected · disabled (탭이라 loading · error · success 없음) · v2.0.0 */
 body:is([data-workspace-view="bulk"], [data-workspace-view="fx"]) #main { display:none!important; }
 body[data-workspace-view="api"] #main > :not(#section8),
 body[data-workspace-view="api"] #section8-header, body[data-workspace-view="api"] #log-window,
@@ -38,8 +39,13 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 .be-platforms { gap:5px; margin-bottom:var(--space-sm); }
 /* 몰 버튼 줄 맨 앞의 나라 탭(한국 · 미국 · 일본) — 그 나라 몰을 본사몰 상품 묶음으로 한 표에 */
 .be-platform-row { display:flex; flex-wrap:wrap; align-items:center; column-gap:12px; flex-shrink:0; }
-.be-countries { display:flex; align-items:center; gap:5px; margin:var(--space-xs) 0 var(--space-sm); padding-right:12px; border-right:1px solid var(--border); }
-#bulk-edit-workspace .be-countries button { height:34px; padding:0 14px; font-weight:600; }
+.be-countries { display:flex; align-items:center; gap:4px; margin:var(--space-xs) 0 var(--space-sm); padding-right:12px; border-right:1px solid var(--border); }
+/* 나라 탭(Hallmark 컴포넌트 — 맨 위 도장): 국기 + 나라 이름. 국기는 3:2 칸에 맞춰 자른다(미국 국기 1.9:1 은 왼쪽 별 칸을
+   남기고 오른쪽 줄을 자른다). 흰 바탕 국기(한국 · 일본)가 버튼 바탕에 묻히지 않게 1px 테두리. */
+#bulk-edit-workspace .be-countries button { height:34px; padding:0 12px 0 8px; gap:8px; font-weight:600; }
+#bulk-edit-workspace .be-countries button:active:not(:disabled) { background:var(--ovl-2); }
+.be-flag { width:21px; height:14px; object-fit:cover; object-position:left center; border-radius:2px; box-shadow:0 0 0 1px var(--ovl-3); flex-shrink:0; }
+#bulk-edit-workspace .be-countries button:disabled .be-flag { filter:grayscale(1); }
 /* 나라 화면: 묶음 머리 줄과 몰 로고 칸 */
 .be-table tr.be-country-head td { background:var(--paper-2); font-weight:600; padding-top:8px; padding-bottom:8px; }
 .be-table tr.be-country-head small { display:inline; margin:0 0 0 10px; font-weight:400; }
@@ -104,7 +110,7 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 .be-group { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
 .be-group-end { margin-left:auto; }
 .be-unit { font-size:12px; font-weight:600; color:var(--text-secondary); min-width:28px; }
-/* 열 머리 아래 입력 줄: 칸 폭 안에서 줄을 바꿔 쌓는다(판매가 열 [칸][통화] / [값 출처][가격 적용], 사진 열 [이미지 목록][↓]). */
+/* 열 머리 아래 입력 줄: 판매가 열 [칸][통화][↓], 사진 열 [이미지 목록][↓]. */
 .be-table .be-th-tools td { padding:var(--space-xs) var(--space-sm) var(--space-sm); background:var(--paper-2); vertical-align:top; }
 .be-tool { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-xs); }
 .be-tool select, .be-tool button { flex:1 1 auto; }
@@ -117,7 +123,8 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 #be-image-list .vu-image-open { display:block; height:auto; padding:0; border:0; background:transparent; }
 #be-image-list .vu-image-moves button { height:20px; padding:0 4px; font-size:11px; }
 #be-image-list .vu-image-add { flex:none; width:54px; height:54px; padding:2px; white-space:normal; font-size:11px; border-style:dashed; }
-#be-image-apply { flex:none; font-size:16px; }
+.be-price-tool { flex-wrap:nowrap; }
+#be-image-apply, #be-apply { flex:none; font-size:16px; }
 /* width 를 auto 로 두면 숫자 칸의 기본 폭(약 170px)이 열 최소 폭이 되어 1200px 창에서 표가 넘친다 — 72px 에서 늘어나게만 한다. */
 #be-value { width:72px; flex:1 0 72px; font-family:var(--font-mono); }
 .be-state { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:var(--space-xs) var(--space-md); margin:2px 0 6px; }
@@ -153,7 +160,9 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 /* 바뀐 행: 옅은 워시 + 왼쪽 코발트 선. 진한 워시는 선택 표시와 헷갈린다 */
 .be-table tr.be-dirty { background:color-mix(in oklch, var(--accent-wash) 45%, transparent); }
 .be-table tr.be-dirty > td:first-child { box-shadow:inset 3px 0 0 var(--accent); }
-.be-table .be-price { min-width:64px; white-space:nowrap; font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+/* 판매가 칸: [현재가 = 덮어쓸 값][통화] 한 줄, 환율 등급은 그 밑에 작게 */
+.be-table .be-price { white-space:nowrap; }
+.be-table .be-price .be-unit { margin-left:var(--space-xs); }
 /* 상품번호 / SKU: 표준 번호를 굵게, SKU·몰 ID 는 작게. 긴 SKU 목록은 칸 안에서 줄바꿈한다. */
 .be-table .be-identity { min-width:120px; max-width:220px; }
 .be-table .be-no { font-family:var(--font-mono); font-weight:600; white-space:nowrap; }
@@ -169,7 +178,8 @@ body[data-workspace-view] .mode-radio:checked + .mode-label { background:transpa
 .be-photo-column { width:200px; min-width:200px; }
 .be-table th.be-photo-column { white-space:normal; word-break:keep-all; }
 .be-table th.be-photo-column small { font-weight:400; margin-top:2px; }
-.be-photo-gallery { display:flex; flex-wrap:wrap; gap:6px; max-height:190px; overflow:auto; }
+/* 행 사진 칸은 한 줄 반만 보이고 나머지는 칸 안에서 스크롤한다(190px 은 행이 너무 길었다 — 11-09 절반) */
+.be-photo-gallery { display:flex; flex-wrap:wrap; gap:6px; max-height:95px; overflow:auto; }
 .be-photo-gallery figure { margin:0; }
 .be-photo-gallery figcaption { max-width:70px; font-size:11px; color:var(--text-secondary); text-align:center; }
 #bulk-edit-workspace .vu-image-tile, #bulk-edit-workspace .vu-image-tile img { width:54px; }

@@ -61,9 +61,9 @@ try {
         case 'ebay-load-product': return { success: true, data: { sku: data, inventory: { product: { title: 'Optic-glass Mirror for KIA K5', imageUrls: [IMG('e1'), IMG('e2')] } },
           offer: { offerId: 'o1', status: 'PUBLISHED', availableQuantity: 5, pricingSummary: { price: { value: '59.99', currency: 'USD' } } } } };
         case 'ebay-update': return { success: true, data: { status: 'UPDATED' } };
-        // 셸 이미지 목록(수정 모드에도 보인다) — 상세 한 장이 ESM 주소
+        // 셸 이미지 목록(수정 모드에도 보인다) — 상세 한 장이 ESM 주소. 미리보기는 실제로 뜨는 로컬 그림(file://) — 그림에서 시작한 끌기가 html(<img src=file://>)을 싣는 길을 본다
         case 'image-library-load': return { success: true, profiles: [{ id: 'domestic', label: '국내', folder: '', detailSource: 'esm', seed: false, errors: [], signature: 's',
-          items: [{ name: '대표.jpg', role: '대표', path: 'C:/x/대표.jpg', url: '', selected: true }, { name: 'lib7.jpg', role: '상세', path: IMG('lib7'), url: IMG('lib7'), source: 'esm', selected: true }] }] };
+          items: [{ name: '대표.jpg', role: '대표', path: 'C:/x/대표.jpg', url: '', selected: true }, { name: 'lib7.jpg', role: '상세', path: IMG('lib7'), url: IMG('lib7'), previewUrl: 'logos/flags/kr.png', source: 'esm', selected: true }] }] };
         default: return {};
       }
     } } });
@@ -231,7 +231,7 @@ try {
 
   // 셸 이미지 목록의 줄(부모 문서)을 이베이 카드 갤러리(iframe)에 끌어 놓으면 그 주소가 끝에 붙는다 — 실제 마우스 드래그(문서 넘기)
   assert.equal(await page.locator('#image-library').isVisible(), true, '수정 모드에도 이미지 목록이 보인다');
-  const libRow = page.locator('.vu-image-row[draggable="true"]').filter({ hasText: 'lib7.jpg' });
+  const libRow = page.locator('#vu-image-list .vu-image-tile[draggable="true"][title*="lib7.jpg"]');
   await libRow.waitFor();
   const ebayTiles = () => card('ebay').locator('.vu-image-tile img').evaluateAll(list => list.map(img => img.getAttribute('src')));
   assert.equal((await ebayTiles()).length, 2);

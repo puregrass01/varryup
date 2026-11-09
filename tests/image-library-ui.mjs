@@ -35,9 +35,16 @@ try {
   const page = await context.newPage(), errors = [];
   page.on('pageerror', e => errors.push(e.message)); page.setDefaultTimeout(10000);
   await page.goto(pathToFileURL(path.resolve('src/ui/index_up.html')).href);
-  await page.locator('.vu-image-row').first().waitFor().catch(async e => { console.log('PAGE ERRORS', errors, await page.evaluate(() => ({ state: document.getElementById('image-library')?.innerText, library: !!window.VUImages, calls: window.calls }))); throw e; });
-  assert.equal(await page.locator('.vu-image-row').count(), 3);
-  assert.equal(await page.locator('.vu-image-row input').first().isDisabled(), true);
+  // 목록은 6몰 카드 '사진 · 상품 이미지'와 같은 갤러리(칸 · 번호 · ← → · ×). 대표는 첫 칸, 못 지우고 못 옮긴다.
+  const tiles = page.locator('#vu-image-list .vu-image-tile');
+  await tiles.first().waitFor().catch(async e => { console.log('PAGE ERRORS', errors, await page.evaluate(() => ({ state: document.getElementById('image-library')?.innerText, library: !!window.VUImages, calls: window.calls }))); throw e; });
+  assert.equal(await tiles.count(), 3);
+  assert.deepEqual(await tiles.locator('figcaption').allTextContents(), ['대표', '1', '2']);
+  assert.equal(await page.locator('#vu-image-list .vu-image-remove').first().isDisabled(), true);
+  const lib = page.locator('#vu-image-list');
+  // 버튼 이름은 칸 번호와 같다(대표 · 1 · 2).
+  for (const name of ['대표 이미지 앞으로', '대표 이미지 뒤로', '대표 이미지 삭제', '이미지 1 앞으로']) assert.equal(await lib.getByRole('button', { name, exact: true }).isDisabled(), true, name);
+  assert.equal(await page.locator('#vu-image-list .vu-image-save-hint').isVisible(), false, '갤러리 안내 줄 대신 패널 상태 줄');
   await page.locator('#vu-image-profile').selectOption('amazon');
   await page.locator('#cell-USA-open1').click();
   await page.locator('#vu-image-prepare').click();
@@ -56,7 +63,16 @@ try {
   await page.locator('#vu-image-prepare').click();
   await page.waitForFunction(() => document.getElementById('form-frame').contentDocument.getElementById('ebImages')?.value.includes('ebay-0'));
   assert.equal((await frame.locator('#ebImages').inputValue()).split('\n').length, 3);
-  await page.locator('.vu-image-row input').nth(2).uncheck();
+  // ← → 는 상세끼리 자리를 바꾼다(전체 순서로 보낸다). 패널 단추 규칙이 갤러리 단추에 걸리지 않는다(× 는 동그라미).
+  await lib.getByRole('button', { name: '이미지 2 앞으로', exact: true }).click();
+  await page.waitForFunction(() => calls.findLast(c => c.channel === 'image-library-configure')?.data.changes.order);
+  assert.deepEqual(await page.evaluate(() => calls.findLast(c => c.channel === 'image-library-configure').data), { id: 'ebay', changes: { order: ['ebay/2.jpg', 'ebay/1.jpg'] } });
+  assert.equal(await page.locator('#vu-image-list .vu-image-remove').first().evaluate(b => getComputedStyle(b).borderRadius), '50%');
+  await page.locator('#vu-image-list .vu-image-tile').nth(2).hover();
+  await page.locator('#vu-image-list .vu-image-remove').nth(2).click();
+  await page.waitForFunction(() => document.querySelectorAll('#vu-image-list .vu-image-tile').length === 2);
+  assert.deepEqual(await page.evaluate(() => calls.findLast(c => c.channel === 'image-library-configure').data), { id: 'ebay', changes: { excluded: ['ebay/2.jpg'] } });
+  assert.match(await page.locator('#vu-image-status').textContent(), /뺀 1장/);
   await page.locator('#vu-image-prepare').click();
   await page.waitForFunction(() => document.getElementById('form-frame').contentDocument.getElementById('ebImages')?.value.split('\n').length === 2);
   await page.locator('#vu-image-pick-main').click();
