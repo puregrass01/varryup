@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VERY UP VER3 - 베리씨드</title>
     <script src="theme.js"></script>
+    <script src="vu-suggest.js"></script>
     <link rel="stylesheet" href="fonts.css">
     <link rel="stylesheet" href="theme.css">
     <link rel="stylesheet" href="style.css">
@@ -796,6 +797,50 @@ function renderPanels() {
     });
     // BSA 슬라이더 및 드래그 초기화
     ['KOREA','USA','GENERAL'].forEach(c => initCountry(c));
+    ['KOREA','USA'].forEach(c => attachVehicleAutocomplete(c));
+}
+
+// ── 차량 자동완성: 제조사 · 차종 · 상품번호 · 세대 · 연식 · 코드 칸 — 상품정보 입력과 같은 목록 상자(vu-suggest.js) ──
+// 제조사 칸은 브랜드 이름, 나머지 칸은 차량 카탈로그(data/vehicle_catalog.json)의 차 한 대씩이다.
+// 차 한 줄을 고르면 여섯 칸을 그 차 값으로 채운다 — 상품번호는 여러 차가 같이 써서(No.101 = BMW 13종) 고른 줄의 차를 쓰고,
+// 칸마다 따로 맞추면 다른 차 값이 섞인다. 손으로 고친 값은 다시 고르기 전까지 건드리지 않는다.
+// 제조사 · 차종을 적어 두면 나머지 칸 목록이 그 차들로 좁혀진다(카탈로그에 없는 이름이면 전체).
+// 미국 탭은 영문 브랜드 · 영문 차종. 카탈로그 세대는 한글뿐이라 미국 탭 세대 칸은 채우지 않는다.
+const vehicleList = ipcRenderer.invoke('vehicle-load-catalog').then(r => r?.success ? r.catalog.variants || [] : []).catch(() => []);
+const BRAND_EN = { 캐딜락: 'Cadillac', 쌍용: 'SsangYong', 크라이슬러: 'Chrysler', 닷지: 'Dodge', 벤틀리: 'Bentley', 람보르기니: 'Lamborghini', 폴스타: 'Polestar', 스즈키: 'Suzuki', 르노: 'Renault', 렉서스: 'Lexus', 쉐보레: 'Chevrolet', 혼다: 'Honda' };
+const HANGUL = /[가-힣]/;
+async function attachVehicleAutocomplete(country) {
+    const form = document.getElementById('aiForm_' + country), en = COUNTRY_TEMPLATES[country].lang === 'en', list = await vehicleList;
+    const ko = v => v.brand.replace(/\s*\(.*\)$/, '');
+    // 이미지에 찍히는 값. 카탈로그의 메모(코드 '거울분리형', 연식 '2025년 예정', 날짜가 글자로 바뀐 연식)와
+    // 묶음 이름('기타' 브랜드, 영문 차종 자리 'X')은 값이 아니라서 빈칸으로 둔다.
+    const show = {
+        brand: v => ko(v) === '기타' ? '' : !en ? ko(v) : v.brand.match(/\(([^)]+)\)/)?.[1] || BRAND_EN[ko(v)] || (HANGUL.test(ko(v)) ? '' : ko(v)),
+        carClass: v => !en ? v.model : v.modelEn && v.modelEn !== 'X' && !HANGUL.test(v.modelEn) ? v.modelEn : '',
+        no: v => v.no, gen: v => v.gen,
+        year: v => HANGUL.test(v.year) || /GMT/.test(v.year) ? '' : v.year,
+        code: v => HANGUL.test(v.code) ? '' : v.code,
+    };
+    const names = Object.keys(show).filter(f => !(en && f === 'gen'));
+    const norm = s => String(s || '').replace(/\s+/g, '').toLowerCase();
+    const id = f => (form[f].id ||= `seed_${f}_${country}`);
+    // 목록 글: 이 칸 값을 맨 앞에(앞 글자로 찾게), 뒤에 어느 차인지. 영문 이름이 없는 차는 한글 차종을 참고로 보인다.
+    const label = (v, f) => {
+        const part = { no: v.no && 'No.' + v.no, brand: show.brand(v), carClass: show.carClass(v) || v.model, gen: en ? '' : v.gen, year: show.year(v), code: show.code(v) };
+        return [part[f], ...['no', 'brand', 'carClass', 'gen', 'year', 'code'].filter(k => k !== f).map(k => part[k])].filter(Boolean).join(' · ');
+    };
+    const typed = (f, v) => { const t = norm(form[f].value); return !t || [show[f](v), f === 'brand' ? ko(v) : v.model].some(x => norm(x) === t); };
+    const pool = skip => { const hit = list.filter(v => typed('brand', v) && (skip === 'carClass' || typed('carClass', v))); return hit.length ? hit : list; };
+    const fill = v => { names.forEach(f => { form[f].value = show[f](v); }); refresh(); };
+    const rows = f => {
+        const seen = new Set();
+        return pool(f).flatMap(v => { const text = label(v, f), k = text.toLowerCase(); return seen.has(k) ? [] : (seen.add(k), [{ label: text, value: show[f](v), pick: () => fill(v) }]); });
+    };
+    const refresh = () => names.filter(f => f !== 'brand').forEach(f => VUSuggest.setOptions(document, `seed-${f}-${country}`, rows(f)));
+    VUSuggest.attach(document, id('brand'), `seed-brand-${country}`, [...new Set(list.map(show.brand).filter(Boolean))]);
+    names.filter(f => f !== 'brand').forEach(f => VUSuggest.attach(document, id(f), `seed-${f}-${country}`, []));
+    for (const f of ['brand', 'carClass']) form[f].addEventListener('change', refresh);
+    refresh();
 }
 
 function initCountry(country) {
