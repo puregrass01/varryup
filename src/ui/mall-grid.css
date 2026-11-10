@@ -55,3 +55,5 @@
 .mg-new-images :is(.vu-image-remove, .vu-image-save-hint) { display: none; }
 .mg-card.mg-off .mg-name { color: var(--text-secondary); }
 .mg-foot .mg-register { padding: 6px var(--space-md); }
+/* 몰 전체 탭 맨 위 [← 뒤로가기] — 6몰 표로 */
+.tab-pane > .mg-back { margin-bottom: var(--space-sm); }

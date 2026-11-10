@@ -312,7 +312,12 @@ try {
   await card('amazon').locator('.mg-head').click();
   await frame.locator('#amazonTab').waitFor({ state: 'visible' });
   assert.deepEqual(await page.evaluate(() => [checked.USA.open1, checked.JAPAN.open1]), [false, true]);
-  await page.locator('#btn-grid-back').click();
+  // 몰 전체 탭마다 맨 위 [← 뒤로가기] 하나 — 누르면 6몰 표(셸 [← 6몰 표]와 같다)
+  for (const tab of ['imwebHeadTab', 'imwebTab', 'naverTab', 'coupangTab', 'amazonTab', 'ebayTab'])
+    assert.equal(await frame.locator(`#${tab} > .mg-back:first-child`).count(), 1, tab);
+  await frame.locator('#amazonTab .mg-back').click();
+  await frame.locator('#mgRegisterAll').waitFor({ state: 'visible' });
+  assert.deepEqual([await frame.locator('#amazonTab').isVisible(), await page.locator('#btn-grid-back').isVisible()], [false, false]);
 
   // 7) 좌측 [일괄 수정]: 상품 정보(검색 조건)의 상품을 여섯 몰에서 불러와 바뀐 몰(좌측 변경 판매가)을 모두 묻고 저장한다
   const p2 = await context.newPage();

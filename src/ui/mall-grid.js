@@ -732,6 +732,14 @@
   // 셸이 있으면 좌측의 지금 값으로(셸 loadMallGrid), 없으면 지난 열쇠로.
   $('mgReload').onclick = () => (window.parent !== window && window.parent.loadMallGrid ? window.parent.loadMallGrid() : load(lastKeys));
   MALLS.forEach(m => { const box = el('article', 'mg-card vu-cut'); box.dataset.mall = m.id; $('mgGrid').append(box); });
+  // 몰 전체 탭 맨 위 [← 뒤로가기](11-10) — 카드 '전체 탭 →' · 현황판 칸으로 연 탭에서 6몰 표로 돌아온다(셸 [← 6몰 표]와 같은 길).
+  // 셸 안에서만 — 폼을 따로 열면 돌아갈 표가 없다.
+  if (window.parent !== window) for (const tabId of ['imwebHeadTab', 'imwebTab', 'naverTab', 'coupangTab', 'amazonTab', 'ebayTab']) {
+    const back = el('button', 'btn btn-outline btn-sm mg-back', '← 뒤로가기');
+    back.type = 'button'; back.title = '6몰 표로 돌아가기';
+    back.onclick = () => window.parent.showMallGrid?.();
+    $(tabId)?.prepend(back);
+  }
   MALLS.forEach(m => renderCard(m.id));
 
   // 표 머리 줄: 수정 모드 = [다시 불러오기] 안내 [바뀐 몰 모두 저장], 신규 모드 = 안내 [켠 몰 모두 등록](셸 일괄 등록과 같다).
