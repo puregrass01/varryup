@@ -1,4 +1,5 @@
-// 단일 상품 수정의 기본 화면 — 여섯 몰 카드(2 × 3). 셸(index_up.html)이 좌측에서 고른 상품의 열쇠로 여섯 몰을 한꺼번에 불러온다.
+// 두 모드의 기본 화면 — 여섯 몰 카드(2 × 3). 신규 모드(11-09)는 카드마다 올라갈 상품명 · 판매가 · 이미지 요약 + [등록](renderNew).
+// 아래는 단일 상품 수정: 셸(index_up.html)이 좌측에서 고른 상품의 열쇠로 여섯 몰을 한꺼번에 불러온다.
 // 카드 칸은 그 몰 API 가 실제로 바꾸는 값만이다. 못 바꾸는 값(상품번호 · SKU)은 회색 글 + 이유로만 보인다.
 // 카드 칸은 그 몰 탭의 상태 · 칸에 바로 쓰고 저장도 탭의 저장 함수를 부른다 — 검사는 탭 한 곳에 남는다. 그래서 전체 탭에서 고친 값도
 // 카드에 '바뀜' 으로 보인다. 구역이 여럿인 자사몰(한국 · 미국 · 일본) · 아마존(미국 · 일본)은 상품 일괄 수정 채널
@@ -20,6 +21,9 @@
   // cards[id]: { status: idle|loading|missing|pick|error|ready, note, rows, result, before: Map(칸 → 불러온 값), owner, applied }
   const cards = {};
   let gen = 0, busy = false, lastKeys = {}, prices = {}, priceOpts = {}, pending = Promise.resolve();
+  // mode: 셸이 showMallGrid(mode)로 알린다. 신규 모드 카드는 읽기 전용 요약 + [등록](renderNew), newResults 는 카드마다 마지막 등록 결과.
+  let mode = 'edit';
+  const newResults = {};
 
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   // 안내 줄은 ' — ' 앞만 보이고 이유는 마우스를 올리면 보인다(카드를 짧게).
@@ -454,25 +458,33 @@
       <button type="button" class="btn btn-outline btn-sm" id="mgReload">다시 불러오기</button>
       <span class="mg-status" id="mgStatus" role="status">좌측 본사몰 상품 찾기에서 상품을 고르면 여섯 몰을 한꺼번에 불러옵니다.</span>
       <button type="button" class="btn btn-gradient btn-sm vu-key vu-key-accent" id="mgSaveAll" disabled>바뀐 몰 모두 저장</button>
+      <button type="button" class="btn btn-gradient btn-sm vu-key vu-key-accent" id="mgRegisterAll" hidden>켠 몰 모두 등록</button>
     </div>
     <div class="mg-grid" id="mgGrid"></div>`;
   document.querySelector('.tab-content-area').append(pane);
   const boxOf = id => $('mgGrid').querySelector(`[data-mall="${id}"]`);
 
+  // 카드 머리 → 그 몰 전체 탭(꺼진 몰이면 셸이 켜고 연다 — openGridMall).
+  function headOf(mall) {
+    const head = el('button', 'mg-head'), logo = el('img', 'mg-logo');
+    head.type = 'button'; head.title = `${mall.name} 전체 탭 열기`;
+    logo.src = mall.logo; logo.alt = '';
+    head.append(logo, el('span', 'mg-name', mall.name), el('span', 'mg-open', '전체 탭 →'));
+    head.onclick = () => window.parent?.openGridMall?.(...mall.cell);
+    return head;
+  }
+
   function renderCard(id) {
+    if (mode === 'new') return renderNew(id);
     const mall = MALLS.find(m => m.id === id), a = ADAPTERS[id], box = boxOf(id);
+    box.classList.remove('mg-off');   // 신규 모드의 '꺼진 몰' 표시 — 수정 모드는 켜기와 상관없이 여섯 몰을 불러온다
     let card = cards[id] || { status: 'idle' };
     // 전체 탭에서 다른 상품을 불러왔으면(탭 상태가 바뀜) 그것을 새로 불러온 값으로, 탭이 비었으면 다시 불러오게 한다.
     if (card.status === 'ready' && a.owner && card.owner !== a.owner()) {
       if (a.owner()) snapshot(id);
       else card = cards[id] = { status: 'idle', note: '전체 탭에서 상품이 비워졌습니다 — 다시 불러오세요.' };
     }
-    const head = el('button', 'mg-head'), logo = el('img', 'mg-logo');
-    head.type = 'button'; head.title = `${mall.name} 전체 탭 열기`;
-    logo.src = mall.logo; logo.alt = '';
-    head.append(logo, el('span', 'mg-name', mall.name), el('span', 'mg-open', '전체 탭 →'));
-    head.onclick = () => window.parent?.openGridMall?.(...mall.cell);
-    const parts = [head];
+    const parts = [headOf(mall)];
     if (card.status === 'idle') parts.push(el('p', 'mg-note', card.note || '상품을 고르면 불러옵니다.'));
     else if (card.status === 'loading') parts.push(el('p', 'mg-note', '불러오는 중…'));
     else if (card.status === 'missing') parts.push(el('p', 'mg-missing', '이 몰에 없음'), el('p', 'mg-note', card.note));
@@ -507,6 +519,80 @@
     refreshDirty();
   }
 
+  // ── 신규 모드 카드(11-09): 그 몰에 올라갈 상품명 · 판매가 · 이미지를 읽기만 하고 [등록] 한다 ──
+  // 칸은 그 몰 등록 함수가 읽는 칸 그대로다(셸 fillFrame 이 좌측 값을 넣은 뒤). 고치기는 좌측이나 전체 탭에서.
+  // 이미지는 대부분 폼에 없다 — 등록하는 순간 셸 [img] 패널의 그 몰 묶음이 붙는다(image-payload.js). 그래서 패널에서 고른 이미지를 보인다.
+  // [등록] = 셸 일괄 등록의 그 몰 한 걸음(runBulkRegister only) — 같은 확인 · 시간 한도 · 로그를 탄다.
+  const val = id => ($(id)?.value || '').trim();
+  const money = (v, unit) => !v ? '' : `${Number.isFinite(Number(v)) ? Number(v).toLocaleString('ko-KR') : v} ${unit}`;
+  const joined = list => list.filter(([, v]) => v).map(([k, v]) => `${k} ${v}`).join(' · ');
+  let b2b = null;   // utils/b2b_plan.js — 등록(main)과 같은 B2B 상품명 · 가격 규칙
+  import('../utils/b2b_plan.js').then(m => { b2b = m; refresh(); }, () => {});
+  const NEW = {
+    own: { profile: 'domestic', lines: () => [
+      ['상품명 · 한국', val('ihNameKo')], ['상품명 · 미국', val('ihNameEn')], ['상품명 · 일본', val('ihNameJp')],
+      ['판매가 · 한국', joined([['1set', money(val('ihKrwSet'), '원')], ['운전석', money(val('ihKrwLeft'), '원')], ['조수석', money(val('ihKrwRight'), '원')]])],
+      // 미국 칸을 비우면 등록이 자리 안내('비우면 160 …')의 값을 쓴다
+      ['판매가 · 미국', money(val('ihUsd') || ($('ihUsd')?.placeholder.match(/비우면 ([\d.]+)/) || [])[1], 'USD')],
+      ['판매가 · 일본', money(val('ihJpy'), 'JPY')]] },
+    b2b: { profile: 'domestic', lines: () => {
+      if (!b2b) return [];
+      const data = { titleBrand: val('iwTitleBrand') || val('iwBrand'), titleModel: val('iwTitleModel') || val('iwModel'), code: val('iwCode'), bsaO: !!$('iwBsaO')?.checked, bsaX: !!$('iwBsaX')?.checked };
+      const bsa = b2b.resolveBsa(data) ? 'bsa' : 'plain', named = data.titleBrand || data.titleModel;
+      return [['indiv', 'iwRegisterIndiv'], ['set', 'iwRegisterSet']].filter(([, box]) => $(box)?.checked)
+        .map(([type]) => [`${b2b.B2B_PLAN[type].label} 상품`, named ? `${b2b.b2bTitle(data, type)} — ${money(b2b.B2B_PLAN[type].price[bsa], '원')}` : '']);
+    } },
+    naver: { profile: 'domestic', lines: () => [['상품명', val('titlePreview')], ['판매가', money(val('price'), '원')]] },
+    coupang: { profile: 'domestic', lines: () => [['상품명', val('cpTitlePreview')], ['판매가', money(val('cpPrice'), '원')]] },
+    amazon: { profile: 'amazon', lines: () => [
+      ['마켓', val('amzMarketplaceId') === 'A1VC38T7YXB528' ? '아마존 일본' : '아마존 미국'], ['상품명', val('amzTitle')], ['SKU', val('amzSku')],
+      ['판매가', money(val('amzPrice'), val('amzCurrency') || 'USD')]] },
+    ebay: { profile: 'ebay', what: '초안 저장', lines: () => [['상품명', val('ebTitle')], ['SKU', val('ebSku')], ['판매가', money(val('ebPrice'), 'USD')]] },
+  };
+  // 결과가 붙는 차: 좌측 상품 정보(브랜드 · 차종 · 번호 · 세대 · 연식 · 코드), 아마존은 마켓까지. 몰 폼 칸은 등록 함수가 끝나며 바꿀 수 있어 쓰지 않는다.
+  const sigOf = id => {
+    const left = ['inp-brand', 'inp-carmodel', 'inp-no', 'inp-gen', 'inp-year', 'inp-code'].map(k => (window.parent?.document?.getElementById(k)?.value || '').trim());
+    return JSON.stringify([left, id === 'amazon' ? val('amzMarketplaceId') : '']);
+  };
+  function renderNew(id) {
+    const mall = MALLS.find(m => m.id === id), spec = NEW[id], box = boxOf(id);
+    const on = !!window.parent?.mallsOn?.()?.[id], parts = [headOf(mall)];
+    box.classList.remove('mg-changed');
+    box.classList.toggle('mg-off', !on);
+    if (!on) parts.push(el('p', 'mg-note', '현황판에서 꺼져 있습니다 — 머리를 누르면 켜고 채웁니다.'));
+    else {
+      for (const [label, value] of spec.lines()) {
+        const row = el('p', 'mg-ro mg-line');
+        row.append(el('span', 'mg-k', label), el('span', value ? 'mg-v' : 'mg-v mg-empty', value || '(비어 있음)'));
+        parts.push(row);
+      }
+      const all = window.parent?.VUImages?.selected?.(spec.profile) || [], imgs = all.filter(x => x.url), wrap = el('div', 'mg-images mg-new-images'), list = el('div');
+      wrap.append(el('div', 'mg-label', `이미지 ${imgs.length}장 — [img] 이미지 패널에서 고른 것`));
+      VUImageGallery.render(list, imgs.map(x => x.url), { fixed: imgs[0]?.main ? 1 : 0 });   // 읽기만: 지우기 · 옮기기 없음, 대표가 있으면 첫 칸 '대표'
+      wrap.append(list);
+      parts.push(wrap);
+      // 고른 이미지의 오류(대표 파일 없음 등)는 등록을 멈춘다 — 카드에서 미리 보인다
+      const bad = all.filter(x => x.error);
+      if (bad.length) parts.push(el('p', 'mg-warn', `${bad.map(x => x.error).join(' ')} — 이대로는 등록이 멈춥니다`));
+    }
+    const foot = el('div', 'mg-foot'), go = el('button', 'btn btn-sm vu-key mg-register', spec.what || '등록');
+    go.type = 'button'; go.disabled = !on;
+    go.onclick = () => window.parent?.runBulkRegister?.({ only: [id], fromGrid: true });
+    // 결과는 그때 올린 차에 붙는다 — 좌측에 다음 차를 넣거나 아마존 마켓을 바꾸면 지난 '✅ 등록 완료' 는 내린다
+    const r = newResults[id], result = el('p', 'mg-result', r && r.sig === sigOf(id) ? r.text : '');
+    result.dataset.tone = /^✅/.test(result.textContent) ? 'ok' : /^❌/.test(result.textContent) ? 'err' : /^⚠/.test(result.textContent) ? 'warn' : '';
+    foot.append(go, result);
+    parts.push(foot);
+    box.replaceChildren(...parts);
+    refreshNew();
+  }
+  function refreshNew() {
+    if (mode !== 'new') return;
+    const on = window.parent?.mallsOn?.() || {}, n = MALLS.filter(m => on[m.id]).length;
+    $('mgRegisterAll').disabled = !n;
+    $('mgRegisterAll').textContent = `켠 몰 모두 등록${n ? ` (${n})` : ''}`;
+  }
+
   // 이미지 목록: 탭과 같은 갤러리(× 삭제 · ←→ · ESM 상세 붙이기 · 끌어 놓기 · 배열 적용)에 타일 끌어 옮기기를 더한다. 첫 장 = 대표(아마존 · 이베이).
   function gallery(id, img) {
     const wrap = el('div', 'mg-images'), list = el('div');
@@ -537,6 +623,7 @@
   }
 
   function refreshDirty() {
+    if (mode === 'new') return;   // 신규 모드 카드는 고칠 칸이 없다 — 버튼은 renderNew · refreshNew 가 맞춘다
     let n = 0;
     for (const m of MALLS) {
       const box = boxOf(m.id), changes = changesOf(m.id);
@@ -647,15 +734,32 @@
   MALLS.forEach(m => { const box = el('article', 'mg-card vu-cut'); box.dataset.mall = m.id; $('mgGrid').append(box); });
   MALLS.forEach(m => renderCard(m.id));
 
-  // 셸이 6몰 표를 띄울 때 부른다(수정 모드 기본 화면 · [← 6몰 표]). 전체 탭에서 고친 값이 카드에 보이도록 다시 그린다.
-  window.showMallGrid = () => {
+  // 표 머리 줄: 수정 모드 = [다시 불러오기] 안내 [바뀐 몰 모두 저장], 신규 모드 = 안내 [켠 몰 모두 등록](셸 일괄 등록과 같다).
+  const editStatus = $('mgStatus').textContent;
+  $('mgRegisterAll').onclick = () => window.parent?.runBulkRegister?.({ fromGrid: true });
+  function setMode(next) {
+    if (next === mode) return;
+    mode = next === 'new' ? 'new' : 'edit';
+    $('mgReload').hidden = $('mgSaveAll').hidden = mode === 'new';
+    $('mgRegisterAll').hidden = mode !== 'new';
+    say(mode === 'new' ? '좌측 상품 정보로 채운 여섯 몰의 등록 내용입니다. 고치기는 좌측이나 전체 탭에서 합니다.' : editStatus);
+    $('mgGrid').inert = false;
+    refreshDirty();
+  }
+
+  // 셸이 6몰 표를 띄울 때 부른다(두 모드의 기본 화면 · [← 6몰 표]). 전체 탭에서 고친 값이 카드에 보이도록 다시 그린다.
+  window.showMallGrid = next => {
+    if (next) setMode(next);
     document.querySelectorAll('.tab-pane').forEach(p => { p.style.display = 'none'; });
     pane.style.display = 'block';
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     MALLS.forEach(m => renderCard(m.id));
   };
+  // 신규 모드: 셸이 좌측을 폼에 채운 뒤(syncFrame) · 일괄 등록이 몰 결과를 낼 때 부른다. 표가 안 보이면 그리지 않는다(보일 때 다시 그린다).
+  const refresh = () => { if (mode === 'new' && pane.style.display !== 'none') MALLS.forEach(m => renderCard(m.id)); };
+  const setResult = (id, text) => { if (!id) return; newResults[id] = { text, sig: sigOf(id) }; refresh(); };
   // keys · settled · saveAll: 셸 좌측 [일괄 수정]이 불러오기가 끝나기를 기다려(아직 불러오는 몰은 바뀐 칸이 없어 저장에서 빠진다)
   // 지금 불러온 상품인지 보고 바뀐 몰을 모두 저장한다. lastKeys 는 불러오기를 시작할 때 바뀐다 — 끝났는지는 settled 로 본다.
   const settled = async () => { for (let p; p !== pending;) await (p = pending); };
-  window.VUMallGrid = { load, setPrices, changes: changesOf, busy: () => busy, keys: () => lastKeys, settled, saveAll };
+  window.VUMallGrid = { load, setPrices, changes: changesOf, busy: () => busy, keys: () => lastKeys, settled, saveAll, refresh, setResult };
 })();

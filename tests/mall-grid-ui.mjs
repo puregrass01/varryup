@@ -1,6 +1,6 @@
 // 단일 상품 수정 — 6몰 표(mall-grid.js) — 가짜 IPC 로 셸(index_up.html) + 폼을 연다. 네트워크 · 실제 저장 없음. `node tests/mall-grid-ui.mjs`
 // 지키는 것:
-//   1) 수정 모드의 기본 화면은 카드 6장(자사몰 · B2B · 네이버 · 쿠팡 · 아마존 · 이베이), 신규 모드에는 표가 없다
+//   1) 수정 모드의 기본 화면은 카드 6장(자사몰 · B2B · 네이버 · 쿠팡 · 아마존 · 이베이), 신규 모드 카드는 올라갈 상품명 · 판매가 · 이미지 요약 + 몰별 [등록](11-09)
 //   2) 본사몰 상품 찾기에서 고르면 여섯 몰을 한꺼번에 불러온다 — 없는 몰은 '이 몰에 없음'
 //   3) 칸을 고치면 '바뀜', 저장 전에 '몰 / 칸 / 이전 → 새' 를 묻고(취소하면 아무것도 안 감) 바뀐 칸만 보낸다
 //   4) 쿠팡 상품명을 바꾸면 '저장 시 쿠팡 재승인' · 아마존 이미지는 미국 · 일본이 같으면 둘 다 · 타일 끌어 옮기기
@@ -256,13 +256,63 @@ try {
   await frame.locator('#naverTab').waitFor({ state: 'visible' });
   assert.equal(await frame.locator('#ssEditTitle').inputValue(), '옵틱글래스 기아 K5 새 제목', '카드와 탭은 같은 상태다');
 
-  // 신규 모드에는 표가 없다 · 좌측 버튼은 일괄 등록(수정 모드는 일괄 수정)
+  // 신규 모드도 6몰 표가 기본 화면(11-09) — 카드 = 올라갈 상품명 · 판매가 · 이미지(읽기만) + [등록]. 좌측 버튼은 일괄 등록.
   assert.deepEqual([await page.locator('#btn-bulk-edit').isVisible(), await page.locator('#btn-bulk-register').isVisible()], [true, false]);
+  // 보던 몰 탭(네이버)은 신규로 바꿔도 그대로다(예전과 같다) — [← 6몰 표]로 가면 신규 카드
   await page.locator('label[for="mode-new"]').click();
-  await page.waitForTimeout(200);
-  assert.equal(await frame.locator('#mallGridTab').isVisible(), false);
+  await frame.locator('#naverTab').waitFor({ state: 'visible' });
+  await page.locator('#btn-grid-back').click();
+  await frame.locator('#mgRegisterAll').waitFor({ state: 'visible' });
+  assert.equal(await frame.locator('#mallGridTab').isVisible(), true);
   assert.equal(await page.locator('#btn-grid-back').isVisible(), false);
   assert.deepEqual([await page.locator('#btn-bulk-edit').isVisible(), await page.locator('#btn-bulk-register').isVisible()], [false, true]);
+  assert.deepEqual([await frame.locator('#mgSaveAll').isVisible(), await frame.locator('#mgReload').isVisible()], [false, false]);
+  assert.equal(await frame.locator('.mg-card input.form-input').count(), 0, '신규 카드는 고칠 칸이 없다');
+  // 꺼진 몰 카드: 안내 + [등록] 꺼짐. 켜는 것은 현황판 칸(또는 카드 머리) — 켜면 그 몰 탭이 열리고 [← 6몰 표]로 돌아온다.
+  const on = () => page.evaluate(() => mallsOn());
+  const turnOn = async (id, cell) => {
+    if ((await on())[id]) return;
+    assert.equal(await card(id).locator('.mg-register').isDisabled(), true, id + ' 꺼짐 → 등록 못 함');
+    assert.match(await card(id).textContent(), /현황판에서 꺼져 있습니다/);
+    await page.locator('#' + cell).click();
+    await page.locator('#btn-grid-back').click();
+    await frame.locator('#mgRegisterAll').waitFor({ state: 'visible' });
+  };
+  await turnOn('naver', 'cell-KOREA-open1');
+  await turnOn('b2b', 'cell-KOREA-b2b');
+  // 칸은 그 몰 등록 함수가 읽는 칸 그대로(셸이 좌측 기아 K5 · No.612 를 채운 뒤)
+  const lines = id => card(id).locator('.mg-line').evaluateAll(ls => ls.map(l => [l.children[0].textContent, l.children[1].textContent]));
+  assert.deepEqual(await lines('naver'), [['상품명', '옵틱글래스 기아 K5 광각 사이드 와이드미러'], ['판매가', '115,000 원']]);
+  // B2B 이름 · 가격은 등록(main)과 같은 규칙 모듈(utils/b2b_plan.js)로. 좌측 BSA 기본값은 O → BSA판 개별 115,000 · 세트 220,000
+  await frame.locator('.mg-card[data-mall="b2b"] .mg-line').first().waitFor();
+  assert.deepEqual(await lines('b2b'), [['개별 상품', '옵틱글래스 기아 K5 미러 운전석/조수석 [612] — 115,000 원'], ['세트 상품', '옵틱글래스 기아 K5 미러 1셋 [612] — 220,000 원']]);
+  // 이미지 = [img] 패널에서 고른 것(국내 공통: 주소가 있는 상세 1장)
+  assert.match(await card('naver').locator('.mg-new-images .mg-label').textContent(), /^이미지 1장/);
+  assert.deepEqual(await card('naver').locator('.mg-new-images img').evaluateAll(ns => ns.map(n => n.getAttribute('src'))), ['https://ai.esmplus.com/test/lib7.jpg']);
+  assert.equal(await card('naver').locator('.mg-new-images figcaption').textContent(), '1', '대표 파일이 없으면 첫 칸은 상세(대표라 부르지 않는다)');
+  const turnedOn = Object.values(await on()).filter(Boolean).length;
+  assert.equal(await frame.locator('#mgRegisterAll').textContent(), `켠 몰 모두 등록 (${turnedOn})`);
+  // 카드 [등록] = 그 몰만 등록(셸 일괄 등록의 한 걸음) → 결과가 카드에 남고 표로 돌아온다
+  await child().evaluate(() => { window.__registered = []; for (const fn of ['registerNaver', 'registerCoupang', 'registerImwebB2b', 'registerImwebHead', 'registerAmazon', 'ebayDraft']) window[fn] = async () => { window.__registered.push(fn); return { ok: true }; }; });
+  // 입력 경고(여기선 쿠팡 같은 차종 상품)는 몰 하나를 올려도 전부 묻는다 — 문구는 그 몰 이름으로
+  asked = confirmNext(true);
+  await card('naver').locator('.mg-register').click();
+  assert.match(await asked, /그대로 네이버에 등록할까요\?$/);
+  await frame.locator('.mg-card[data-mall="naver"] .mg-result[data-tone="ok"]').waitFor();
+  assert.equal(await card('naver').locator('.mg-result').textContent(), '✅ 등록 완료');
+  assert.deepEqual(await child().evaluate(() => window.__registered), ['registerNaver'], '그 몰만');
+  await frame.locator('#mgRegisterAll').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#btn-grid-back').isVisible(), false, '등록이 끝나면 표로 돌아온다');
+  // 결과는 그 차에 붙는다 — 좌측에 다른 상품번호를 넣으면 지난 '✅ 등록 완료' 를 내린다
+  await page.locator('#inp-no').fill('613'); await page.locator('#inp-no').dispatchEvent('input');
+  await page.waitForFunction(() => !document.getElementById('form-frame').contentDocument.querySelector('.mg-card[data-mall="naver"] .mg-result').textContent);
+  // 아마존 일본만 켠 채 아마존 카드 머리(전체 탭)를 눌러도 마켓은 일본 그대로(고정 칸 '미국' 을 켜지 않는다)
+  if (!(await page.evaluate(() => checked.JAPAN.open1))) { await page.locator('#cell-JAPAN-open1').click(); await page.locator('#btn-grid-back').click(); }
+  await frame.locator('#mgRegisterAll').waitFor({ state: 'visible' });
+  await card('amazon').locator('.mg-head').click();
+  await frame.locator('#amazonTab').waitFor({ state: 'visible' });
+  assert.deepEqual(await page.evaluate(() => [checked.USA.open1, checked.JAPAN.open1]), [false, true]);
+  await page.locator('#btn-grid-back').click();
 
   // 7) 좌측 [일괄 수정]: 상품 정보(검색 조건)의 상품을 여섯 몰에서 불러와 바뀐 몰(좌측 변경 판매가)을 모두 묻고 저장한다
   const p2 = await context.newPage();
@@ -307,7 +357,7 @@ try {
   await p2.close();
 
   assert.deepEqual(errors, []);
-  console.log('PASS: 6몰 표 — 카드 6장 · 한꺼번에 불러오기 · 이 몰에 없음 · 바뀐 칸만(묻고 보냄) · 쿠팡 재승인 경고 · 아마존 이미지 둘 다 · 타일 끌기 · 좌측 변경 판매가 · [No.번호] 막기 · 탭 오가기 · 신규 모드엔 없음 · 좌측 [일괄 수정](불러오기 + 바뀐 몰 모두 저장)');
+  console.log('PASS: 6몰 표 — 카드 6장 · 한꺼번에 불러오기 · 이 몰에 없음 · 바뀐 칸만(묻고 보냄) · 쿠팡 재승인 경고 · 아마존 이미지 둘 다 · 타일 끌기 · 좌측 변경 판매가 · [No.번호] 막기 · 탭 오가기 · 신규 모드 카드(요약 · 몰별 등록) · 좌측 [일괄 수정](불러오기 + 바뀐 몰 모두 저장)');
 } finally {
   await browser.close();
 }

@@ -233,7 +233,7 @@
       td.append(el('small', '', titleOf(scope) + ' 상품 ' + g.id + (g.t.missing ? ' · ' + g.t.missing : g.t.via === 'sheet' ? ' · Vehicles 시트로 찾은 짝' : '') +
         (g.t.missing ? '' : ' · 짝 ' + g.members.length + '줄')));
       head.append(td); body.append(head);
-      for (const r of [...g.own, ...g.members]) body.append(rowEl(r));
+      for (const r of [...g.own, ...g.members]) body.append(rowEl(r, r === g.own[0]));
     }
     else for (const r of pageRows()) body.append(rowEl(r));
     if (!filtered.length) {
@@ -243,7 +243,8 @@
     autoLoad();
   }
   // 표 한 줄. 나라 화면에서는 사진 칸 대신 몰 로고 · 이름을 보이고, 단위는 그 줄의 몰 것이다.
-  function rowEl(r) {
+  // strip: 나라 화면 묶음의 본사 첫 줄 — 몰 이름 밑에 상품 사진을 작게 한 줄(누르면 크게). 짝 몰 줄에는 넣지 않는다(표가 길어진다).
+  function rowEl(r, strip) {
       const sc = r.scope || scope, unit = unitOf(sc);
       const tr = el('tr'); tr.classList.toggle('be-dirty', dirty(r));
       const selectCell = el('td', 'be-check-column'), check = el('input'); check.type = 'checkbox'; check.checked = !!r.selected;
@@ -253,6 +254,17 @@
       if (country) {
         const mall = el('span', 'be-mall'); mall.append(logoOf(sc), el('span', '', titleOf(sc) + (locked(r) && !r.readonly ? ' (보기만)' : '')));
         photo.append(mall);
+        const urls = strip ? previewImageUrls(r.newImages || r.images || r.image || r.mainImageUrl || r.imageUrl || []).filter(u => typeof u === 'string' && /^https?:\/\//i.test(u)) : [];
+        if (urls.length) {
+          const row = el('div', 'be-photo-strip');
+          urls.forEach((url, index) => {
+            const open = el('button', 'be-image-open'), image = el('img'); image.src = url; image.alt = r.name + ' 이미지 ' + (index + 1); image.loading = 'lazy';
+            image.onerror = () => { open.hidden = true; };
+            open.type = 'button'; open.setAttribute('aria-label', image.alt + ' 확대'); open.title = '클릭하여 전체 이미지 보기';
+            open.onclick = () => viewImage(url, image.alt); open.append(image); row.append(open);
+          });
+          photo.append(row);
+        }
       } else {
       const images = previewImageUrls(r.newImages || r.images || r.image || r.mainImageUrl || r.imageUrl || []);
       {

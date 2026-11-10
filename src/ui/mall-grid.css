@@ -2,6 +2,8 @@
 .embedded-platform .tab-pane#mallGridTab, #mallGridTab { max-width: none; }
 .mg-bar { display: flex; gap: var(--space-sm); align-items: center; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); }
 .mg-status { flex: 1; font-size: 12px; color: var(--text-secondary); }
+/* 모드별 버튼(수정: 다시 불러오기 · 바뀐 몰 모두 저장 / 신규: 켠 몰 모두 등록) — .btn 의 display 가 hidden 을 이기지 않게 */
+.mg-bar [hidden] { display: none; }
 .mg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .mg-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px 12px 12px; background: var(--bg-card); color: var(--text-primary); transition: border-color var(--transition); }
 /* 바뀐 카드: 코발트 테두리. 바뀐 칸은 아래 '· 바뀜' 글자로도 표시된다 */
@@ -42,3 +44,14 @@
 @media (max-width: 720px) { .mg-card:has(.mg-opt-table) { grid-column: 1 / -1; } }
 @media (max-width: 520px) { .mg-grid { grid-template-columns: minmax(0, 1fr); } }
 .mg-tip { cursor: help; text-decoration: underline dotted var(--text-muted); text-underline-offset: 3px; }
+
+/* 신규 모드 카드(11-09): 올라갈 값 한 줄씩(이름 · 값), 이미지는 작은 칸 한 줄(넘치면 가로 스크롤), 꺼진 몰은 흐린 머리 */
+.mg-line { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: var(--space-sm); font-size: 12px; }
+.mg-line .mg-v { color: var(--text-primary); overflow-wrap: anywhere; }
+.mg-line .mg-empty { color: var(--text-muted); }
+.mg-new-images .vu-image-gallery { flex-wrap: nowrap; gap: 6px; margin: 0; padding: var(--space-xs) 0; overflow-x: auto; }
+.mg-new-images .vu-image-tile { width: 48px; flex: none; }
+.mg-new-images .vu-image-tile img { width: 48px; height: 48px; }
+.mg-new-images :is(.vu-image-remove, .vu-image-save-hint) { display: none; }
+.mg-card.mg-off .mg-name { color: var(--text-secondary); }
+.mg-foot .mg-register { padding: 6px var(--space-md); }

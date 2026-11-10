@@ -77,6 +77,12 @@ try {
       tr.querySelector('input[type=number]')?.value, tr.querySelector('input[type=number]')?.disabled, tr.querySelector('.be-result')?.textContent]));
   let t = await table();
   assert.match(t[0][1], /옵틱글래스 BMW X5 광각미러 \[No\.101\].*상품 2097/);
+  // 묶음의 본사 첫 줄에만 상품 사진 한 줄(짝 몰 줄 · 다른 본사 줄에는 없다). 누르면 크게 본다.
+  const strips = await page.$$eval('#be-body tr', trs => trs.map(tr => tr.querySelectorAll('.be-photo-strip img').length));
+  assert.ok(strips[1] > 0 && strips.every((n, i) => i === 1 || n === 0), JSON.stringify(strips));
+  await page.locator('.be-photo-strip .be-image-open').first().evaluate(b => b.click());   // 테스트는 외부 이미지를 못 받아 칸이 숨는다(미리보기 실패 = 숨김)
+  assert.equal(await page.locator('#be-image-viewer').evaluate(d => d.open), true);
+  await page.keyboard.press('Escape');
   // 본사 줄은 1set · 운전석만(조수석 · 기본가 없음). 몰마다 로고 + 이름. B2B 는 기본가 줄 하나, 보기만.
   assert.deepEqual(t.slice(1).map(r => [r[0], r[1]]), [
     ['아임웹 본사', 'logos/imweb.png'], ['아임웹 본사', 'logos/imweb.png'], ['아임웹 본사', 'logos/imweb.png'],

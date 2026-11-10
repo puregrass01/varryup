@@ -95,8 +95,10 @@ try {
   await page.locator('label[for="mode-new"]').click();
   await expectMode('new');
   assert.equal(await page.locator('#card-area').textContent(), '');
-  // 수정 모드의 폼은 6몰 표였다 — 신규 모드엔 표가 없고 켠 몰도 없으니 폼을 닫는다(표가 아직 뜨는 중이면 뜬 뒤 닫는다).
-  await page.locator('#form-frame').waitFor({ state: 'hidden' });
+  // 신규 모드도 6몰 표가 기본 화면이다(11-09) — 켠 몰이 없어도 폼(표)을 닫지 않고, 표는 신규 카드로 다시 그린다.
+  await page.frameLocator('#form-frame').locator('#mgRegisterAll').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#form-frame').isVisible(), true);
+  assert.equal(await page.frameLocator('#form-frame').locator('#mgSaveAll').isVisible(), false);
   await page.locator('label[for="mode-edit"]').click();
   await expectMode('edit');
   assert.equal(await page.evaluate(() => window.modeMessages.at(-1).mode), 'edit');

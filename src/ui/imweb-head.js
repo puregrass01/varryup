@@ -277,6 +277,7 @@
       if (!r?.success) { $('ihPricePlan').textContent = `미국 · 일본 가격을 계산하지 못했습니다: ${r?.error || '알 수 없는 오류'}`; return; }
       autoFill('ihJpy', r.plan.JPY.combos[0]);
       $('ihUsd').placeholder = `비우면 ${r.plan.USD.combos[0]} (한국가 환산)`;
+      window.VUMallGrid?.refresh?.();   // 신규 모드 6몰 표의 자사몰 카드가 미국 · 일본 가격을 늦게 받는다(이벤트 없이 쓴 값)
     }, () => {});
     $('ihSpecPlan').replaceChildren(...[['국내용(한국)', d.specImageUrl, '등록할 수 없습니다'], ['해외용(미국 · 일본)', d.specImageUrlEn, '국내용을 씁니다']]
       .map(([k, u, why]) => Object.assign(document.createElement('p'), { className: 'help-text', textContent: `조견표 ${k}: ${u || '없음'}`, title: u ? '' : why })));

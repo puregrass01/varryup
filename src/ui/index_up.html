@@ -1782,6 +1782,8 @@ function syncFrame() {
   if (isBulkRunning) return { ok: false, filled: [], missed: [], kept: [] };
   const r = fillFrame({ report: false });
   updateRunButton(r);
+  // 신규 모드 6몰 표: 채운 값(몰마다 올라갈 상품명 · 판매가 · 이미지)을 카드에 다시 그린다
+  if (currentMode === 'new') try { $('form-frame')?.contentWindow?.VUMallGrid?.refresh?.(); } catch (e) { /* 로드 중 */ }
   return r;
 }
 
@@ -1830,6 +1832,17 @@ async function runRegister() {
   if (r.missed.length) addLog(`⚠ 확인할 항목 ${r.missed.length}건 — 등록 전에 폼을 확인하세요.`, 'warn');
 }
 
+// 현황판에서 켠 몰(6몰 표의 카드 id). 채우기(fillFrame)와 신규 모드 6몰 표(켠 몰만 [등록])가 같이 쓴다.
+function mallsOn() {
+  return {
+    b2b:     !!checked.KOREA?.b2b,
+    naver:   !!checked.KOREA?.open1,
+    coupang: !!checked.KOREA?.open2,
+    ebay:    !!checked.USA?.open2,
+    amazon:  !!(checked.USA?.open1 || checked.JAPAN?.open1),
+    own:     !!(checked.KOREA?.own || checked.USA?.own || checked.JAPAN?.own),
+  };
+}
 function fillFrame({ report = false } = {}) {
   const filled = [], missed = [], kept = [];
   const frame = $('form-frame');
@@ -1857,14 +1870,7 @@ function fillFrame({ report = false } = {}) {
   const chartHtml = $('inp-chart-html').value.trim();
 
   // 현황판에서 켠 몰. 꺼진 몰의 탭은 보이지도 않으니 채우지도 경고하지도 않는다.
-  const on = {
-    b2b:     !!checked.KOREA?.b2b,
-    naver:   !!checked.KOREA?.open1,
-    coupang: !!checked.KOREA?.open2,
-    ebay:    !!checked.USA?.open2,
-    amazon:  !!(checked.USA?.open1 || checked.JAPAN?.open1),
-    own:     !!(checked.KOREA?.own || checked.USA?.own || checked.JAPAN?.own),
-  };
+  const on = mallsOn();
 
   // 상품번호는 CSV DB 에 'No.101번' 형식으로 들어 있다(1058건 중 945건). 거기서 그대로
   // 복사해 넣으면 아래 문형들이 'No.No.101번' 이 되고, 아마존 SKU 는 'OPT-No.101번' 이 된다.
@@ -2551,7 +2557,7 @@ function applyFilter(preferTab) {
       doc.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       if (btn) btn.classList.add('active');
       markViewingCells(tabId);
-      $('btn-grid-back').hidden = currentMode !== 'edit';
+      $('btn-grid-back').hidden = false;
     };
 
     let firstActiveBtn = null;
@@ -2673,14 +2679,15 @@ function openDetailSidebar() {
    본사몰 상품 찾기에서 상품을 고르면 여섯 몰을 한꺼번에 불러온다 — 칸에 글자를 칠 때는 안 부른다
    (네이버 찾기는 상품 목록 전체를 훑는 무거운 조회다).
 ══════════════════════════════════════════════ */
+// 신규 모드도 6몰 표가 기본 화면이다(11-09) — 카드마다 그 몰에 올라갈 상품명 · 판매가 · 이미지와 [등록].
 function showMallGrid() {
   const frame = $('form-frame');
-  if (!frame || currentMode !== 'edit') return;
+  if (!frame) return;
   frame.style.display = 'block';
   $('btn-grid-back').hidden = true;
   markViewingCells(null);
   updateEmptyState();
-  const show = () => { try { frame.contentWindow.showMallGrid?.(); } catch (e) { /* 폼 스크립트 오류는 폼 쪽에서 드러난다 */ } };
+  const show = () => { try { frame.contentWindow.showMallGrid?.(currentMode); } catch (e) { /* 폼 스크립트 오류는 폼 쪽에서 드러난다 */ } };
   const doc = frame.contentWindow && frame.contentWindow.document;
   if (doc && doc.readyState === 'complete' && doc.querySelector('.tab-btn')) return show();
   frame.onload = () => {
@@ -2688,40 +2695,34 @@ function showMallGrid() {
     syncFrameTheme();
     setSection8Mode(currentMode, true);
     syncFrame();
-    // 뜨는 사이 신규 모드로 바뀌었으면 표 대신 켠 몰의 폼(syncModeView 의 신규 쪽 — 이 onload 가 openPlatformTab 의 것을 덮었다).
     // 그 사이 몰 탭을 열었으면(문서는 다 읽혀 openPlatformTab 이 바로 탭을 띄우고 onload 는 아직 이쪽 것일 때)
     // [← 6몰 표] 가 보인다 — 그 탭을 표로 덮지 않는다.
-    const first = currentMode !== 'edit' && firstSelectedTab();
-    if (first) openPlatformTab(first.tab, first.country);
-    else if (currentMode !== 'edit') closeForms();
-    else if ($('btn-grid-back').hidden) show();
+    if ($('btn-grid-back').hidden) show();
   };
   if (!frame.src || !frame.src.includes('index.html')) frame.src = `index.html?mode=${currentMode}`;
 }
 
-// 폼을 닫을 자리. 수정 모드에는 닫힌 상태가 없다 — 6몰 표로 간다.
+// 폼을 닫을 자리. 닫힌 상태는 없다 — 6몰 표로 간다(두 모드 모두).
 function closeForms() {
-  if (currentMode === 'edit') return showMallGrid();
-  const frame = $('form-frame');
-  if (frame) frame.style.display = 'none';
+  return showMallGrid();
 }
 
-// 모드가 바뀐 뒤 오른쪽 화면을 맞춘다: 수정이면 6몰 표, 신규면 표 대신 켠 몰의 폼(없으면 닫기).
+// 모드가 바뀐 뒤 오른쪽 화면을 맞춘다: 6몰 표(카드는 모드에 맞게 다시 그린다). 신규로 바꿀 때 보던 몰 탭이 있으면
+// 그 탭을 그대로 둔다(예전과 같다 — [← 6몰 표]로 돌아가면 신규 카드). 수정으로 바꿀 때는 늘 표.
 function syncModeView() {
   updateMallFields();
-  if (currentMode === 'edit') return showMallGrid();
-  $('btn-grid-back').hidden = true;
-  const frame = $('form-frame'), grid = frame?.contentWindow?.document?.getElementById('mallGridTab');
-  if (!grid || grid.style.display === 'none') return;
-  const first = firstSelectedTab();
-  if (first) openPlatformTab(first.tab, first.country);
-  else { frame.style.display = 'none'; updateEmptyState(); }
+  if (currentMode === 'new' && !$('btn-grid-back').hidden) return;
+  return showMallGrid();
 }
 
 // 카드 머리 → 그 몰 탭. 현황판 칸을 누른 것과 같다(꺼져 있으면 켠다).
+// 같은 몰(같은 탭)이 다른 나라 칸으로 켜져 있으면 그 칸으로 연다 — 아마존 일본이 켜져 있는데 카드의 고정 칸(미국)을 켜면
+// 둘 중 하나만 켜는 규칙이 일본을 끄고 등록 마켓이 미국으로 바뀐다(자사몰도 한국 칸을 새로 켜지 않게).
 function openGridMall(country, type) {
-  const plat = PLATFORMS[country]?.find(p => p.type === type), tab = plat && NAME_TO_TAB[plat.name];
+  const tabOf = c => { const p = PLATFORMS[c]?.find(x => x.type === type); return p && NAME_TO_TAB[p.name]; };
+  const tab = tabOf(country);
   if (!tab) return;
+  if (!checked[country]?.[type]) country = Object.keys(checked).find(c => checked[c]?.[type] && tabOf(c) === tab) || country;
   openDetailSidebar();
   if (!checked[country][type]) return handleCheck(country, type, true, tab);
   openPlatformTab(tab, country);
@@ -2823,7 +2824,13 @@ function readBulkResult(r, what = '등록') {
   return { ok: false, error: `${what} 결과를 받지 못했습니다 — 아래 로그를 확인하세요` };
 }
 
-async function runBulkRegister() {
+// 일괄 등록 몰 id → 6몰 표 카드 id. 결과는 카드에도 한 줄 남는다(신규 모드 6몰 표).
+const GRID_ID = { naver: 'naver', coupang: 'coupang', imweb_b2b: 'b2b', imweb_head: 'own', amazon: 'amazon', ebay: 'ebay' };
+const gridResult = (id, text) => { try { $('form-frame')?.contentWindow?.VUMallGrid?.setResult?.(GRID_ID[id], text); } catch (e) { /* 로드 중 */ } };
+
+// only: 카드 [등록] — 그 몰만(카드 id). fromGrid: 6몰 표에서 눌렀다 — 끝나면 표로 돌아온다.
+// 버튼 click 이 이벤트를 첫 인자로 넘겨도 아래 두 값은 없다(= 켠 몰 모두 · 마지막 탭에 머무름, 예전과 같다).
+async function runBulkRegister({ only = null, fromGrid = false } = {}) {
   if (isBulkRunning) {
     addLog(`이미 ${bulkKind}이 진행 중입니다.`, 'warn');
     return;
@@ -2856,6 +2863,8 @@ async function runBulkRegister() {
   // 예전에는 click() 만 하고 곧장 성공으로 셌다. 거부돼도 성공이었고 오류는 이베이 탭 로그에만 남았다.
   if (checked.USA?.open2) targetPlatforms.push({ id: 'ebay', name: 'eBay 미국', tabId: 'ebayTab', country: 'USA', fn: 'ebayDraft',
     what: '초안 저장(Draft)', done: '초안 저장 완료 — 게시는 이베이 탭의 초안 게시 버튼으로 하세요' });
+  if (only) targetPlatforms.splice(0, Infinity, ...targetPlatforms.filter(p => only.includes(GRID_ID[p.id])));
+  if (only && amazonLeft && !only.includes('amazon')) amazonLeft = '';
 
   if (targetPlatforms.length === 0) {
     addLog('현황판에서 등록할 플랫폼을 먼저 선택하세요.', 'warn');
@@ -2875,7 +2884,9 @@ async function runBulkRegister() {
   if (syncReport.missed && syncReport.missed.length > 0) {
     syncReport.missed.forEach(m => addLog(`⚠ ${m}`, 'warn'));
     // BSA 불일치·다른 차 조견표 같은 경고가 있으면 그대로 올리기 전에 묻는다.
-    if (!window.confirm(`입력 확인 경고 ${syncReport.missed.length}건이 있습니다.\n\n${syncReport.missed.map(m => '· ' + m).join('\n')}\n\n그대로 일괄 등록할까요?`)) {
+    // 카드 [등록](only)도 경고는 전부 보인다 — 상품번호 · 조견표처럼 여러 몰에 걸리는 경고가 많아 몰별로 가르지 않는다.
+    const where = only ? `${targetPlatforms.map(p => p.name).join(', ')}에 ` : '일괄 ';
+    if (!window.confirm(`입력 확인 경고 ${syncReport.missed.length}건이 있습니다.\n\n${syncReport.missed.map(m => '· ' + m).join('\n')}\n\n그대로 ${where}등록할까요?`)) {
       addLog('일괄 등록을 취소했습니다 — 경고를 확인한 뒤 다시 누르세요.', 'warn');
       return;
     }
@@ -2901,6 +2912,7 @@ async function runBulkRegister() {
   try {
     for (const [i, plat] of targetPlatforms.entries()) {
       addLog(`▶ [${plat.name}] 등록 준비 및 탭 전환...`, 'info');
+      gridResult(plat.id, `${plat.what || '등록'} 중…`);
       let result;
       try {
         openPlatformTab(plat.tabId, plat.country);
@@ -2915,14 +2927,17 @@ async function runBulkRegister() {
       if (result.ok) {
         successCount++;
         addLog(`✅ [${plat.name}] ${plat.done || '등록 완료'}`, 'ok');
+        gridResult(plat.id, `✅ ${plat.done || '등록 완료'}`);
       } else {
         failCount++;
         failedNames.push(plat.name);
         if (result.partial) {
           partialCount++;
           addLog(`⚠ [${plat.name}] 일부만 등록: ${result.error}`, 'warn');
+          gridResult(plat.id, `⚠ 일부만 등록: ${result.error}`);
         } else {
           addLog(`❌ [${plat.name}] 등록 실패: ${result.error}`, 'error');
+          gridResult(plat.id, `❌ 등록 실패: ${result.error}`);
         }
       }
       // 몰 사이에 잠깐 쉰다 — 탭이 바뀌는 걸 눈으로 따라갈 수 있게.
@@ -2946,6 +2961,7 @@ async function runBulkRegister() {
       btnBulk.disabled = false;
       btnBulk.innerHTML = originalText;
     }
+    if (fromGrid) showMallGrid();   // 카드 · [켠 몰 모두 등록]에서 시작했으면 결과가 남은 표로 돌아온다
   }
 }
 

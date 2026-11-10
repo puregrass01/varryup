@@ -99,6 +99,9 @@
   const line = u => `<p><img src="${u.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}" /></p>`;
   window.VUImages = {
     esmUrls,   // 일괄 수정 이미지 주소 칸도 같은 해석을 쓴다
+    // 고른 이미지(대표 먼저) — 신규 모드 6몰 표 카드가 '올라갈 이미지' 로 보인다(읽기만, 호스팅하지 않는다).
+    // main: 대표인지. error: 그 이미지의 오류(대표 파일 없음 등) — 고른 이미지에 오류가 있으면 등록 때 묶음 준비가 멈춘다(utils/image_library.js prepare).
+    selected: id => (profiles.get(id)?.items || []).filter(i => i.selected).map(i => ({ url: i.url || i.previewUrl || '', main: i.role === '대표', error: i.error || '' })),
     async init(options) {
       ipc = options.ipc; afterChange = options.onChange; root = document.getElementById('image-library');
       root.classList.add('vu-cut');

@@ -4,8 +4,10 @@ function setSection8Mode(mode, force = false) {
   mode = mode === 'edit' ? 'edit' : 'new';
   const section = document.getElementById('section8');
   if (section) {
-    modeRevision += 1;
     const changed = currentMode !== mode;
+    // 모드가 실제로 바뀔 때만 센다 — 폼(6몰 표)이 뜨며 같은 모드를 다시 적용하는 것(onload)은 바꾼 게 아니다.
+    // 예전엔 그것도 세어서, 신규 모드 시작 때 표가 뜨면 main 이 알려 준 모드(veryup-get-mode)를 버렸다.
+    if (changed) modeRevision += 1;
     currentMode = mode;
     const radio = document.querySelector(`.mode-radio[value="${mode}"]`);
     if (radio) radio.checked = true;

@@ -20,22 +20,13 @@ import path from 'node:path';
 import { buildContentFromTemplate, yearValues, extractImageUrl } from './build_payload.js';
 import { buildCategories, categoriesFileFromTree } from './categories.js';
 import { toFormData } from './imweb_client.js';
+// 상품명 · 가격 규칙은 순수 모듈에 있다 — 신규 모드 6몰 표 카드(렌더러)도 같은 규칙으로 미리 보인다.
+import { B2B_PLAN, resolveBsa, b2bTitle } from '../../utils/b2b_plan.js';
+export { B2B_PLAN, resolveBsa, b2bTitle };
 
 export const B2B_SITE_CODE = 'S202101070709acd6138de';
 const LIST_TTL_MS = 5 * 60 * 1000;
 
-// 개별(운전석/조수석) · 세트(1셋) × 일반 · BSA. 가격과 템플릿은 예전 등록과 같다.
-export const B2B_PLAN = {
-  indiv: { label: '개별', suffix: '운전석/조수석', price: { bsa: 115000, plain: 80000 }, template: { bsa: '1291', plain: '803' } },
-  set: { label: '세트', suffix: '1셋', price: { bsa: 220000, plain: 150000 }, template: { bsa: '1290', plain: '712' } },
-};
-
-/** bsaO · bsaX 가 오면 그것으로 BSA 여부를 정한다(예전과 같은 판정). data.hasBsa 도 맞춰 둔다. */
-export function resolveBsa(data) {
-  if (data.bsaO !== undefined || data.bsaX !== undefined) data.hasBsa = !data.bsaX && !!data.bsaO;
-  return !!data.hasBsa;
-}
-export const b2bTitle = (data, type) => `옵틱글래스 ${data.titleBrand} ${data.titleModel} 미러 ${B2B_PLAN[type].suffix} [${data.code}]`;
 export function planOf(data, type) {
   const k = resolveBsa(data) ? 'bsa' : 'plain';
   return { price: B2B_PLAN[type].price[k], templateNo: B2B_PLAN[type].template[k] };
